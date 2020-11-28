@@ -14,5 +14,6 @@
 .cxx
 local.properties
 serif_android/build
+serif_cli/build
 serif_shared/build
 *.swp

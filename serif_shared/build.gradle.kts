@@ -15,6 +15,7 @@ repositories {
     mavenCentral()
 }
 kotlin {
+    jvm()
     android()
     ios {
         binaries {
@@ -44,6 +45,7 @@ kotlin {
         }
         val iosMain by getting
         val iosTest by getting
+        val jvmMain by getting
     }
 }
 android {

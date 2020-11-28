@@ -16,6 +16,7 @@ pluginManagement {
 rootProject.name = "Serif"
 
 
+include(":serif_cli")
 include(":serif_android")
 include(":serif_shared")
 

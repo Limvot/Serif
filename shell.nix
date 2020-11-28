@@ -5,6 +5,7 @@ in
 pkgs.mkShell {
     buildInputs = with pkgs; [
         android-studio
+        jdk
     ];
     _JAVA_AWT_WM_NONREPARENTING=1;
 }
