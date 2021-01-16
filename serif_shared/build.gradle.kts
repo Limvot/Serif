@@ -7,6 +7,7 @@ plugins {
 }
 group = "xyz.room409.serif"
 version = "1.0-SNAPSHOT"
+val ktor_version = "1.5.0"
 
 repositories {
     gradlePluginPortal()
@@ -25,7 +26,11 @@ kotlin {
         }
     }
     sourceSets {
-        val commonMain by getting
+        val commonMain by getting {
+            dependencies {
+                implementation("io.ktor:ktor-client-core:$ktor_version")
+            }
+        }
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test-common"))
@@ -35,6 +40,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation("com.google.android.material:material:1.2.0")
+                implementation("io.ktor:ktor-client-android:$ktor_version")
             }
         }
         val androidTest by getting {
@@ -43,9 +49,17 @@ kotlin {
                 implementation("junit:junit:4.12")
             }
         }
-        val iosMain by getting
+        val iosMain by getting {
+            dependencies {
+                implementation("io.ktor:ktor-client-ios:$ktor_version")
+            }
+        }
         val iosTest by getting
-        val jvmMain by getting
+        val jvmMain by getting {
+            dependencies {
+                implementation("io.ktor:ktor-client-cio:$ktor_version")
+            }
+        }
     }
 }
 android {
