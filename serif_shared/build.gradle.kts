@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     kotlin("multiplatform")
+    kotlin("plugin.serialization") version "1.4.10"
     id("com.android.library")
     id("kotlin-android-extensions")
 }
@@ -28,7 +29,9 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1")
                 implementation("io.ktor:ktor-client-core:$ktor_version")
+                implementation("io.ktor:ktor-client-serialization:$ktor_version")
             }
         }
         val commonTest by getting {
