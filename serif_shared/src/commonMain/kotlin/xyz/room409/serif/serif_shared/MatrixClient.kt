@@ -28,25 +28,21 @@ data class RoomMessage(val msgtype: String, val body: String) {
 @Serializable
 data class EventIdResponse(val event_id: String)
 
-class Greeting {
-    fun greeting(): String {
+val client = HttpClient() {
+    install(JsonFeature) {
+        serializer = KotlinxSerializer(kotlinx.serialization.json.Json {
+            ignoreUnknownKeys = true
+        })
+    }
+}
+
+class MatrixSession(val access_token: String) {
+    fun test(): String {
 
         val result = runBlocking {
-            val client = HttpClient() {
-                install(JsonFeature) {
-                    serializer = KotlinxSerializer(kotlinx.serialization.json.Json {
-                        ignoreUnknownKeys = true
-                    })
-                }
-            }
-
-            val loginResponse = client.post<LoginResponse>("https://synapse.room409.xyz/_matrix/client/r0/login") {
-                contentType(ContentType.Application.Json)
-                body = LoginRequest(username="testuser", password="keyboardcowpeople")
-            }
 
             val room_id = "!bwqkmRobBXpTSDiGIw:synapse.room409.xyz"
-            val message_confirmation = client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/23?access_token=${loginResponse.access_token}") {
+            val message_confirmation = client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/23?access_token=$access_token") {
                 contentType(ContentType.Application.Json)
                 body = RoomMessage("Final version - for now.....")
             }
@@ -54,7 +50,22 @@ class Greeting {
             message_confirmation.event_id
         }
 
-
         return "Hello, ${Platform().platform}, ya cowpeople! - Our sent event id is: $result"
+    }
+}
+
+class MatrixClient {
+    fun version(): String {
+        return "Serif Matrix client, pre-alpha on ${Platform().platform}"
+    }
+
+    fun login(username: String, password: String): MatrixSession {
+        val loginResponse = runBlocking {
+            client.post<LoginResponse>("https://synapse.room409.xyz/_matrix/client/r0/login") {
+                contentType(ContentType.Application.Json)
+                body = LoginRequest(username, password)
+            }
+        }
+        return MatrixSession(loginResponse.access_token)
     }
 }
