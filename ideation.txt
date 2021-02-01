@@ -78,3 +78,4 @@ Feature Ideas
 - Spell check (keyboard? in app for pinephone / desktop? special mark for web)
 - Room Folders
 - Room Timers / Notifications / Event stuff
+- SPANREED EDITION
