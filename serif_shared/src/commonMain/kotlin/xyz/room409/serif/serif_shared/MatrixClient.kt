@@ -28,15 +28,26 @@ data class RoomMessage(val msgtype: String, val body: String) {
 @Serializable
 data class EventIdResponse(val event_id: String)
 
-val client = HttpClient() {
-    install(JsonFeature) {
-        serializer = KotlinxSerializer(kotlinx.serialization.json.Json {
-            ignoreUnknownKeys = true
-        })
+
+sealed class MatrixState {
+    val version: String
+        get() {
+            return "Serif Matrix client, pre-alpha on ${Platform().platform}"
+        }
+}
+class MatrixLogin(val login_message: String, val mclient: MatrixClient): MatrixState() {
+    constructor(): this(login_message="Please enter your username and password\n",
+                        mclient=MatrixClient())
+    fun login(username: String, password: String): MatrixState {
+        return MatrixRooms(msession=mclient.login(username, password))
     }
 }
-
-class MatrixSession(val access_token: String) {
+class MatrixRooms(val msession: MatrixSession): MatrixState() {
+    fun test(): MatrixState {
+        return MatrixLogin("${msession.test()}, now going back to login for now\n", MatrixClient())
+    }
+}
+class MatrixSession(val client: HttpClient, val access_token: String) {
     fun test(): String {
 
         val result = runBlocking {
@@ -46,26 +57,30 @@ class MatrixSession(val access_token: String) {
                 contentType(ContentType.Application.Json)
                 body = RoomMessage("Final version - for now.....")
             }
-            client.close()
             message_confirmation.event_id
         }
 
+        // TO ACT LIKE A LOGOUT, CLOSING THE CLIENT
+        client.close()
         return "Hello, ${Platform().platform}, ya cowpeople! - Our sent event id is: $result"
     }
 }
 
 class MatrixClient {
-    fun version(): String {
-        return "Serif Matrix client, pre-alpha on ${Platform().platform}"
-    }
-
     fun login(username: String, password: String): MatrixSession {
+        val client = HttpClient() {
+            install(JsonFeature) {
+                serializer = KotlinxSerializer(kotlinx.serialization.json.Json {
+                    ignoreUnknownKeys = true
+                })
+            }
+        }
         val loginResponse = runBlocking {
             client.post<LoginResponse>("https://synapse.room409.xyz/_matrix/client/r0/login") {
                 contentType(ContentType.Application.Json)
                 body = LoginRequest(username, password)
             }
         }
-        return MatrixSession(loginResponse.access_token)
+        return MatrixSession(client, loginResponse.access_token)
     }
 }
