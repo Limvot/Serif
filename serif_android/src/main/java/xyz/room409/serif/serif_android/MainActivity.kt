@@ -2,11 +2,11 @@ package xyz.room409.serif.serif_android
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import xyz.room409.serif.serif_shared.Greeting
+import xyz.room409.serif.serif_shared.MatrixClient
 import android.widget.TextView
 
-fun greet(): String {
-    return Greeting().greeting()
+fun version(): String {
+    return MatrixClient().version()
 }
 
 class MainActivity : AppCompatActivity() {
@@ -15,6 +15,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         val tv: TextView = findViewById(R.id.text_view)
-        tv.text = greet()
+        tv.text = version()
     }
 }

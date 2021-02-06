@@ -1,13 +1,13 @@
 import SwiftUI
 import serif_shared
 
-func greet() -> String {
-    return Greeting().greeting()
+func version() -> String {
+    return MatrixClient().version()
 }
 
 struct ContentView: View {
     var body: some View {
-        Text(greet())
+        Text(version())
     }
 }
 
