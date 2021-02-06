@@ -44,12 +44,9 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient): MatrixS
                         mclient=MatrixClient())
     fun login(username: String, password: String): MatrixState {
         when (val loginResult = mclient.login(username, password)) {
-            is Success -> {
-                return MatrixRooms(msession=loginResult.value)
-            }
-            is Error -> {
-                return MatrixLogin(login_message="${loginResult.message}, please login again...\n", mclient=mclient)
-            }
+            is Success -> { return MatrixRooms(msession=loginResult.value) }
+            is Error -> { return MatrixLogin(login_message="${loginResult.message} - exception was ${loginResult.cause}, please login again...\n",
+                                             mclient=mclient) }
         }
     }
 }
