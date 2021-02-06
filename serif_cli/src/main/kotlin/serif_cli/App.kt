@@ -30,6 +30,9 @@ class App {
             return
         }
         while (true) {
+            // We do this little dance so that Kotlin smart cast works and
+            // doesn't complain that it might change between the when
+            // and the use in the branches.
             val m = mstate
             mstate = when (m) {
                 is MatrixLogin -> {
