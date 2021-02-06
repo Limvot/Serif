@@ -8,6 +8,10 @@ import io.ktor.http.*
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 
+sealed class Outcome<out T : Any> { }
+data class Success<out T : Any>(val value: T) : Outcome<T>()
+data class Error(val message: String, val cause: Exception? = null) : Outcome<Nothing>()
+
 @Serializable
 data class LoginRequest(val type: String, val identifier: LoginIdentifier, val password: String, val initial_device_display_name: String) {
     constructor(username: String, password: String): this(type="m.login.password",
@@ -39,7 +43,14 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient): MatrixS
     constructor(): this(login_message="Please enter your username and password\n",
                         mclient=MatrixClient())
     fun login(username: String, password: String): MatrixState {
-        return MatrixRooms(msession=mclient.login(username, password))
+        when (val loginResult = mclient.login(username, password)) {
+            is Success -> {
+                return MatrixRooms(msession=loginResult.value)
+            }
+            is Error -> {
+                return MatrixLogin(login_message="${loginResult.message}, please login again...\n", mclient=mclient)
+            }
+        }
     }
 }
 class MatrixRooms(val msession: MatrixSession): MatrixState() {
@@ -67,7 +78,7 @@ class MatrixSession(val client: HttpClient, val access_token: String) {
 }
 
 class MatrixClient {
-    fun login(username: String, password: String): MatrixSession {
+    fun login(username: String, password: String): Outcome<MatrixSession> {
         val client = HttpClient() {
             install(JsonFeature) {
                 serializer = KotlinxSerializer(kotlinx.serialization.json.Json {
@@ -75,12 +86,16 @@ class MatrixClient {
                 })
             }
         }
-        val loginResponse = runBlocking {
-            client.post<LoginResponse>("https://synapse.room409.xyz/_matrix/client/r0/login") {
-                contentType(ContentType.Application.Json)
-                body = LoginRequest(username, password)
+        try {
+            val loginResponse = runBlocking {
+                client.post<LoginResponse>("https://synapse.room409.xyz/_matrix/client/r0/login") {
+                    contentType(ContentType.Application.Json)
+                    body = LoginRequest(username, password)
+                }
             }
+            return Success(MatrixSession(client, loginResponse.access_token))
+        } catch (e: Exception) {
+            return Error("Login failed", e)
         }
-        return MatrixSession(client, loginResponse.access_token)
     }
 }

@@ -33,8 +33,7 @@ class App {
             // We do this little dance so that Kotlin smart cast works and
             // doesn't complain that it might change between the when
             // and the use in the branches.
-            val m = mstate
-            mstate = when (m) {
+            mstate = when (val m = mstate) {
                 is MatrixLogin -> {
                     print(m.login_message)
                     print("Username: ")
