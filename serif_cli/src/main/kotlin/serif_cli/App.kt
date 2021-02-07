@@ -44,8 +44,15 @@ class App {
                     m.login(username, password)
                 }
                 is MatrixRooms -> {
-                    println("Logged in! Getting Room")
-                    m.getRoom()
+                    println(m.message)
+                    println(m.rooms)
+                    print("Input a room number or :sync>")
+                    val msg = console.readLine()
+                    if(msg == ":sync") {
+                        m.sync()
+                    } else {
+                        m.getRoom()
+                    }
                 }
                 is MatrixChatRoom -> {
                     print("Message> ")

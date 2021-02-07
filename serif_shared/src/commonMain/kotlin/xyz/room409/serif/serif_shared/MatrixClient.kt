@@ -32,6 +32,17 @@ data class RoomMessage(val msgtype: String, val body: String) {
 @Serializable
 data class EventIdResponse(val event_id: String)
 
+@Serializable
+data class SyncResponse(var next_batch: String, val rooms: Rooms)
+@Serializable
+data class Rooms(val join: MutableMap<String, Room>)
+@Serializable
+data class Room(val timeline: Timeline)
+@Serializable
+data class Timeline(val events: List<Event>, val prev_batch: String)
+@Serializable
+data class Event(val content: JsonObject)
+
 
 sealed class MatrixState {
     val version: String
@@ -44,13 +55,21 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient): MatrixS
                         mclient=MatrixClient())
     fun login(username: String, password: String): MatrixState {
         when (val loginResult = mclient.login(username, password)) {
-            is Success -> { return MatrixRooms(msession=loginResult.value) }
+            is Success -> { return MatrixRooms(msession=loginResult.value, rooms=listOf(), message="Logged in! Maybe try syncing?") }
             is Error -> { return MatrixLogin(login_message="${loginResult.message} - exception was ${loginResult.cause}, please login again...\n",
                                              mclient=mclient) }
         }
     }
 }
-class MatrixRooms(val msession: MatrixSession): MatrixState() {
+class MatrixRooms(val msession: MatrixSession, val rooms: List<String>, val message: String): MatrixState() {
+    fun sync(): MatrixState {
+        when (val syncResult = msession.sync()) {
+            is Success -> { return MatrixRooms(msession=msession, rooms=msession?.sync_response?.rooms?.join?.keys?.toList() ?: listOf(),
+                                               message="Sync success\n") }
+            is Error   -> { return MatrixRooms(msession=msession, rooms=rooms,
+                                               message="${syncResult.message} - exception was ${syncResult.cause}, maybe try again?\n") }
+        }
+    }
     fun getRoom(): MatrixState {
         return MatrixChatRoom(msession)
     }
@@ -69,11 +88,10 @@ class MatrixChatRoom(val msession: MatrixSession): MatrixState() {
     }
 }
 class MatrixSession(val client: HttpClient, val access_token: String) {
+    var sync_response: SyncResponse? = null
     fun sendMessage(msg : String): Outcome<String> {
         try {
-
             val result = runBlocking {
-
                 val room_id = "!bwqkmRobBXpTSDiGIw:synapse.room409.xyz"
                 val message_confirmation = client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/23?access_token=$access_token") {
                     contentType(ContentType.Application.Json)
@@ -91,6 +109,36 @@ class MatrixSession(val client: HttpClient, val access_token: String) {
     fun closeSession() {
         // TO ACT LIKE A LOGOUT, CLOSING THE CLIENT
         client.close()
+    }
+    fun sync(): Outcome<Unit> {
+        val timeout_ms = 10000
+        val url = if (sync_response != null) {
+            "https://synapse.room409.xyz/_matrix/client/r0/sync?since=${sync_response!!.next_batch}&timeout=$timeout_ms&access_token=$access_token"
+        } else {
+            val limit = 5
+            "https://synapse.room409.xyz/_matrix/client/r0/sync?filter={\"room\":{\"timeline\":{\"limit\":$limit}}}&access_token=$access_token"
+        }
+        try {
+            runBlocking {
+                val new_sync_response = client.get<SyncResponse>(url)
+                if (sync_response != null) {
+                    println("Sync response wasn't null")
+                    for ((room_id, room) in new_sync_response.rooms.join) {
+                        println(" adding in new room_id and room")
+                        // Do a better combine
+                        sync_response!!.rooms.join[room_id] = room
+                    }
+                    sync_response!!.next_batch = new_sync_response.next_batch
+                } else {
+                    println("was null, adding whole response")
+                    sync_response = new_sync_response
+                }
+                println("Current response was $sync_response")
+            }
+            return Success(Unit)
+        } catch (e: Exception) {
+            return Error("Sync failed", e)
+        }
     }
 }
 
