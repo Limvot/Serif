@@ -51,19 +51,24 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient): MatrixS
     }
 }
 class MatrixRooms(val msession: MatrixSession): MatrixState() {
-    fun test(): MatrixState {
-        return MatrixLogin("${msession.test()}, now going back to login for now\n", MatrixClient())
+    fun getRoom(): MatrixState {
+        return MatrixChatRoom(msession)
+    }
+}
+class MatrixChatRoom(val msession: MatrixSession): MatrixState() {
+    fun sendMessage(msg : String): MatrixState {
+        return MatrixLogin("${msession.test(msg)}, now going back to login for now\n", MatrixClient())
     }
 }
 class MatrixSession(val client: HttpClient, val access_token: String) {
-    fun test(): String {
+    fun test(msg : String): String {
 
         val result = runBlocking {
 
             val room_id = "!bwqkmRobBXpTSDiGIw:synapse.room409.xyz"
             val message_confirmation = client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/23?access_token=$access_token") {
                 contentType(ContentType.Application.Json)
-                body = RoomMessage("Final version - for now.....")
+                body = RoomMessage(msg)
             }
             message_confirmation.event_id
         }

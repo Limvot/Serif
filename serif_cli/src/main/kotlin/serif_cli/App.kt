@@ -44,8 +44,13 @@ class App {
                     m.login(username, password)
                 }
                 is MatrixRooms -> {
-                    println("Logged in! Sending test message")
-                    m.test()
+                    println("Logged in! Getting Room")
+                    m.getRoom()
+                }
+                is MatrixChatRoom -> {
+                    println("Entered Room! Enter Test Message")
+                    val msg = console.readLine()
+                    m.sendMessage(msg)
                 }
             }
         }
