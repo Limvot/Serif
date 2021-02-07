@@ -48,9 +48,13 @@ class App {
                     m.getRoom()
                 }
                 is MatrixChatRoom -> {
-                    println("Entered Room! Enter Test Message")
+                    print("Message> ")
                     val msg = console.readLine()
-                    m.sendMessage(msg)
+                    if(msg == ":q") {
+                        m.exitRoom()
+                    } else {
+                        m.sendMessage(msg)
+                    }
                 }
             }
         }
