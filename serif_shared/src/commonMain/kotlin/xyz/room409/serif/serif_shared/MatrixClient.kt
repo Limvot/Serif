@@ -26,7 +26,7 @@ data class LoginIdentifier(val type: String, val user: String)
 data class LoginResponse(val access_token: String)
 
 @Serializable
-data class RoomMessage(val msgtype: String, val body: String) {
+data class SendRoomMessage(val msgtype: String, val body: String) {
     constructor(body: String): this(msgtype="m.text",body=body)
 }
 @Serializable
@@ -40,8 +40,59 @@ data class Rooms(val join: MutableMap<String, Room>)
 data class Room(val timeline: Timeline)
 @Serializable
 data class Timeline(val events: List<Event>, val prev_batch: String)
+
+@Serializable(with = EventSerializer::class)
+abstract class Event {
+    abstract val self: JsonObject
+    abstract val content: JsonElement
+    abstract val type: String
+}
+
+object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
+    override fun selectDeserializer(element: JsonElement) = when {
+        else -> EventFallbackSerializer
+    }
+}
+
+abstract class RoomEvent: Event() {
+    abstract val event_id: String
+    abstract val sender: String
+    abstract val origin_server_ts: Long
+    abstract val unsigned: UnsignedData?
+}
+
 @Serializable
-data class Event(val content: JsonObject)
+data class UnsignedData(val age: Long?, /*redacted_because: Event?,*/ val transaction_id: String?)
+
+abstract class StateEvent: RoomEvent() {
+    abstract val state_key: String
+    /*abstract val prev_content: EventContent?*/
+}
+
+abstract class RoomMessage: RoomEvent() {
+    abstract val body: String
+    abstract val msgtype: String
+}
+
+//@Serializable
+//class RoomMessageFallback(val self: JsonObject): RoomMessage()
+//@Serializable
+//class RoomEventFallback(val self: JsonObject): RoomEvent()
+@Serializable
+class EventFallback(override val self: JsonObject, override val content: JsonElement, override val type: String): Event() {
+    override fun toString() = self.toString()
+}
+
+object EventFallbackSerializer : JsonTransformingSerializer<EventFallback>(EventFallback.serializer()) {
+    override fun transformDeserialize(element: JsonElement): JsonElement = buildJsonObject {
+        put("self", element)
+        put("content", element.jsonObject["content"]!!)
+        put("type", element.jsonObject["type"]!!)
+    }
+    override fun transformSerialize(element: JsonElement): JsonElement =
+        element.jsonObject["self"]!!
+}
+
 
 
 sealed class MatrixState {
@@ -64,7 +115,7 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient): MatrixS
 class MatrixRooms(val msession: MatrixSession, val rooms: List<String>, val message: String): MatrixState() {
     fun sync(): MatrixState {
         when (val syncResult = msession.sync()) {
-            is Success -> { return MatrixRooms(msession=msession, rooms=msession?.sync_response?.rooms?.join?.keys?.toList() ?: listOf(),
+            is Success -> { return MatrixRooms(msession=msession, rooms=msession.sync_response?.rooms?.join?.keys?.toList() ?: listOf(),
                                                message="Sync success\n") }
             is Error   -> { return MatrixRooms(msession=msession, rooms=rooms,
                                                message="${syncResult.message} - exception was ${syncResult.cause}, maybe try again?\n") }
@@ -95,7 +146,7 @@ class MatrixSession(val client: HttpClient, val access_token: String) {
                 val room_id = "!bwqkmRobBXpTSDiGIw:synapse.room409.xyz"
                 val message_confirmation = client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/23?access_token=$access_token") {
                     contentType(ContentType.Application.Json)
-                    body = RoomMessage(msg)
+                    body = SendRoomMessage(msg)
                 }
                 message_confirmation.event_id
             }
