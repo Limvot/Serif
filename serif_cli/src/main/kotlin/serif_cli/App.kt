@@ -45,19 +45,32 @@ class App {
                 }
                 is MatrixRooms -> {
                     println(m.message)
-                    println(m.rooms)
-                    print("Input a room number or :sync>")
+                    m.rooms.forEachIndexed { i, (id,name) ->
+                        println("$i - $id - $name")
+                    }
+                    print("Input a room number, :sync, or :q> ")
                     val msg = console.readLine()
                     if(msg == ":sync") {
                         m.sync()
+                    } else if(msg == ":q") {
+                        m.fake_logout()
                     } else {
-                        m.getRoom()
+                        val selection = msg.toIntOrNull()
+                        if (selection != null && selection >= 0 && selection < m.rooms.size) {
+                            m.getRoom(m.rooms[selection].first)
+                        } else {
+                            println("Bad number $msg, try again")
+                            m
+                        }
                     }
                 }
                 is MatrixChatRoom -> {
-                    print("Message> ")
+                    m.messages.forEach { message ->
+                        println("-$message")
+                    }
+                    print("Message (or :b)> ")
                     val msg = console.readLine()
-                    if(msg == ":q") {
+                    if(msg == ":b") {
                         m.exitRoom()
                     } else {
                         m.sendMessage(msg)
