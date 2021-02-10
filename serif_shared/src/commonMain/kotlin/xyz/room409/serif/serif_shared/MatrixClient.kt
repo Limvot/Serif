@@ -2,82 +2,41 @@ package xyz.room409.serif.serif_shared
 import kotlinx.coroutines.*
 import io.ktor.client.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.client.features.json.*
 import io.ktor.client.features.json.serializer.KotlinxSerializer
 import io.ktor.http.*
-import kotlinx.serialization.*
-import kotlinx.serialization.json.*
 
 sealed class Outcome<out T : Any> { }
 data class Success<out T : Any>(val value: T) : Outcome<T>()
 data class Error(val message: String, val cause: Exception? = null) : Outcome<Nothing>()
 
-@Serializable
-data class LoginRequest(val type: String, val identifier: LoginIdentifier, val password: String, val initial_device_display_name: String) {
-    constructor(username: String, password: String): this(type="m.login.password",
-                                                          identifier=LoginIdentifier(type="m.id.user",user=username),
-                                                          password=password,
-                                                          initial_device_display_name="Serif")
-}
-@Serializable
-data class LoginIdentifier(val type: String, val user: String)
+// Returns the first Event of class T, or null
+inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.firstOrNull { it != null }
 
-@Serializable
-data class LoginResponse(val access_token: String)
-
-@Serializable
-data class RoomMessage(val msgtype: String, val body: String) {
-    constructor(body: String): this(msgtype="m.text",body=body)
-}
-@Serializable
-data class EventIdResponse(val event_id: String)
-
-
-sealed class MatrixState {
-    val version: String
-        get() {
-            return "Serif Matrix client, pre-alpha on ${Platform().platform}"
-        }
-}
-class MatrixLogin(val login_message: String, val mclient: MatrixClient): MatrixState() {
-    constructor(): this(login_message="Please enter your username and password\n",
-                        mclient=MatrixClient())
-    fun login(username: String, password: String): MatrixState {
-        when (val loginResult = mclient.login(username, password)) {
-            is Success -> { return MatrixRooms(msession=loginResult.value) }
-            is Error -> { return MatrixLogin(login_message="${loginResult.message} - exception was ${loginResult.cause}, please login again...\n",
-                                             mclient=mclient) }
-        }
-    }
-}
-class MatrixRooms(val msession: MatrixSession): MatrixState() {
-    fun getRoom(): MatrixState {
-        return MatrixChatRoom(msession)
-    }
-}
-class MatrixChatRoom(val msession: MatrixSession): MatrixState() {
-    fun sendMessage(msg : String): MatrixState {
-        when (val sendMessageResult = msession.sendMessage(msg)) {
-            is Success -> { println("${sendMessageResult.value}") }
-            is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
-        }
-        return this
-    }
-    fun exitRoom(): MatrixState {
-        msession.closeSession()
-        return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
-    }
-}
 class MatrixSession(val client: HttpClient, val access_token: String) {
-    fun sendMessage(msg : String): Outcome<String> {
+    var sync_response: SyncResponse? = null
+
+    // rooms is a pair of room_id and room display name
+    // Display name is calculated by first checking for a room name event in the state events,
+    // then for a canonical alias in the state events, then a list of hero users in the room summary,
+    // and then the error message. Technically we should also be looking at timeline events
+    // for room name changes too. Also, it's not working when there's not a room name -
+    // the way I'm reading the doc heros should be non-null... maybe it's not decoding right?
+    val rooms: List<Pair<String,String>>
+        get() = sync_response?.rooms?.join?.entries?.map { (id, room) ->
+            Pair(id, (room.state.events.firstOfType<StateEvent<RoomNameContent>>()?.content?.name
+                   ?: room.state.events.firstOfType<StateEvent<RoomCanonicalAliasContent>>()?.content?.alias
+                   ?: room.summary.heroes?.joinToString(", ")
+                   ?: "<no room name or heroes>"))
+        }?.toList() ?: listOf()
+
+    fun sendMessage(msg: String, room_id: String): Outcome<String> {
         try {
-
             val result = runBlocking {
-
-                val room_id = "!bwqkmRobBXpTSDiGIw:synapse.room409.xyz"
                 val message_confirmation = client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/23?access_token=$access_token") {
                     contentType(ContentType.Application.Json)
-                    body = RoomMessage(msg)
+                    body = SendRoomMessage(msg)
                 }
                 message_confirmation.event_id
             }
@@ -91,6 +50,43 @@ class MatrixSession(val client: HttpClient, val access_token: String) {
     fun closeSession() {
         // TO ACT LIKE A LOGOUT, CLOSING THE CLIENT
         client.close()
+    }
+    fun sync(): Outcome<Unit> {
+        val timeout_ms = 10000
+        val url = if (sync_response != null) {
+            "https://synapse.room409.xyz/_matrix/client/r0/sync?since=${sync_response!!.next_batch}&timeout=$timeout_ms&access_token=$access_token"
+        } else {
+            val limit = 5
+            "https://synapse.room409.xyz/_matrix/client/r0/sync?filter={\"room\":{\"timeline\":{\"limit\":$limit}}}&access_token=$access_token"
+        }
+        try {
+            runBlocking {
+                val new_sync_response = client.get<SyncResponse>(url)
+                if (sync_response != null) {
+                    println("Sync response wasn't null")
+                    for ((room_id, room) in new_sync_response.rooms.join) {
+                        if (sync_response!!.rooms.join.containsKey(room_id)) {
+                            // This should actually be updated with messages from the timeline too
+                            sync_response!!.rooms.join[room_id]!!.state = room.state
+                            // This also needs to be changed to something that supports discontinuous
+                            // sections of timeline with different prev_patch, etc
+                            sync_response!!.rooms.join[room_id]!!.timeline.events += room.timeline.events
+                        } else {
+                            println(" adding in new room_id and room")
+                            sync_response!!.rooms.join[room_id] = room
+                        }
+                    }
+                    sync_response!!.next_batch = new_sync_response.next_batch
+                } else {
+                    println("was null, adding whole response")
+                    sync_response = new_sync_response
+                }
+                println("Current response was $sync_response")
+            }
+            return Success(Unit)
+        } catch (e: Exception) {
+            return Error("Sync failed", e)
+        }
     }
 }
 
