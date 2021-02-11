@@ -1,5 +1,6 @@
 package xyz.room409.serif.serif_shared
 import xyz.room409.serif.serif_shared.db.*
+import xyz.room409.serif.serif_shared.db.SessionDb
 import xyz.room409.serif.serif_shared.db.DriverFactory
 
 object Database {
@@ -12,18 +13,21 @@ object Database {
     }
 
     fun saveSession(username : String, access_token : String, transactionId : Long) {
-        saveSession(this.db, username, access_token, transactionId)
+        this.db?.sessionDbQueries?.insertSession(username, access_token, transactionId)
     } 
     
     fun updateSession(access_token : String, transactionId : Long) {
-        updateSession(this.db, access_token, transactionId) 
+        this.db?.sessionDbQueries?.updateSession(transactionId, access_token)
     }
 
     fun getStoredSessions() : List<Triple<String,String,Long>> {
-        return getStoredSessions(this.db)
+        val saved_sessions = this.db?.sessionDbQueries?.selectAllSessions(
+            { user : String, auth_tok : String, transactionId : Long ->
+                Triple(user,auth_tok,transactionId) })?.executeAsList() ?: listOf()
+        return saved_sessions
     }
 
     fun deleteAllSessions() {
-        deleteAllSessions(this.db)
+        this.db?.sessionDbQueries?.deleteAllSessions()
     }
 }

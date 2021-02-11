@@ -41,6 +41,7 @@ class MatrixRooms(val msession: MatrixSession, val rooms: List<Pair<String, Stri
     fun getRoom(id: String): MatrixState {
         return MatrixChatRoom(msession,
                               id,
+                              this.rooms.find({(_id,_) -> _id == id })!!.second,
                               msession.sync_response!!.rooms.join[id]!!.timeline.events.map { (it as? RoomMessageEvent)?.content?.body }.filterNotNull())
     }
     fun fake_logout(): MatrixState {
@@ -48,7 +49,7 @@ class MatrixRooms(val msession: MatrixSession, val rooms: List<Pair<String, Stri
         return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
     }
 }
-class MatrixChatRoom(val msession: MatrixSession, val room_id: String, val messages: List<String>): MatrixState() {
+class MatrixChatRoom(val msession: MatrixSession, val room_id: String, val name : String, val messages: List<String>): MatrixState() {
     fun sendMessage(msg : String): MatrixState {
         when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
             is Success -> { println("${sendMessageResult.value}") }
@@ -61,9 +62,7 @@ class MatrixChatRoom(val msession: MatrixSession, val room_id: String, val messa
     }
 
     fun getRoomName(): String {
-        var ret = room_id
-        msession.rooms.forEach { (id,name) -> if(id == room_id) { ret = name } }
-        return ret;
+        return this.name
     }
 }
 
