@@ -14,7 +14,7 @@ data class Error(val message: String, val cause: Exception? = null) : Outcome<No
 // Returns the first Event of class T, or null
 inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.firstOrNull { it != null }
 
-class MatrixSession(val client: HttpClient, val access_token: String) {
+class MatrixSession(val client: HttpClient, val access_token: String, var transactionId : Long) {
     var sync_response: SyncResponse? = null
 
     // rooms is a pair of room_id and room display name
@@ -34,10 +34,12 @@ class MatrixSession(val client: HttpClient, val access_token: String) {
     fun sendMessage(msg: String, room_id: String): Outcome<String> {
         try {
             val result = runBlocking {
-                val message_confirmation = client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/23?access_token=$access_token") {
+                val message_confirmation =
+                client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
                     contentType(ContentType.Application.Json)
                     body = SendRoomMessage(msg)
                 }
+                transactionId++
                 message_confirmation.event_id
             }
 
@@ -48,6 +50,8 @@ class MatrixSession(val client: HttpClient, val access_token: String) {
     }
 
     fun closeSession() {
+        //Update Database with latest transactionId
+        Database.updateSession(this.access_token, this.transactionId)
         // TO ACT LIKE A LOGOUT, CLOSING THE CLIENT
         client.close()
     }
@@ -106,9 +110,38 @@ class MatrixClient {
                     body = LoginRequest(username, password)
                 }
             }
-            return Success(MatrixSession(client, loginResponse.access_token))
+
+            //Save to DB
+            println("Saving session to db")
+            val new_transactionId : Long = 0
+            Database.saveSession(username, loginResponse.access_token, new_transactionId)
+
+            return Success(MatrixSession(client, loginResponse.access_token, new_transactionId))
         } catch (e: Exception) {
             return Error("Login failed", e)
         }
+    }
+    fun loginFromSavedSession(username: String): Outcome<MatrixSession> {
+        val client = HttpClient() {
+            install(JsonFeature) {
+                serializer = KotlinxSerializer(kotlinx.serialization.json.Json {
+                    ignoreUnknownKeys = true
+                })
+            }
+        }
+        //Load from DB
+        println("loading specific session from db")
+        val sessions = Database.getStoredSessions()
+        for((user, tok, transactionId) in sessions) {
+            if(user == username) {
+                return Success(MatrixSession(client, tok, transactionId))
+            }
+        }
+        return Error("No Saved Session for $username")
+    }
+
+    fun getStoredSessions() : List<String> {
+        println("loading sessions from db")
+        return Database.getStoredSessions().map({ it.first })
     }
 }

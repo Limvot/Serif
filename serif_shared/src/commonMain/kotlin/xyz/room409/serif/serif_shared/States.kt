@@ -17,6 +17,17 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient): MatrixS
                                              mclient=mclient) }
         }
     }
+    fun loginFromSession(username: String): MatrixState {
+        when (val loginResult = mclient.loginFromSavedSession(username)) {
+            is Success -> { return MatrixRooms(msession=loginResult.value, rooms=listOf(), message="Logged in! Maybe try syncing?") }
+            is Error -> { return MatrixLogin(login_message="${loginResult.message} - exception was ${loginResult.cause}, please login again...\n",
+                                             mclient=mclient) }
+        }
+    }
+
+    fun getSessions() : List<String> {
+        return mclient.getStoredSessions()
+    }
 }
 class MatrixRooms(val msession: MatrixSession, val rooms: List<Pair<String, String>>, val message: String): MatrixState() {
     fun sync(): MatrixState {
@@ -47,6 +58,12 @@ class MatrixChatRoom(val msession: MatrixSession, val room_id: String, val messa
     }
     fun exitRoom(): MatrixState {
         return MatrixRooms(msession, msession.rooms, "Back to rooms. You can still do a :sync...")
+    }
+
+    fun getRoomName(): String {
+        var ret = room_id
+        msession.rooms.forEach { (id,name) -> if(id == room_id) { ret = name } }
+        return ret;
     }
 }
 

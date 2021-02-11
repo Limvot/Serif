@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS SavedSessions (
+ userId TEXT NOT NULL PRIMARY KEY,
+ authTok TEXT NOT NULL,
+ transactionId INTEGER NOT NULL
+);
+
+deleteAllSessions:
+DELETE FROM SavedSessions;
+
+insertSession:
+INSERT INTO SavedSessions(userId, authTok, transactionId)
+VALUES(?,?,?);
+
+updateSession:
+UPDATE SavedSessions
+SET transactionId = ?
+WHERE authTok = ?;
+
+
+selectAllSessions:
+SELECT * FROM SavedSessions;
