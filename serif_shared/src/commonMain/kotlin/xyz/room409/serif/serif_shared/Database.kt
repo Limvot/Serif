@@ -27,6 +27,13 @@ object Database {
         return saved_sessions
     }
 
+    fun getUserSession(user : String) : Triple<String,String,Long> {
+        val saved_session = this.db?.sessionDbQueries?.selectUserSession(user)
+            { user : String, auth_tok : String, transactionId : Long ->
+                Triple(user,auth_tok,transactionId) }?.executeAsOne() ?: Triple("","",0L)
+        return saved_session
+    }
+
     fun deleteAllSessions() {
         this.db?.sessionDbQueries?.deleteAllSessions()
     }

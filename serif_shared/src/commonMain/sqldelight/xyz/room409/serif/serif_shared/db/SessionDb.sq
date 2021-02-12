@@ -19,3 +19,7 @@ WHERE authTok = ?;
 
 selectAllSessions:
 SELECT * FROM SavedSessions;
+
+selectUserSession:
+SELECT * FROM SavedSessions
+WHERE userId = ?;

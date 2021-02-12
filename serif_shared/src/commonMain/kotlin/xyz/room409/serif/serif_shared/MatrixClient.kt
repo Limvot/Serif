@@ -131,13 +131,10 @@ class MatrixClient {
         }
         //Load from DB
         println("loading specific session from db")
-        val sessions = Database.getStoredSessions()
-        for((user, tok, transactionId) in sessions) {
-            if(user == username) {
-                return Success(MatrixSession(client, tok, transactionId))
-            }
-        }
-        return Error("No Saved Session for $username")
+        val sessions = Database.getUserSession(username)
+        val tok = sessions.second
+        val transactionId = sessions.third
+        return Success(MatrixSession(client, tok, transactionId))
     }
 
     fun getStoredSessions() : List<String> {
