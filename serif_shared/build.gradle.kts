@@ -2,12 +2,15 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     kotlin("multiplatform")
+    kotlin("plugin.serialization") version "1.4.10"
     id("com.android.library")
     id("kotlin-android-extensions")
+    id("com.squareup.sqldelight")
 }
 group = "xyz.room409.serif"
 version = "1.0-SNAPSHOT"
 val ktor_version = "1.5.0"
+val sql_delight_version = "1.4.3"
 
 repositories {
     gradlePluginPortal()
@@ -28,7 +31,10 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1")
                 implementation("io.ktor:ktor-client-core:$ktor_version")
+                implementation("io.ktor:ktor-client-serialization:$ktor_version")
+                implementation("com.squareup.sqldelight:runtime:$sql_delight_version")
             }
         }
         val commonTest by getting {
@@ -41,6 +47,7 @@ kotlin {
             dependencies {
                 implementation("com.google.android.material:material:1.2.0")
                 implementation("io.ktor:ktor-client-android:$ktor_version")
+                implementation("com.squareup.sqldelight:android-driver:$sql_delight_version")
             }
         }
         val androidTest by getting {
@@ -52,12 +59,14 @@ kotlin {
         val iosMain by getting {
             dependencies {
                 implementation("io.ktor:ktor-client-ios:$ktor_version")
+                implementation("com.squareup.sqldelight:native-driver:$sql_delight_version")
             }
         }
         val iosTest by getting
         val jvmMain by getting {
             dependencies {
                 implementation("io.ktor:ktor-client-cio:$ktor_version")
+                implementation("com.squareup.sqldelight:sqlite-driver:$sql_delight_version")
             }
         }
     }
@@ -90,3 +99,9 @@ val packForXcode by tasks.creating(Sync::class) {
     into(targetDir)
 }
 tasks.getByName("build").dependsOn(packForXcode)
+
+sqldelight {
+  database("SessionDb") { // This will be the name of the generated database class.
+      packageName = "xyz.room409.serif.serif_shared.db"
+  }
+}

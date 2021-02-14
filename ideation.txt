@@ -1,0 +1,81 @@
+
+Feature Ideas
+==============
+
+
+- Login
+- Logout
+- Room List
+- Type and Send a message
+- Recieve a message
+    - Chat History
+- Start a new chat
+    - add person to chat
+    - remove person from chat
+    - leave chat
+- Clickable Links
+- Copy & Paste
+- Message Timestamps
+- Reactions ( :D )
+- Replies
+    - Clicking on Reply scrolls to og message
+- Edits
+- Forward
+- Images
+    - GIFs
+    - Image gallery
+    - Image captions
+    - Sticker support
+    - Bitmoji
+- Showing and setting user avatar
+- Show and set room name
+- Show and set room picture
+- Show and set room description
+- showing and setting display name
+- Personal Notes room / saved messages
+- Contacts
+    - Snapchat QR code-esque friending
+- Notifications
+- E2EE
+    - Cross Signing
+    - Key Backup
+- Tagging (mentions) people
+- Read Recipts
+- Typing notifications
+- Multiple Accounts
+- Redaction / Delete
+- Themes / Night Mode
+- Audio
+- Video
+- Markup formatting
+    - Spoiler tags
+    -   Spoiler level aware
+    - Mute / alert levels
+    - Open to proper spot
+- Support Matrix Spaces - eventually
+- Custom Font (Ana's cursive or something)
+- Custom status - online / busy / out to lunch
+- Bio
+- Mute users / words / message regexs?
+- alert words
+    - by group
+- Audio / Video calls
+- Link Previews
+- expiring messages / timedead deletion?
+- Searching Messages
+- Pinned message
+- Polls / Quizzes
+- Admin / user powerlevels
+    - Annoucement rooms / Channels (BBC, etc)
+- Serif <3 Matrix merch
+- Location Sharing
+- Bot notification messages
+- Threading support (Cerulean)
+- Bug / crash reporting tool
+- Server status / health (can't connect to server)
+    - Send message when back online
+    - long term - bridge health
+- Spell check (keyboard? in app for pinephone / desktop? special mark for web)
+- Room Folders
+- Room Timers / Notifications / Event stuff
+- SPANREED EDITION
