@@ -34,7 +34,7 @@ data class Room(var timeline: Timeline, var state: State, val summary: RoomSumma
 @Serializable
 data class Timeline(var events: List<Event>, val prev_batch: String)
 @Serializable
-data class State(val events: List<Event>)
+data class State(var events: List<Event>)
 @Serializable
 data class RoomSummary(
     @SerialName("m.heroes") val heroes: List<String>? = null,

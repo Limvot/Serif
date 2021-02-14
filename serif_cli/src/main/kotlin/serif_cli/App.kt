@@ -5,8 +5,12 @@ package xyz.room409.serif.serif_cli
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
 
+import kotlin.concurrent.thread
+import java.util.concurrent.LinkedBlockingQueue
+
 class App {
     val console = System.console()
+    val queue = LinkedBlockingQueue<String>()
     var mstate: MatrixState = MatrixLogin()
     val version: String
         get() {
@@ -34,6 +38,8 @@ class App {
         // information out of the database
         Database.initDb(DriverFactory())
 
+        val getInputToQueue: () -> Unit = { thread(start = true) { queue.add(console.readLine()) }; }
+
         while (true) {
             // We do this little dance so that Kotlin smart cast works and
             // doesn't complain that it might change between the when
@@ -41,6 +47,7 @@ class App {
             mstate = when (val m = mstate) {
                 is MatrixLogin -> {
                     print(m.login_message)
+                    val onSync: () -> Unit = { println("there was a new sync"); queue.add(":refresh"); }
                     val login_prompt = { ->
                         print("Username: ")
                         val username = console.readLine()
@@ -48,7 +55,7 @@ class App {
                         val password = String(console.readPassword())
                         clearScreen()
                         println("Logging in with username |$username| and a password I won't print...")
-                        m.login(username, password)
+                        m.login(username, password, onSync)
                     }
 
                     val sessions = m.getSessions()
@@ -65,7 +72,7 @@ class App {
                             if (i != null && i in (0..sessions.size - 1)) {
                                 clearScreen()
                                 println("Logging in with saved session for |${sessions[i]}| ...")
-                                m.loginFromSession(sessions[i])
+                                m.loginFromSession(sessions[i], onSync)
                             } else {
                                 println("invalid choice $resp, try again")
                                 m
@@ -80,10 +87,11 @@ class App {
                     m.rooms.forEachIndexed { i, (id, name) ->
                         println("$i - $id - $name")
                     }
-                    print("Input a room number, :sync, or :q> ")
-                    val msg = console.readLine()
-                    if (msg == ":sync") {
-                        m.sync()
+                    print("Input a room number, :refresh, or :q> ")
+                    getInputToQueue()
+                    val msg = queue.take()
+                    if (msg == ":refresh") {
+                        m.refresh()
                     } else if (msg == ":q") {
                         m.fake_logout()
                     } else {
@@ -98,10 +106,13 @@ class App {
                 }
                 is MatrixChatRoom -> {
                     printRoom(m.messages.takeLast(20), m.name)
-                    print("Message (or :b)> ")
-                    val msg = console.readLine()
+                    print("Message (or :b for back, :refresh for refresh)> ")
+                    getInputToQueue()
+                    val msg = queue.take()
                     if (msg == ":b") {
                         m.exitRoom()
+                    } else if (msg == ":refresh") {
+                        m.refresh()
                     } else {
                         m.sendMessage(msg)
                     }
@@ -115,7 +126,7 @@ class App {
         val esc = 27.toChar()
         print("$esc[H$esc[2J")
     }
-    fun printRoom(messages: List<String>, room_id: String) {
+    fun printRoom(messages: List<Pair<String,String>>, room_id: String) {
         // Start Fresh
         this.clearScreen()
 
@@ -123,8 +134,9 @@ class App {
         println("==$room_id==")
 
         // print last 20 messages or so
-        messages.forEach { message ->
-            println("-$message")
+        val maxSenderLen = messages.map { (sender, _message) -> sender.length }.max()
+        messages.forEach { (sender, message) ->
+            println("${sender.padEnd(maxSenderLen!!, ' ')}: $message")
         }
     }
 }
