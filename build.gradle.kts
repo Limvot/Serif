@@ -46,6 +46,6 @@ val ktlintFormat by tasks.creating(JavaExec::class) {
     description = "Fix Kotlin code style deviations."
     classpath = ktlint
     main = "com.pinterest.ktlint.Main"
-    args = listOf("-F", "serif_android/**/*.kt", "serif_shared/**/*.kt", "serif_cli/**/*.kt", "serif_ios/**/*.kt")
+    args = listOf("-F", "serif_android/src/**/*.kt", "serif_shared/src/**/*.kt", "serif_cli/src/**/*.kt", "serif_ios/src/**/*.kt")
 }
 
