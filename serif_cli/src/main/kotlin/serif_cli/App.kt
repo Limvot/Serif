@@ -99,7 +99,7 @@ class App {
                     }
                 }
                 is MatrixChatRoom -> {
-                    printRoom(m.messages.takeLast(20), m.getRoomName())
+                    printRoom(m.messages.takeLast(20), m.name)
                     print("Message (or :b)> ")
                     val msg = console.readLine()
                     if(msg == ":b") {

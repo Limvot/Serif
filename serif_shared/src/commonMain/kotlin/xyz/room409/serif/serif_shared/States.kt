@@ -60,9 +60,5 @@ class MatrixChatRoom(val msession: MatrixSession, val room_id: String, val name 
     fun exitRoom(): MatrixState {
         return MatrixRooms(msession, msession.rooms, "Back to rooms. You can still do a :sync...")
     }
-
-    fun getRoomName(): String {
-        return this.name
-    }
 }
 
