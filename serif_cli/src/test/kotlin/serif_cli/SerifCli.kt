@@ -3,7 +3,6 @@
  */
 
 package xyz.room409.serif.serif_cli
-import xyz.room409.serif.serif_cli.App
 import kotlin.test.Test
 import kotlin.test.assertNotNull
 
