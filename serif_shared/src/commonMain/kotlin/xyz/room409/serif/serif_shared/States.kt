@@ -6,12 +6,15 @@ sealed class MatrixState {
         get() {
             return "Serif Matrix client, pre-alpha on ${Platform().platform}"
         }
+    abstract fun refresh(): MatrixState
 }
 class MatrixLogin(val login_message: String, val mclient: MatrixClient) : MatrixState() {
     constructor() : this(
         login_message = "Please enter your username and password\n",
         mclient = MatrixClient()
     )
+    // No need to refresh
+    override fun refresh(): MatrixState = this
     fun login(username: String, password: String, onSync: () -> Unit): MatrixState {
         when (val loginResult = mclient.login(username, password, onSync)) {
             is Success -> { return MatrixRooms(msession = loginResult.value, rooms = listOf(), message = "Logged in! Maybe try syncing?") }
@@ -40,7 +43,7 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
     }
 }
 class MatrixRooms(private val msession: MatrixSession, val rooms: List<Pair<String, String>>, val message: String) : MatrixState() {
-    fun refresh(): MatrixState = MatrixRooms(
+    override fun refresh(): MatrixState = MatrixRooms(
                                     msession = msession, rooms = msession.rooms,
                                     message = "updated...\n"
                                 )
@@ -69,7 +72,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         }
         return this
     }
-    fun refresh(): MatrixState = MatrixChatRoom(
+    override fun refresh(): MatrixState = MatrixChatRoom(
                                     msession,
                                     room_id,
                                     msession.rooms.find({ (id, _) -> id == room_id })!!.second,
