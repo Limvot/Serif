@@ -1,12 +1,12 @@
 package xyz.room409.serif.serif_android
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import xyz.room409.serif.serif_shared.MatrixState
-import xyz.room409.serif.serif_shared.MatrixLogin
 import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import xyz.room409.serif.serif_shared.MatrixLogin
+import xyz.room409.serif.serif_shared.MatrixState
 
-fun version(mstate : MatrixState): String {
+fun version(mstate: MatrixState): String {
     return mstate.version + ", Android UI"
 }
 

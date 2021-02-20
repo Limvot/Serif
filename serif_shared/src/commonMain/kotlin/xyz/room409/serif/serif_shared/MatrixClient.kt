@@ -1,20 +1,20 @@
 package xyz.room409.serif.serif_shared
-import kotlinx.coroutines.*
 import io.ktor.client.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
 import io.ktor.client.features.json.*
 import io.ktor.client.features.json.serializer.KotlinxSerializer
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.*
 
-sealed class Outcome<out T : Any> { }
+sealed class Outcome<out T : Any>
 data class Success<out T : Any>(val value: T) : Outcome<T>()
 data class Error(val message: String, val cause: Exception? = null) : Outcome<Nothing>()
 
 // Returns the first Event of class T, or null
 inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.firstOrNull { it != null }
 
-class MatrixSession(val client: HttpClient, val access_token: String, var transactionId : Long) {
+class MatrixSession(val client: HttpClient, val access_token: String, var transactionId: Long) {
     var sync_response: SyncResponse? = null
 
     // rooms is a pair of room_id and room display name
@@ -23,22 +23,27 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     // and then the error message. Technically we should also be looking at timeline events
     // for room name changes too. Also, it's not working when there's not a room name -
     // the way I'm reading the doc heros should be non-null... maybe it's not decoding right?
-    val rooms: List<Pair<String,String>>
+    val rooms: List<Pair<String, String>>
         get() = sync_response?.rooms?.join?.entries?.map { (id, room) ->
-            Pair(id, (room.state.events.firstOfType<StateEvent<RoomNameContent>>()?.content?.name
-                   ?: room.state.events.firstOfType<StateEvent<RoomCanonicalAliasContent>>()?.content?.alias
-                   ?: room.summary.heroes?.joinToString(", ")
-                   ?: "<no room name or heroes>"))
+            Pair(
+                id,
+                (
+                    room.state.events.firstOfType<StateEvent<RoomNameContent>>()?.content?.name
+                        ?: room.state.events.firstOfType<StateEvent<RoomCanonicalAliasContent>>()?.content?.alias
+                        ?: room.summary.heroes?.joinToString(", ")
+                        ?: "<no room name or heroes>"
+                    )
+            )
         }?.toList() ?: listOf()
 
     fun sendMessage(msg: String, room_id: String): Outcome<String> {
         try {
             val result = runBlocking {
                 val message_confirmation =
-                client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
-                    contentType(ContentType.Application.Json)
-                    body = SendRoomMessage(msg)
-                }
+                    client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
+                        contentType(ContentType.Application.Json)
+                        body = SendRoomMessage(msg)
+                    }
                 transactionId++
                 message_confirmation.event_id
             }
@@ -50,7 +55,7 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     }
 
     fun closeSession() {
-        //Update Database with latest transactionId
+        // Update Database with latest transactionId
         Database.updateSession(this.access_token, this.transactionId)
         // TO ACT LIKE A LOGOUT, CLOSING THE CLIENT
         client.close()
@@ -98,9 +103,11 @@ class MatrixClient {
     fun login(username: String, password: String): Outcome<MatrixSession> {
         val client = HttpClient() {
             install(JsonFeature) {
-                serializer = KotlinxSerializer(kotlinx.serialization.json.Json {
-                    ignoreUnknownKeys = true
-                })
+                serializer = KotlinxSerializer(
+                    kotlinx.serialization.json.Json {
+                        ignoreUnknownKeys = true
+                    }
+                )
             }
         }
         try {
@@ -111,9 +118,9 @@ class MatrixClient {
                 }
             }
 
-            //Save to DB
+            // Save to DB
             println("Saving session to db")
-            val new_transactionId : Long = 0
+            val new_transactionId: Long = 0
             Database.saveSession(username, loginResponse.access_token, new_transactionId)
 
             return Success(MatrixSession(client, loginResponse.access_token, new_transactionId))
@@ -124,12 +131,14 @@ class MatrixClient {
     fun loginFromSavedSession(username: String): Outcome<MatrixSession> {
         val client = HttpClient() {
             install(JsonFeature) {
-                serializer = KotlinxSerializer(kotlinx.serialization.json.Json {
-                    ignoreUnknownKeys = true
-                })
+                serializer = KotlinxSerializer(
+                    kotlinx.serialization.json.Json {
+                        ignoreUnknownKeys = true
+                    }
+                )
             }
         }
-        //Load from DB
+        // Load from DB
         println("loading specific session from db")
         val sessions = Database.getUserSession(username)
         val tok = sessions.second
@@ -137,7 +146,7 @@ class MatrixClient {
         return Success(MatrixSession(client, tok, transactionId))
     }
 
-    fun getStoredSessions() : List<String> {
+    fun getStoredSessions(): List<String> {
         println("loading sessions from db")
         return Database.getStoredSessions().map({ it.first })
     }

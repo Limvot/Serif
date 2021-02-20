@@ -1,6 +1,5 @@
 package xyz.room409.serif.serif_shared
 
-
 import platform.UIKit.UIDevice
 
 actual class Platform actual constructor() {
