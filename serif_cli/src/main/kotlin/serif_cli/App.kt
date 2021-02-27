@@ -4,9 +4,8 @@
 package xyz.room409.serif.serif_cli
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
-
-import kotlin.concurrent.thread
 import java.util.concurrent.LinkedBlockingQueue
+import kotlin.concurrent.thread
 
 class App {
     val console = System.console()
@@ -84,8 +83,8 @@ class App {
                 }
                 is MatrixRooms -> {
                     println(m.message)
-                    m.rooms.forEachIndexed { i, (id, name) ->
-                        println("$i - $id - $name")
+                    m.rooms.forEachIndexed { i, room ->
+                        println("$i - ${room.id} - ${room.name}- ${room.unreadCount}, ${room.highlightCount}")
                     }
                     print("Input a room number, :refresh, or :q> ")
                     getInputToQueue()
@@ -97,7 +96,7 @@ class App {
                     } else {
                         val selection = msg.toIntOrNull()
                         if (selection != null && selection >= 0 && selection < m.rooms.size) {
-                            m.getRoom(m.rooms[selection].first)
+                            m.getRoom(m.rooms[selection].id)
                         } else {
                             println("Bad number $msg, try again")
                             m
@@ -126,7 +125,7 @@ class App {
         val esc = 27.toChar()
         print("$esc[H$esc[2J")
     }
-    fun printRoom(messages: List<Pair<String,String>>, room_id: String) {
+    fun printRoom(messages: List<Pair<String, String>>, room_id: String) {
         // Start Fresh
         this.clearScreen()
 

@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="serif_shared-jvm-1.0-SNAPSHOT">
+    <output-path>C:\Users\neelb\Serif\serif_shared\build\libs</output-path>
+    <root id="archive" name="serif_shared-jvm-1.0-SNAPSHOT.jar">
+      <element id="module-output" name="Serif.serif_shared.jvmMain" />
+    </root>
+  </artifact>
+</component>
