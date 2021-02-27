@@ -91,7 +91,7 @@ class RoomMessageEvent(
     override fun toString() = "RoomMessageEvent(" + raw_self.toString() + ")"
 }
 @Serializable
-class RoomMessageEventContent(val body: String, val msgtype: String)
+class RoomMessageEventContent(val body: String = "<missing message body, likely redacted>", val msgtype: String = "<missing type, likely redacted>")
 
 @Serializable
 class EventFallback(
