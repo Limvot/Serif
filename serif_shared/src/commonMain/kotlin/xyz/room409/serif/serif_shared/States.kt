@@ -42,16 +42,17 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         return mclient.getStoredSessions()
     }
 }
-class MatrixRooms(private val msession: MatrixSession, val rooms: List<Pair<String, String>>, val message: String) : MatrixState() {
+data class SharedUiRoom(val id: String, val name: String, val unreadCount: Int, val highlightCount: Int)
+class MatrixRooms(private val msession: MatrixSession, val rooms: List<SharedUiRoom>, val message: String) : MatrixState() {
     override fun refresh(): MatrixState = MatrixRooms(
-                                    msession = msession, rooms = msession.rooms,
-                                    message = "updated...\n"
-                                )
+        msession = msession, rooms = msession.rooms,
+        message = "updated...\n"
+    )
     fun getRoom(id: String): MatrixState {
         return MatrixChatRoom(
             msession,
             id,
-            this.rooms.find({ (_id, _) -> _id == id })!!.second,
+            this.rooms.find({ room -> room.id == id })!!.name,
             msession.getRoomEvents(id).map {
                 if (it as? RoomMessageEvent != null) {
                     Pair(it.sender, it.content.body)
@@ -64,7 +65,7 @@ class MatrixRooms(private val msession: MatrixSession, val rooms: List<Pair<Stri
         return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
     }
 }
-class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, val messages: List<Pair<String,String>>) : MatrixState() {
+class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, val messages: List<Pair<String, String>>) : MatrixState() {
     fun sendMessage(msg: String): MatrixState {
         when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
             is Success -> { println("${sendMessageResult.value}") }
@@ -73,15 +74,15 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         return this
     }
     override fun refresh(): MatrixState = MatrixChatRoom(
-                                    msession,
-                                    room_id,
-                                    msession.rooms.find({ (id, _) -> id == room_id })!!.second,
-                                    msession.getRoomEvents(room_id).map {
-                                        if (it as? RoomMessageEvent != null) {
-                                            Pair(it.sender, it.content.body)
-                                        } else { null }
-                                    }.filterNotNull()
-                                )
+        msession,
+        room_id,
+        msession.rooms.find({ room -> room.id == room_id })!!.name,
+        msession.getRoomEvents(room_id).map {
+            if (it as? RoomMessageEvent != null) {
+                Pair(it.sender, it.content.body)
+            } else { null }
+        }.filterNotNull()
+    )
     fun exitRoom(): MatrixState {
         return MatrixRooms(msession, msession.rooms, "Back to rooms.")
     }

@@ -41,8 +41,8 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
                 onSync()
             } catch (e: Exception) {
                 // Exponential backoff on failure
-                val backoff_ms = timeout_ms shl fail_times;
-                println("This sync failed with an exception $e, waiting ${backoff_ms/1000} seconds before trying again")
+                val backoff_ms = timeout_ms shl fail_times
+                println("This sync failed with an exception $e, waiting ${backoff_ms / 1000} seconds before trying again")
                 fail_times += 1
                 Thread.sleep(backoff_ms)
             }
@@ -54,19 +54,23 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     // then for a canonical alias in the state events, then a list of hero users in the room summary,
     // and then the error message. Technically we should also be looking at timeline events
     // for room name changes too. Also, it's not working when there's not a room name -
-    // the way I'm reading the doc heros should be non-null... maybe it's not decoding right?
-    val rooms: List<Pair<String, String>>
-        get() = synchronized(this) { sync_response?.rooms?.join?.entries?.map { (id, room) ->
-            Pair(
-                id,
-                (
-                    room.state.events.firstStateEventContentOfType<RoomNameContent>()?.name
-                        ?: room.state.events.firstStateEventContentOfType<RoomCanonicalAliasContent>()?.alias
-                        ?: room.summary.heroes?.joinToString(", ")
-                        ?: "<no room name or heroes>"
-                    )
-            )
-        }?.toList() ?: listOf() }
+    // the way I'm reading the doc heroes should be non-null... maybe it's not decoding right?
+    val rooms: List<SharedUiRoom>
+        get() = synchronized(this) {
+            sync_response?.rooms?.join?.entries?.map { (id, room,) ->
+                SharedUiRoom(
+                    id,
+                    (
+                        room.state.events.firstStateEventContentOfType<RoomNameContent>()?.name
+                            ?: room.state.events.firstStateEventContentOfType<RoomCanonicalAliasContent>()?.alias
+                            ?: room.summary.heroes?.joinToString(", ")
+                            ?: "<no room name or heroes>"
+                        ),
+                    room.unread_notifications?.unread_count ?: 0,
+                    room.unread_notifications?.highlight_count ?: 0,
+                )
+            }?.toList() ?: listOf()
+        }
 
     fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
 
@@ -110,6 +114,7 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
                         // This also needs to be changed to something that supports discontinuous
                         // sections of timeline with different prev_patch, etc
                         sync_response!!.rooms.join[room_id]!!.timeline.events += room.timeline.events
+                        sync_response!!.rooms.join[room_id]!!.unread_notifications = room.unread_notifications
                     } else {
                         sync_response!!.rooms.join[room_id] = room
                     }
