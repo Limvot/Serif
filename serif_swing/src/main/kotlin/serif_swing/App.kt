@@ -67,8 +67,8 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
     var message_label = JLabel(m.message)
     var inner_scroll_pane = JPanel()
     init {
-        panel.layout = BoxLayout(panel, BoxLayout.PAGE_AXIS)
-        panel.add(message_label)
+        panel.layout = BorderLayout()
+        panel.add(message_label, BorderLayout.PAGE_START)
 
         inner_scroll_pane.layout = BoxLayout(inner_scroll_pane, BoxLayout.PAGE_AXIS)
         for ((id, name, unreadCount, highlightCount) in m.rooms) {
@@ -76,10 +76,10 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
             inner_scroll_pane.add(button)
             button.addActionListener({ transition(m.getRoom(id), true) })
         }
-        panel.add(JScrollPane(inner_scroll_pane))
+        panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
 
         var back_button = JButton("(Fake) Logout")
-        panel.add(back_button)
+        panel.add(back_button, BorderLayout.PAGE_END)
         back_button.addActionListener({ transition(m.fake_logout(), true) })
     }
     override fun refresh() {
@@ -101,9 +101,12 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var c_right = GridBagConstraints()
     var message_field = JTextField(20)
     init {
-        panel.layout = BoxLayout(panel, BoxLayout.PAGE_AXIS)
+        panel.layout = BorderLayout()
 
-        inner_scroll_pane.layout = GridBagLayout()
+        val backfill_button = JButton("Backfill")
+        backfill_button.addActionListener({ m.requestBackfill() })
+        panel.add(backfill_button, BorderLayout.PAGE_START)
+
         c_left.anchor = GridBagConstraints.EAST
         c_left.gridwidth = GridBagConstraints.RELATIVE
         c_left.fill = GridBagConstraints.NONE
@@ -115,32 +118,40 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         c_right.weightx = 1.0
 
         inner_scroll_pane.layout = BoxLayout(inner_scroll_pane, BoxLayout.PAGE_AXIS)
+        redrawMessages()
+        panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
+
+        val message_panel = JPanel()
+        message_panel.layout = BorderLayout()
+        var back_button = JButton("Back")
+        message_panel.add(back_button, BorderLayout.LINE_START)
+        message_panel.add(message_field, BorderLayout.CENTER)
+        var send_button = JButton("Send")
+        message_panel.add(send_button, BorderLayout.LINE_END)
+        panel.add(message_panel, BorderLayout.PAGE_END)
+        val onSend: (ActionEvent) -> Unit = {
+            val text = message_field.text
+            message_field.text = ""
+            transition(m.sendMessage(text), true)
+        }
+        message_field.addActionListener(onSend)
+        send_button.addActionListener(onSend)
+        back_button.addActionListener({ transition(m.exitRoom(), true) })
+
+    }
+    fun redrawMessages() {
+        inner_scroll_pane.removeAll()
         for ((sender, message) in m.messages) {
             inner_scroll_pane.add(JLabel("$sender:  "), c_left)
             inner_scroll_pane.add(JLabel(message), c_right)
         }
-        panel.add(JScrollPane(inner_scroll_pane))
-        panel.add(message_field)
-        var send_button = JButton("Send")
-        panel.add(send_button)
-        val onSend: (ActionEvent) -> Unit = { transition(m.sendMessage(message_field.text), true) }
-        message_field.addActionListener(onSend)
-        send_button.addActionListener(onSend)
-
-        var back_button = JButton("Back")
-        panel.add(back_button)
-        back_button.addActionListener({ transition(m.exitRoom(), true) })
     }
     override fun refresh() {
         transition(m.refresh(), true)
     }
     fun update(new_m: MatrixChatRoom) {
         m = new_m
-        inner_scroll_pane.removeAll()
-        for ((sender, message) in m.messages) {
-            inner_scroll_pane.add(JLabel("$sender:  "), c_left)
-            inner_scroll_pane.add(JLabel(message), c_right)
-        }
+        redrawMessages()
     }
 }
 

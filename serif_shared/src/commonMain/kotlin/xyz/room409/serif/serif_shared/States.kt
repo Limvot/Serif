@@ -73,6 +73,9 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         }
         return this
     }
+    fun requestBackfill() {
+        msession.requestBackfill(room_id)
+    }
     override fun refresh(): MatrixState = MatrixChatRoom(
         msession,
         room_id,
