@@ -107,19 +107,15 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         backfill_button.addActionListener({ m.requestBackfill() })
         panel.add(backfill_button, BorderLayout.PAGE_START)
 
-        c_left.anchor = GridBagConstraints.EAST
-        c_left.gridwidth = GridBagConstraints.RELATIVE
-        c_left.fill = GridBagConstraints.NONE
-        c_left.weightx = 0.0
-
-        c_right.anchor = GridBagConstraints.EAST
-        c_right.gridwidth = GridBagConstraints.REMAINDER
-        c_right.fill = GridBagConstraints.HORIZONTAL
-        c_right.weightx = 1.0
-
-        inner_scroll_pane.layout = BoxLayout(inner_scroll_pane, BoxLayout.PAGE_AXIS)
+        val group_layout = GroupLayout(inner_scroll_pane)
+        inner_scroll_pane.layout = group_layout
+        group_layout.autoCreateGaps = true
+        group_layout.autoCreateContainerGaps = true
         redrawMessages()
-        panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
+        panel.add(JScrollPane(inner_scroll_pane,
+                              JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
+                              JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
+                  BorderLayout.CENTER)
 
         val message_panel = JPanel()
         message_panel.layout = BorderLayout()
@@ -141,10 +137,28 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     }
     fun redrawMessages() {
         inner_scroll_pane.removeAll()
+        val layout = inner_scroll_pane.layout as GroupLayout
+        val par_senders = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
+        val par_messages = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
+        var seq_vert_groups = layout.createSequentialGroup()
         for ((sender, message) in m.messages) {
-            inner_scroll_pane.add(JLabel("$sender:  "), c_left)
-            inner_scroll_pane.add(JLabel(message), c_right)
+            val sender = JLabel("$sender:  ")
+
+            val message = JTextArea(message)
+            message.setEditable(false)
+            message.lineWrap = true
+            message.wrapStyleWord = true
+
+            par_senders.addComponent(sender)
+            par_messages.addComponent(message)
+            seq_vert_groups.addGroup(layout.createParallelGroup(GroupLayout.Alignment.BASELINE)
+                                        .addComponent(sender)
+                                        .addComponent(message))
         }
+        layout.setHorizontalGroup(layout.createSequentialGroup()
+                                    .addGroup(par_senders)
+                                    .addGroup(par_messages))
+        layout.setVerticalGroup(seq_vert_groups)
     }
     override fun refresh() {
         transition(m.refresh(), true)
