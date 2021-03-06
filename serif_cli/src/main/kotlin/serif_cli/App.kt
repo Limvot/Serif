@@ -125,7 +125,7 @@ class App {
         val esc = 27.toChar()
         print("$esc[H$esc[2J")
     }
-    fun printRoom(messages: List<Pair<String, String>>, room_id: String) {
+    fun printRoom(messages: List<SharedUiMessage>, room_id: String) {
         // Start Fresh
         this.clearScreen()
 

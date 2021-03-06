@@ -7,9 +7,9 @@ plugins {
     id("kotlin-android-extensions")
     id("com.squareup.sqldelight")
 }
+val ktor_version = "1.5.0"
 group = "xyz.room409.serif"
 version = "1.0-SNAPSHOT"
-val ktor_version = "1.5.0"
 val sql_delight_version = "1.4.3"
 
 repositories {

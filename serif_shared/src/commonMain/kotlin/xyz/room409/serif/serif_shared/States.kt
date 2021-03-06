@@ -54,7 +54,7 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
         SharedUiRoom(
             id,
             determineRoomName(room, id),
-            room.unread_notifications?.unread_count ?: 0,
+            room.unread_notifications?.notification_count ?: 0,
             room.unread_notifications?.highlight_count ?: 0,
             room.timeline.events.findLast { it as? RoomMessageEvent != null }?.let {
                 val it = it as RoomMessageEvent
