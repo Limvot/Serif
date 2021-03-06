@@ -70,11 +70,19 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
         panel.layout = BorderLayout()
         panel.add(message_label, BorderLayout.PAGE_START)
 
-        inner_scroll_pane.layout = BoxLayout(inner_scroll_pane, BoxLayout.PAGE_AXIS)
-        for ((id, name, unreadCount, highlightCount) in m.rooms) {
-            var button = JButton("$name - $id - ($unreadCount unread / $highlightCount mentions)")
-            inner_scroll_pane.add(button)
+        inner_scroll_pane.layout = GridLayout(0,1)
+        for ((id, name, unreadCount, highlightCount, lastMessage) in m.rooms) {
+            var button = JButton()
+            button.layout = BoxLayout(button, BoxLayout.PAGE_AXIS)
+
+            val room_name = JLabel("$name ($unreadCount unread / $highlightCount mentions)")
+            val last_message = JLabel(lastMessage?.message?.take(80) ?: "")
+
+            button.add(room_name)
+            button.add(last_message)
+
             button.addActionListener({ transition(m.getRoom(id), true) })
+            inner_scroll_pane.add(button)
         }
         panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
 
@@ -138,8 +146,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     fun redrawMessages() {
         inner_scroll_pane.removeAll()
         val layout = inner_scroll_pane.layout as GroupLayout
-        val par_senders = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-        val par_messages = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
+        val parallel_group = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
         var seq_vert_groups = layout.createSequentialGroup()
         for ((sender, message) in m.messages) {
             val sender = JLabel("$sender:  ")
@@ -149,23 +156,27 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             message.lineWrap = true
             message.wrapStyleWord = true
 
-            par_senders.addComponent(sender)
-            par_messages.addComponent(message)
-            seq_vert_groups.addGroup(layout.createParallelGroup(GroupLayout.Alignment.BASELINE)
-                                        .addComponent(sender)
-                                        .addComponent(message))
+            parallel_group.addComponent(sender)
+            parallel_group.addComponent(message)
+            seq_vert_groups.addComponent(sender)
+            seq_vert_groups.addGroup(layout.createSequentialGroup()
+                            .addPreferredGap(sender, message, LayoutStyle.ComponentPlacement.INDENT)
+                            .addComponent(message))
+
         }
-        layout.setHorizontalGroup(layout.createSequentialGroup()
-                                    .addGroup(par_senders)
-                                    .addGroup(par_messages))
+        layout.setHorizontalGroup(parallel_group)
         layout.setVerticalGroup(seq_vert_groups)
     }
     override fun refresh() {
         transition(m.refresh(), true)
     }
     fun update(new_m: MatrixChatRoom) {
-        m = new_m
-        redrawMessages()
+        if (m.messages != new_m.messages) {
+            m = new_m
+            redrawMessages()
+        } else {
+            m = new_m
+        }
     }
 }
 
@@ -202,7 +213,13 @@ class App {
         frame.contentPane.removeAll()
         var panel = JPanel()
         val to_ret = when (mstate) {
-            is MatrixLogin -> SwingLogin(::transition, { sstate.refresh(); frame.validate(); frame.repaint(); }, panel, mstate)
+            is MatrixLogin -> SwingLogin(::transition, {
+                javax.swing.SwingUtilities.invokeLater({
+                    sstate.refresh()
+                    frame.validate()
+                    frame.repaint()
+                })
+            }, panel, mstate)
             is MatrixRooms -> SwingRooms(::transition, panel, mstate)
             is MatrixChatRoom -> SwingChatRoom(::transition, panel, mstate)
         }
@@ -215,5 +232,6 @@ class App {
 
 fun main(args: Array<String>) {
     FlatDarkLaf.install()
+    UIManager.getLookAndFeelDefaults().put("defaultFont", Font("Serif", Font.PLAIN, 16));
     javax.swing.SwingUtilities.invokeLater({ App() })
 }

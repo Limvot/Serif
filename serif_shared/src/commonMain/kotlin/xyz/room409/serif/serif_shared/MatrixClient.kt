@@ -55,22 +55,13 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     // and then the error message. Technically we should also be looking at timeline events
     // for room name changes too. Also, it's not working when there's not a room name -
     // the way I'm reading the doc heroes should be non-null... maybe it's not decoding right?
-    val rooms: List<SharedUiRoom>
-        get() = synchronized(this) {
-            sync_response?.rooms?.join?.entries?.map { (id, room,) ->
-                SharedUiRoom(
-                    id,
-                    (
-                        room.state.events.firstStateEventContentOfType<RoomNameContent>()?.name
-                            ?: room.state.events.firstStateEventContentOfType<RoomCanonicalAliasContent>()?.alias
-                            ?: room.summary.heroes?.joinToString(", ")
-                            ?: "<no room name or heroes>"
-                        ),
-                    room.unread_notifications?.unread_count ?: 0,
-                    room.unread_notifications?.highlight_count ?: 0,
-                )
-            }?.toList() ?: listOf()
-        }
+
+    fun <T> mapRooms(f: (String,Room) -> T): List<T> = synchronized(this) {
+        sync_response?.rooms?.join?.entries?.map{ (id,room,) -> f(id, room) }?.toList() ?: listOf()
+    }
+    fun <T> mapRoom(id: String, f: (Room) -> T): T? = synchronized(this) {
+        sync_response?.rooms?.join?.get(id)?.let { f(it) }
+    }
 
     fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
 
@@ -103,8 +94,8 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
                     // This also needs to be changed to something that supports discontinuous
                     // sections of timeline with different prev_patch, etc
                     if (response.chunk != null) {
-                        sync_response!!.rooms.join[room_id]!!.state.events += response.chunk.filter { it is StateEvent<*> }.asReversed()
-                        sync_response!!.rooms.join[room_id]!!.timeline.events = response.chunk + sync_response!!.rooms.join[room_id]!!.timeline.events
+                        sync_response!!.rooms.join[room_id]!!.state.events += response.chunk.filter { it is StateEvent<*> }
+                        sync_response!!.rooms.join[room_id]!!.timeline.events = response.chunk.asReversed() + sync_response!!.rooms.join[room_id]!!.timeline.events
                     }
                     if (response.state != null) {
                         sync_response!!.rooms.join[room_id]!!.state.events += response.state
