@@ -7,7 +7,6 @@ import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
 import java.awt.*
 import java.awt.event.*
-import java.util.concurrent.LinkedBlockingQueue
 import javax.swing.*
 import javax.swing.text.*
 
@@ -60,6 +59,9 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         button.addActionListener(logIn)
     }
     override fun refresh() {
+        // This should change when we have multiple sessions,
+        // since it will clear all text input fields on
+        // refresh
         transition(m.refresh(), true)
     }
 }
@@ -181,7 +183,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 }
 
 class App {
-    val queue = LinkedBlockingQueue<String>()
     var frame = JFrame("Serif")
     var sstate: SwingState
 

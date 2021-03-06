@@ -87,7 +87,7 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     fun requestBackfill(room_id: String) {
         thread(start = true) {
             try {
-                val from = sync_response!!.rooms.join[room_id]!!.timeline.prev_batch
+                val from = synchronized(this) { sync_response!!.rooms.join[room_id]!!.timeline.prev_batch }
                 val url = "https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/messages?access_token=$access_token&from=$from&dir=b"
                 val response = runBlocking { client.get<BackfillResponse>(url) }
                 synchronized(this) {
