@@ -15,6 +15,8 @@
 local.properties
 serif_android/build
 serif_cli/build
+serif_swing/build
+serif_swing/test.db
 serif_shared/build
 test/
 *.swp

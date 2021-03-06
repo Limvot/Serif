@@ -21,7 +21,7 @@ inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.
 // the right T. Java generics are bad, yall, and Kotlin in trying to be nice sometimes makes things much worse.
 inline fun <reified T> List<Event>.firstStateEventContentOfType(): T? = this.map { ((it as? StateEvent<T>?)?.content) as? T? }.firstOrNull { it != null }
 
-class MatrixSession(val client: HttpClient, val access_token: String, var transactionId: Long, val onSync: () -> Unit) {
+class MatrixSession(val client: HttpClient, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var sync_response: SyncResponse? = null
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
@@ -38,7 +38,7 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
             try {
                 mergeInSync(runBlocking { client.get<SyncResponse>(url) })
                 fail_times = 0
-                onSync()
+                onUpdate()
             } catch (e: Exception) {
                 // Exponential backoff on failure
                 val backoff_ms = timeout_ms shl fail_times
@@ -55,22 +55,13 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     // and then the error message. Technically we should also be looking at timeline events
     // for room name changes too. Also, it's not working when there's not a room name -
     // the way I'm reading the doc heroes should be non-null... maybe it's not decoding right?
-    val rooms: List<SharedUiRoom>
-        get() = synchronized(this) {
-            sync_response?.rooms?.join?.entries?.map { (id, room,) ->
-                SharedUiRoom(
-                    id,
-                    (
-                        room.state.events.firstStateEventContentOfType<RoomNameContent>()?.name
-                            ?: room.state.events.firstStateEventContentOfType<RoomCanonicalAliasContent>()?.alias
-                            ?: room.summary.heroes?.joinToString(", ")
-                            ?: "<no room name or heroes>"
-                        ),
-                    room.unread_notifications?.unread_count ?: 0,
-                    room.unread_notifications?.highlight_count ?: 0,
-                )
-            }?.toList() ?: listOf()
-        }
+
+    fun <T> mapRooms(f: (String,Room) -> T): List<T> = synchronized(this) {
+        sync_response?.rooms?.join?.entries?.map{ (id,room,) -> f(id, room) }?.toList() ?: listOf()
+    }
+    fun <T> mapRoom(id: String, f: (Room) -> T): T? = synchronized(this) {
+        sync_response?.rooms?.join?.get(id)?.let { f(it) }
+    }
 
     fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
 
@@ -90,6 +81,31 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
             return Success("Hello, ${Platform().platform}, ya cowpeople! - Our sent event id is: $result")
         } catch (e: Exception) {
             return Error("Message Send Failed", e)
+        }
+    }
+
+    fun requestBackfill(room_id: String) {
+        thread(start = true) {
+            try {
+                val from = synchronized(this) { sync_response!!.rooms.join[room_id]!!.timeline.prev_batch }
+                val url = "https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/messages?access_token=$access_token&from=$from&dir=b"
+                val response = runBlocking { client.get<BackfillResponse>(url) }
+                synchronized(this) {
+                    // This also needs to be changed to something that supports discontinuous
+                    // sections of timeline with different prev_patch, etc
+                    if (response.chunk != null) {
+                        sync_response!!.rooms.join[room_id]!!.state.events += response.chunk.filter { it is StateEvent<*> }
+                        sync_response!!.rooms.join[room_id]!!.timeline.events = response.chunk.asReversed() + sync_response!!.rooms.join[room_id]!!.timeline.events
+                    }
+                    if (response.state != null) {
+                        sync_response!!.rooms.join[room_id]!!.state.events += response.state
+                    }
+                    sync_response!!.rooms.join[room_id]!!.timeline.prev_batch = response.end
+                }
+                onUpdate()
+            } catch (e: Exception) {
+                println("This backfill for $room_id failed with an exception $e")
+            }
         }
     }
 
@@ -126,7 +142,7 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
 }
 
 class MatrixClient {
-    fun login(username: String, password: String, onSync: () -> Unit): Outcome<MatrixSession> {
+    fun login(username: String, password: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
         val client = HttpClient() {
             install(JsonFeature) {
                 serializer = KotlinxSerializer(
@@ -149,12 +165,12 @@ class MatrixClient {
             val new_transactionId: Long = 0
             Database.saveSession(username, loginResponse.access_token, new_transactionId)
 
-            return Success(MatrixSession(client, loginResponse.access_token, new_transactionId, onSync))
+            return Success(MatrixSession(client, loginResponse.access_token, new_transactionId, onUpdate))
         } catch (e: Exception) {
             return Error("Login failed", e)
         }
     }
-    fun loginFromSavedSession(username: String, onSync: () -> Unit): Outcome<MatrixSession> {
+    fun loginFromSavedSession(username: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
         val client = HttpClient() {
             install(JsonFeature) {
                 serializer = KotlinxSerializer(
@@ -169,7 +185,7 @@ class MatrixClient {
         val sessions = Database.getUserSession(username)
         val tok = sessions.second
         val transactionId = sessions.third
-        return Success(MatrixSession(client, tok, transactionId, onSync))
+        return Success(MatrixSession(client, tok, transactionId, onUpdate))
     }
 
     fun getStoredSessions(): List<String> {
