@@ -24,17 +24,19 @@ data class SendRoomMessage(val msgtype: String, val body: String) {
 }
 @Serializable
 data class EventIdResponse(val event_id: String)
-
+@Serializable
+data class UnreadNotifications(val highlight_count: Int? = null, val unread_count: Int? = null)
 @Serializable
 data class SyncResponse(var next_batch: String, val rooms: Rooms)
 @Serializable
 data class Rooms(val join: MutableMap<String, Room>)
 @Serializable
-data class Room(var timeline: Timeline, var state: State, val summary: RoomSummary)
+data class Room(var timeline: Timeline, var state: State, val summary: RoomSummary, var unread_notifications: UnreadNotifications? = null)
+
 @Serializable
 data class Timeline(var events: List<Event>, val prev_batch: String)
 @Serializable
-data class State(val events: List<Event>)
+data class State(var events: List<Event>)
 @Serializable
 data class RoomSummary(
     @SerialName("m.heroes") val heroes: List<String>? = null,

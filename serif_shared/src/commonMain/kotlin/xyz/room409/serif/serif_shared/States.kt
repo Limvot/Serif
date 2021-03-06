@@ -12,8 +12,8 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         login_message = "Please enter your username and password\n",
         mclient = MatrixClient()
     )
-    fun login(username: String, password: String): MatrixState {
-        when (val loginResult = mclient.login(username, password)) {
+    fun login(username: String, password: String, onSync: () -> Unit): MatrixState {
+        when (val loginResult = mclient.login(username, password, onSync)) {
             is Success -> { return MatrixRooms(msession = loginResult.value, rooms = listOf(), message = "Logged in! Maybe try syncing?") }
             is Error -> {
                 return MatrixLogin(
@@ -23,8 +23,8 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
             }
         }
     }
-    fun loginFromSession(username: String): MatrixState {
-        when (val loginResult = mclient.loginFromSavedSession(username)) {
+    fun loginFromSession(username: String, onSync: () -> Unit): MatrixState {
+        when (val loginResult = mclient.loginFromSavedSession(username, onSync)) {
             is Success -> { return MatrixRooms(msession = loginResult.value, rooms = listOf(), message = "Logged in! Maybe try syncing?") }
             is Error -> {
                 return MatrixLogin(
@@ -39,29 +39,22 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         return mclient.getStoredSessions()
     }
 }
-class MatrixRooms(val msession: MatrixSession, val rooms: List<Pair<String, String>>, val message: String) : MatrixState() {
-    fun sync(): MatrixState {
-        when (val syncResult = msession.sync()) {
-            is Success -> {
-                return MatrixRooms(
-                    msession = msession, rooms = msession.rooms,
-                    message = "Sync success\n"
-                )
-            }
-            is Error -> {
-                return MatrixRooms(
-                    msession = msession, rooms = rooms,
-                    message = "${syncResult.message} - exception was ${syncResult.cause}, maybe try again?\n"
-                )
-            }
-        }
-    }
+data class SharedUiRoom(val id: String, val name: String, val unreadCount: Int, val highlightCount: Int)
+class MatrixRooms(private val msession: MatrixSession, val rooms: List<SharedUiRoom>, val message: String) : MatrixState() {
+    fun refresh(): MatrixState = MatrixRooms(
+        msession = msession, rooms = msession.rooms,
+        message = "updated...\n"
+    )
     fun getRoom(id: String): MatrixState {
         return MatrixChatRoom(
             msession,
             id,
-            this.rooms.find({ (_id, _) -> _id == id })!!.second,
-            msession.sync_response!!.rooms.join[id]!!.timeline.events.map { (it as? RoomMessageEvent)?.content?.body }.filterNotNull()
+            this.rooms.find({ room -> room.id == id })!!.name,
+            msession.getRoomEvents(id).map {
+                if (it as? RoomMessageEvent != null) {
+                    Pair(it.sender, it.content.body)
+                } else { null }
+            }.filterNotNull()
         )
     }
     fun fake_logout(): MatrixState {
@@ -69,7 +62,7 @@ class MatrixRooms(val msession: MatrixSession, val rooms: List<Pair<String, Stri
         return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
     }
 }
-class MatrixChatRoom(val msession: MatrixSession, val room_id: String, val name: String, val messages: List<String>) : MatrixState() {
+class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, val messages: List<Pair<String, String>>) : MatrixState() {
     fun sendMessage(msg: String): MatrixState {
         when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
             is Success -> { println("${sendMessageResult.value}") }
@@ -77,7 +70,17 @@ class MatrixChatRoom(val msession: MatrixSession, val room_id: String, val name:
         }
         return this
     }
+    fun refresh(): MatrixState = MatrixChatRoom(
+        msession,
+        room_id,
+        msession.rooms.find({ room -> room.id == room_id })!!.name,
+        msession.getRoomEvents(room_id).map {
+            if (it as? RoomMessageEvent != null) {
+                Pair(it.sender, it.content.body)
+            } else { null }
+        }.filterNotNull()
+    )
     fun exitRoom(): MatrixState {
-        return MatrixRooms(msession, msession.rooms, "Back to rooms. You can still do a :sync...")
+        return MatrixRooms(msession, msession.rooms, "Back to rooms.")
     }
 }
