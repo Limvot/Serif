@@ -56,8 +56,8 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     // for room name changes too. Also, it's not working when there's not a room name -
     // the way I'm reading the doc heroes should be non-null... maybe it's not decoding right?
 
-    fun <T> mapRooms(f: (String,Room) -> T): List<T> = synchronized(this) {
-        sync_response?.rooms?.join?.entries?.map{ (id,room,) -> f(id, room) }?.toList() ?: listOf()
+    fun <T> mapRooms(f: (String, Room) -> T): List<T> = synchronized(this) {
+        sync_response?.rooms?.join?.entries?.map { (id, room,) -> f(id, room) }?.toList() ?: listOf()
     }
     fun <T> mapRoom(id: String, f: (Room) -> T): T? = synchronized(this) {
         sync_response?.rooms?.join?.get(id)?.let { f(it) }
@@ -87,14 +87,14 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     fun getLocalImagePathFromUrl(image_url: String): Outcome<String> {
         try {
             val cached_img = Database.getImageInCache(image_url)
-            if(cached_img != null) {
+            if (cached_img != null) {
                 return Success(cached_img)
             } else {
                 val result = runBlocking {
                     val url = "https://synapse.room409.xyz/_matrix/media/r0/download/${image_url.replace("mxc://","")}"
                     println("Retrieving image from $url")
                     val media = client.get<ByteArray>(url)
-                    Database.addImageToCache(image_url,media)
+                    Database.addImageToCache(image_url, media)
                 }
                 println("Img file at $result")
                 return Success(result)

@@ -59,7 +59,7 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
             room.timeline.events.findLast { it as? RoomMessageEvent != null }?.let {
                 val it = it as RoomMessageEvent
                 SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts)
-           }
+            }
         )
     }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
     override fun refresh(): MatrixState = MatrixRooms(
@@ -78,18 +78,29 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
         return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
     }
 }
-data class SharedUiMessage(val sender: String, val message: String, val id: String, val timestamp: Long,
-                           val url: String? = null)
+data class SharedUiMessage(
+    val sender: String,
+    val message: String,
+    val id: String,
+    val timestamp: Long,
+    val url: String? = null
+)
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String) : MatrixState() {
     val messages: List<SharedUiMessage> = msession.getRoomEvents(room_id).map {
         if (it as? RoomMessageEvent != null) {
-            if(it.content.url != null) {
-                when(val img_local = msession.getLocalImagePathFromUrl(it.content.url)) {
-                    is Success -> { SharedUiMessage(it.sender, it.content.body, it.event_id,
-                                                    it.origin_server_ts, img_local.value) }
+            if (it.content.url != null) {
+                when (val img_local = msession.getLocalImagePathFromUrl(it.content.url)) {
+                    is Success -> {
+                        SharedUiMessage(
+                            it.sender, it.content.body, it.event_id,
+                            it.origin_server_ts, img_local.value
+                        )
+                    }
                     is Error -> {
-                        SharedUiMessage(it.sender, "Failed to load image ${it.content.url}",
-                                        it.event_id, it.origin_server_ts)
+                        SharedUiMessage(
+                            it.sender, "Failed to load image ${it.content.url}",
+                            it.event_id, it.origin_server_ts
+                        )
                     }
                 }
             } else {

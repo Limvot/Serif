@@ -48,7 +48,7 @@ object Database {
     }
 
     fun addImageToCache(url: String, file_data: ByteArray): String {
-        val file = File.createTempFile("media_",".img")
+        val file = File.createTempFile("media_", ".img")
         file.outputStream().write(file_data)
         val local = file.toPath().toString()
         this.db?.sessionDbQueries?.insertMedia(url, local)

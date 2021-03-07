@@ -72,7 +72,7 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
         panel.layout = BorderLayout()
         panel.add(message_label, BorderLayout.PAGE_START)
 
-        inner_scroll_pane.layout = GridLayout(0,1)
+        inner_scroll_pane.layout = GridLayout(0, 1)
         for ((id, name, unreadCount, highlightCount, lastMessage) in m.rooms) {
             var button = JButton()
             button.layout = BoxLayout(button, BoxLayout.PAGE_AXIS)
@@ -122,10 +122,14 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         group_layout.autoCreateGaps = true
         group_layout.autoCreateContainerGaps = true
         redrawMessages()
-        panel.add(JScrollPane(inner_scroll_pane,
-                              JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
-                              JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
-                  BorderLayout.CENTER)
+        panel.add(
+            JScrollPane(
+                inner_scroll_pane,
+                JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            ),
+            BorderLayout.CENTER
+        )
 
         val message_panel = JPanel()
         message_panel.layout = BorderLayout()
@@ -143,7 +147,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         message_field.addActionListener(onSend)
         send_button.addActionListener(onSend)
         back_button.addActionListener({ transition(m.exitRoom(), true) })
-
     }
     fun redrawMessages() {
         inner_scroll_pane.removeAll()
@@ -157,24 +160,25 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val sender = JLabel("$_sender:  ")
 
             val msg_widget =
-            if(url != null) {
-                val img = ImageIcon(url);
-                val label = JLabel(img)
-                label
-            } else {
-                val message = JTextArea(message)
-                message.setEditable(false)
-                message.lineWrap = true
-                message.wrapStyleWord = true
-                message
-            }
+                if (url != null) {
+                    val img = ImageIcon(url)
+                    val label = JLabel(img)
+                    label
+                } else {
+                    val message = JTextArea(message)
+                    message.setEditable(false)
+                    message.lineWrap = true
+                    message.wrapStyleWord = true
+                    message
+                }
             parallel_group.addComponent(sender)
             parallel_group.addComponent(msg_widget)
             seq_vert_groups.addComponent(sender)
-            seq_vert_groups.addGroup(layout.createSequentialGroup()
-                            .addPreferredGap(sender, msg_widget, LayoutStyle.ComponentPlacement.INDENT)
-                            .addComponent(msg_widget))
-
+            seq_vert_groups.addGroup(
+                layout.createSequentialGroup()
+                    .addPreferredGap(sender, msg_widget, LayoutStyle.ComponentPlacement.INDENT)
+                    .addComponent(msg_widget)
+            )
         }
         layout.setHorizontalGroup(parallel_group)
         layout.setVerticalGroup(seq_vert_groups)
@@ -224,13 +228,17 @@ class App {
         frame.contentPane.removeAll()
         var panel = JPanel()
         val to_ret = when (mstate) {
-            is MatrixLogin -> SwingLogin(::transition, {
-                javax.swing.SwingUtilities.invokeLater({
-                    sstate.refresh()
-                    frame.validate()
-                    frame.repaint()
-                })
-            }, panel, mstate)
+            is MatrixLogin -> SwingLogin(
+                ::transition,
+                {
+                    javax.swing.SwingUtilities.invokeLater({
+                        sstate.refresh()
+                        frame.validate()
+                        frame.repaint()
+                    })
+                },
+                panel, mstate
+            )
             is MatrixRooms -> SwingRooms(::transition, panel, mstate)
             is MatrixChatRoom -> SwingChatRoom(::transition, panel, mstate)
         }
@@ -243,6 +251,6 @@ class App {
 
 fun main(args: Array<String>) {
     FlatDarkLaf.install()
-    UIManager.getLookAndFeelDefaults().put("defaultFont", Font("Serif", Font.PLAIN, 16));
+    UIManager.getLookAndFeelDefaults().put("defaultFont", Font("Serif", Font.PLAIN, 16))
     javax.swing.SwingUtilities.invokeLater({ App() })
 }
