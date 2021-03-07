@@ -84,6 +84,27 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
         }
     }
 
+    fun getLocalImagePathFromUrl(image_url: String): Outcome<String> {
+        try {
+            val cached_img = Database.getImageInCache(image_url)
+            if(cached_img != null) {
+                return Success(cached_img)
+            } else {
+                val result = runBlocking {
+                    val url = "https://synapse.room409.xyz/_matrix/media/r0/download/${image_url.replace("mxc://","")}"
+                    println("Retrieving image from $url")
+                    val media = client.get<ByteArray>(url)
+                    Database.addImageToCache(image_url,media)
+                }
+                println("Img file at $result")
+                return Success(result)
+            }
+        } catch (e: Exception) {
+            println("Error with image retrieval $e")
+            return Error("Image Retrieval Failed", e)
+        }
+    }
+
     fun requestBackfill(room_id: String) {
         thread(start = true) {
             try {

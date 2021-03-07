@@ -150,20 +150,30 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         val layout = inner_scroll_pane.layout as GroupLayout
         val parallel_group = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
         var seq_vert_groups = layout.createSequentialGroup()
-        for ((sender, message) in m.messages) {
-            val sender = JLabel("$sender:  ")
+        for (msg in m.messages) {
+            val _sender = msg.sender
+            val message = msg.message
+            val url = msg.url
+            val sender = JLabel("$_sender:  ")
 
-            val message = JTextArea(message)
-            message.setEditable(false)
-            message.lineWrap = true
-            message.wrapStyleWord = true
-
+            val msg_widget =
+            if(url != null) {
+                val img = ImageIcon(url);
+                val label = JLabel(img)
+                label
+            } else {
+                val message = JTextArea(message)
+                message.setEditable(false)
+                message.lineWrap = true
+                message.wrapStyleWord = true
+                message
+            }
             parallel_group.addComponent(sender)
-            parallel_group.addComponent(message)
+            parallel_group.addComponent(msg_widget)
             seq_vert_groups.addComponent(sender)
             seq_vert_groups.addGroup(layout.createSequentialGroup()
-                            .addPreferredGap(sender, message, LayoutStyle.ComponentPlacement.INDENT)
-                            .addComponent(message))
+                            .addPreferredGap(sender, msg_widget, LayoutStyle.ComponentPlacement.INDENT)
+                            .addComponent(msg_widget))
 
         }
         layout.setHorizontalGroup(parallel_group)

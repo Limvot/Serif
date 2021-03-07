@@ -23,3 +23,24 @@ SELECT * FROM SavedSessions;
 selectUserSession:
 SELECT * FROM SavedSessions
 WHERE userId = ?;
+
+CREATE TABLE IF NOT EXISTS MediaCache (
+ mxcUrl TEXT NOT NULL PRIMARY KEY,
+ localPath TEXT NOT NULL
+);
+
+insertMedia:
+INSERT INTO MediaCache(mxcUrl, localPath)
+VALUES(?,?);
+
+updateMedia:
+UPDATE MediaCache
+SET localPath = ?
+WHERE mxcUrl = ?;
+
+selectCachedMedia:
+SELECT * FROM MediaCache
+WHERE mxcUrl = ?;
+
+deleteAllCache:
+DELETE FROM MediaCache;

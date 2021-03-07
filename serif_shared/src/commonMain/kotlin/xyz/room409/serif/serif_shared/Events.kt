@@ -23,6 +23,8 @@ data class SendRoomMessage(val msgtype: String, val body: String) {
     constructor(body: String) : this(msgtype = "m.text", body = body)
 }
 @Serializable
+data class MediaUploadResponse(val content_uri: String)
+@Serializable
 data class EventIdResponse(val event_id: String)
 @Serializable
 data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
@@ -96,7 +98,8 @@ class RoomMessageEvent(
     override fun toString() = "RoomMessageEvent(" + raw_self.toString() + ")"
 }
 @Serializable
-class RoomMessageEventContent(val body: String = "<missing message body, likely redacted>", val msgtype: String = "<missing type, likely redacted>")
+class RoomMessageEventContent(val body: String = "<missing message body, likely redacted>", val msgtype: String = "<missing type, likely redacted>",
+                              val url: String? = null)
 
 @Serializable
 class EventFallback(
