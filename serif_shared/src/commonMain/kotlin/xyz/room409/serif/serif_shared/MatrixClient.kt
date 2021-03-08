@@ -91,10 +91,13 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
                 val img_f = File(url)
                 val image_data = img_f.readBytes()
                 val f_size = image_data.size
+                var ct = ContentType.Image.JPEG
                 val mimetype =
                     if(url.endsWith(".png")) {
+                        ct = ContentType.Image.PNG
                         "image/png"
                     } else if(url.endsWith(".gif")) {
+                        ct = ContentType.Image.GIF
                         "image/gif"
                     } else {
                         "image/jpeg"
@@ -104,7 +107,7 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
                 //Post Image to server
                 val upload_img_response =
                     client.post<MediaUploadResponse>("https://synapse.room409.xyz/_matrix/media/r0/upload?access_token=$access_token") {
-                        contentType(ContentType.Image.Any)
+                        contentType(ct)
                         body = image_data
                     }
 
