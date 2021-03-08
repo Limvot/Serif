@@ -134,8 +134,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
         val group_layout = GroupLayout(inner_scroll_pane)
         inner_scroll_pane.layout = group_layout
-        group_layout.autoCreateGaps = true
-        group_layout.autoCreateContainerGaps = true
         redrawMessages()
         panel.add(
             JScrollPane(
@@ -183,7 +181,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         back_button.addActionListener({ transition(m.exitRoom(), true) })
     }
     fun redrawMessages() {
-        val inner_scroll_pane_pref_dim = inner_scroll_pane.preferredSize
+        val isp_width = inner_scroll_pane.getWidth()
         inner_scroll_pane.removeAll()
         val layout = inner_scroll_pane.layout as GroupLayout
         val parallel_group = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
@@ -196,13 +194,17 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
             val msg_widget =
                 if (url != null) {
-                    val og_image = ImageIcon(url).image
-                    val isp_width: Int = inner_scroll_pane_pref_dim.width
+                    val og_image_icon = ImageIcon(url)
+                    val og_image = og_image_icon.image
                     val img_width: Int = og_image.getWidth(null)
                     val img_height: Int = og_image.getHeight(null)
-                    val new_width = min(isp_width, img_width)
-                    val new_height = min(img_height, (img_height * new_width)/img_width)
-                    JLabel(ImageIcon(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT)))
+                    if (isp_width != 0 && img_width != 0 && img_height != 0) {
+                        val new_width = min(isp_width, img_width)
+                        val new_height = min(img_height, (img_height * new_width)/img_width)
+                        JLabel(ImageIcon(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT)))
+                    } else {
+                        JLabel(og_image_icon)
+                    }
                 } else {
                     val message = JTextArea(message)
                     message.setEditable(false)
