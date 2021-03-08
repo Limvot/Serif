@@ -5,6 +5,7 @@ package xyz.room409.serif.serif_swing
 import com.formdev.flatlaf.*
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
+import kotlin.math.min
 import java.awt.*
 import java.awt.event.*
 import javax.swing.*
@@ -182,6 +183,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         back_button.addActionListener({ transition(m.exitRoom(), true) })
     }
     fun redrawMessages() {
+        val inner_scroll_pane_pref_dim = inner_scroll_pane.preferredSize
         inner_scroll_pane.removeAll()
         val layout = inner_scroll_pane.layout as GroupLayout
         val parallel_group = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
@@ -194,9 +196,13 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
             val msg_widget =
                 if (url != null) {
-                    val img = ImageIcon(url)
-                    val label = JLabel(img)
-                    label
+                    val og_image = ImageIcon(url).image
+                    val isp_width: Int = inner_scroll_pane_pref_dim.width
+                    val img_width: Int = og_image.getWidth(null)
+                    val img_height: Int = og_image.getHeight(null)
+                    val new_width = min(isp_width, img_width)
+                    val new_height = min(img_height, (img_height * new_width)/img_width)
+                    JLabel(ImageIcon(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT)))
                 } else {
                     val message = JTextArea(message)
                     message.setEditable(false)
