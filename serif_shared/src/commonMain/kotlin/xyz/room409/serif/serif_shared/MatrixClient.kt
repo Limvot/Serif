@@ -91,7 +91,15 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
                 val img_f = File(url)
                 val image_data = img_f.readBytes()
                 val f_size = image_data.size
-                val image_info = ImageInfo(0, "image/jpeg", f_size, 0)
+                val mimetype =
+                    if(url.endsWith(".png")) {
+                        "image/png"
+                    } else if(url.endsWith(".gif")) {
+                        "image/gif"
+                    } else {
+                        "image/jpeg"
+                    }
+                val image_info = ImageInfo(0, mimetype, f_size, 0)
 
                 //Post Image to server
                 val upload_img_response =
