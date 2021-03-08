@@ -8,7 +8,9 @@ import xyz.room409.serif.serif_shared.db.DriverFactory
 import java.awt.*
 import java.awt.event.*
 import javax.swing.*
+import javax.swing.filechooser.*;
 import javax.swing.text.*
+import java.io.File
 
 sealed class SwingState() {
     abstract fun refresh()
@@ -105,6 +107,18 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
         }
     }
 }
+class ImageFileFilter : FileFilter() {
+    override fun accept(f: File): Boolean {
+        if(f.isDirectory()) { return true }
+        val fname = f.getName()
+        val extension = fname.split('.').last().toLowerCase()
+        val supported = arrayOf("gif", "png", "jpeg", "jpg")
+        return supported.contains(extension)
+    }
+    override fun getDescription(): String {
+        return "Supported Image files"
+    }
+}
 class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom) : SwingState() {
     var inner_scroll_pane = JPanel()
     var c_left = GridBagConstraints()
@@ -136,16 +150,35 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         var back_button = JButton("Back")
         message_panel.add(back_button, BorderLayout.LINE_START)
         message_panel.add(message_field, BorderLayout.CENTER)
+        val msg_panel_actions = JPanel()
+        msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
+        var attach_button = JButton("+")
+        msg_panel_actions.add(attach_button)
         var send_button = JButton("Send")
-        message_panel.add(send_button, BorderLayout.LINE_END)
+        msg_panel_actions.add(send_button)
+        message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
         panel.add(message_panel, BorderLayout.PAGE_END)
         val onSend: (ActionEvent) -> Unit = {
             val text = message_field.text
             message_field.text = ""
             transition(m.sendMessage(text), true)
         }
+        val onAttach: (ActionEvent) -> Unit = {
+            val fc = JFileChooser()
+            val iff = ImageFileFilter()
+            fc.addChoosableFileFilter(iff)
+            fc.setFileFilter(iff)
+            val ret = fc.showDialog(panel, "Attach")
+            if(ret == JFileChooser.APPROVE_OPTION) {
+                val file = fc.getSelectedFile()
+                message_field.text = ""
+                transition(m.sendMessage(file.toPath().toString(), is_img = true), true)
+                println("Selected ${file.toPath()}")
+            }
+        }
         message_field.addActionListener(onSend)
         send_button.addActionListener(onSend)
+        attach_button.addActionListener(onAttach)
         back_button.addActionListener({ transition(m.exitRoom(), true) })
     }
     fun redrawMessages() {

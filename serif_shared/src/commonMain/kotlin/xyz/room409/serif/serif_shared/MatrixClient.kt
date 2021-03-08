@@ -8,6 +8,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlin.concurrent.thread
 import kotlin.synchronized
+import java.io.File
 
 sealed class Outcome<out T : Any>
 data class Success<out T : Any>(val value: T) : Outcome<T>()
@@ -79,6 +80,39 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
             }
 
             return Success("Hello, ${Platform().platform}, ya cowpeople! - Our sent event id is: $result")
+        } catch (e: Exception) {
+            return Error("Message Send Failed", e)
+        }
+    }
+
+    fun sendImageMessage(url: String, room_id: String): Outcome<String> {
+        try {
+            val result = runBlocking {
+                val img_f = File(url)
+                val image_data = img_f.readBytes()
+                val f_size = image_data.size
+                val image_info = ImageInfo(0, "image/jpeg", f_size, 0)
+
+                //Post Image to server
+                val upload_img_response =
+                    client.post<MediaUploadResponse>("https://synapse.room409.xyz/_matrix/media/r0/upload?access_token=$access_token") {
+                        contentType(ContentType.Image.Any)
+                        body = image_data
+                    }
+
+                //Send link to image
+                val message_confirmation =
+                    client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
+                        contentType(ContentType.Application.Json)
+                        body = SendRoomImageMessage("image_alt_text", image_info, upload_img_response.content_uri)
+                    }
+
+                transactionId++
+                Database.updateSession(access_token, transactionId)
+                message_confirmation.event_id
+            }
+
+            return Success("Sent event id is: $result")
         } catch (e: Exception) {
             return Error("Message Send Failed", e)
         }

@@ -23,6 +23,17 @@ data class SendRoomMessage(val msgtype: String, val body: String) {
     constructor(body: String) : this(msgtype = "m.text", body = body)
 }
 @Serializable
+data class ImageInfo(val h: Int, val mimetype: String, val size: Int, val w: Int)
+@Serializable
+data class SendRoomImageMessage(val msgtype: String, val body: String, val info: ImageInfo, val url: String) {
+    constructor(body: String, info: ImageInfo, url: String) : this(
+        msgtype = "m.image",
+        body = body,
+        info = info,
+        url = url
+    )
+}
+@Serializable
 data class MediaUploadResponse(val content_uri: String)
 @Serializable
 data class EventIdResponse(val event_id: String)
