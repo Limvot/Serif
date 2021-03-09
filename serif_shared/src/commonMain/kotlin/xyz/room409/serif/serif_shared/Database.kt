@@ -47,11 +47,17 @@ object Database {
         return cached_img
     }
 
-    fun addImageToCache(url: String, file_data: ByteArray): String {
-        val file = File.createTempFile("media_", ".img")
+    fun addImageToCache(url: String, file_data: ByteArray, update: Boolean): String {
+        val cache_path = File(System.getProperty("user.dir") + "/cache/images/")
+        cache_path.mkdirs()
+        val file = File.createTempFile("media_", "img", cache_path)
         file.outputStream().write(file_data)
         val local = file.toPath().toString()
-        this.db?.sessionDbQueries?.insertMedia(url, local)
+        if(update) {
+            this.db?.sessionDbQueries?.updateMedia(local, url)
+        } else {
+            this.db?.sessionDbQueries?.insertMedia(url, local)
+        }
         return local
     }
 }
