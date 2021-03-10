@@ -124,7 +124,7 @@ class ImageFileFilter : FileFilter() {
         return "Supported Image files"
     }
 }
-class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom) : SwingState() {
+class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom, var last_window_width: Int) : SwingState() {
     var inner_scroll_pane = JPanel()
     var c_left = GridBagConstraints()
     var c_right = GridBagConstraints()
@@ -138,7 +138,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
         val group_layout = GroupLayout(inner_scroll_pane)
         inner_scroll_pane.layout = group_layout
-        redrawMessages()
+        redrawMessages(last_window_width)
         panel.add(
             JScrollPane(
                 inner_scroll_pane,
@@ -184,8 +184,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         attach_button.addActionListener(onAttach)
         back_button.addActionListener({ transition(m.exitRoom(), true) })
     }
-    fun redrawMessages() {
-        val isp_width = inner_scroll_pane.getWidth()
+    fun redrawMessages(draw_width: Int) {
         inner_scroll_pane.removeAll()
         val layout = inner_scroll_pane.layout as GroupLayout
         val parallel_group = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
@@ -193,7 +192,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         for (msg in m.messages) {
             val _sender = msg.sender
             val message = msg.message
-            val sender = JLabel("$_sender:  ")
+            val sender = JTextArea("$_sender:  ")
+            sender.setEditable(false)
+            sender.lineWrap = true
+            sender.wrapStyleWord = true
 
             val msg_widget =
             when(msg) {
@@ -203,8 +205,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     val og_image = og_image_icon.image
                     val img_width: Int = og_image.getWidth(null)
                     val img_height: Int = og_image.getHeight(null)
-                    if (isp_width != 0 && img_width != 0 && img_height != 0) {
-                        val new_width = min(isp_width, img_width)
+                    if (draw_width != 0 && img_width != 0 && img_height != 0) {
+                        val new_width = min(draw_width, img_width)
                         val new_height = min(img_height, (img_height * new_width)/img_width)
                         JLabel(ImageIcon(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT)))
                     } else {
@@ -245,10 +247,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     override fun refresh() {
         transition(m.refresh(), true)
     }
-    fun update(new_m: MatrixChatRoom) {
-        if (m.messages != new_m.messages) {
+    fun update(new_m: MatrixChatRoom, window_width: Int) {
+        if (m.messages != new_m.messages || last_window_width != window_width) {
             m = new_m
-            redrawMessages()
+            redrawMessages(window_width)
+            last_window_width = window_width
         } else {
             m = new_m
         }
@@ -276,7 +279,7 @@ class App {
         val s = sstate
         if (partial) {
             when {
-                new_state is MatrixChatRoom && s is SwingChatRoom -> { s.update(new_state); return; }
+                new_state is MatrixChatRoom && s is SwingChatRoom -> { s.update(new_state, frame.width); return; }
                 new_state is MatrixRooms && s is SwingRooms -> { s.update(new_state); return; }
             }
         }
@@ -285,21 +288,25 @@ class App {
 
     fun constructStateView(mstate: MatrixState): SwingState {
         frame.contentPane.removeAll()
+        val refresh_all = {
+            sstate.refresh()
+            frame.validate()
+            frame.repaint();
+        }
+        frame.addComponentListener(object : ComponentAdapter() {
+            override fun componentResized(e: ComponentEvent) {
+                refresh_all()
+            }
+        })
         var panel = JPanel()
         val to_ret = when (mstate) {
             is MatrixLogin -> SwingLogin(
                 ::transition,
-                {
-                    javax.swing.SwingUtilities.invokeLater({
-                        sstate.refresh()
-                        frame.validate()
-                        frame.repaint()
-                    })
-                },
+                { javax.swing.SwingUtilities.invokeLater(refresh_all) },
                 panel, mstate
             )
             is MatrixRooms -> SwingRooms(::transition, panel, mstate)
-            is MatrixChatRoom -> SwingChatRoom(::transition, panel, mstate)
+            is MatrixChatRoom -> SwingChatRoom(::transition, panel, mstate, frame.width)
         }
         frame.add(panel)
         frame.validate()
