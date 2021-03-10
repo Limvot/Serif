@@ -129,14 +129,14 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
         }
     }
 
-    fun getLocalImagePathFromUrl(image_url: String): Outcome<String> {
+    fun getLocalMediaPathFromUrl(media_url: String): Outcome<String> {
         try {
-            val cached_img = Database.getImageInCache(image_url)
+            val cached_media = Database.getMediaInCache(media_url)
             var existing_entry = false
-            if (cached_img != null) {
-                if(File(cached_img).exists()) {
+            if (cached_media != null) {
+                if(File(cached_media).exists()) {
                     //File is in cache and it exists
-                    return Success(cached_img)
+                    return Success(cached_media)
                 } else {
                     existing_entry = true
                 }
@@ -144,13 +144,13 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
 
             //No valid cache hit
             val result = runBlocking {
-                val url = "https://synapse.room409.xyz/_matrix/media/r0/download/${image_url.replace("mxc://","")}"
+                val url = "https://synapse.room409.xyz/_matrix/media/r0/download/${media_url.replace("mxc://","")}"
                 println("Retrieving image from $url")
                 val media = client.get<ByteArray>(url)
-                Database.addImageToCache(image_url, media, existing_entry)
+                Database.addMediaToCache(media_url, media, existing_entry)
             }
 
-            println("Img file at $result")
+            println("Media file at $result")
             return Success(result)
         } catch (e: Exception) {
             println("Error with image retrieval $e")

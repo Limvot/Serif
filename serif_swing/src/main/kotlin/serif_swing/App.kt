@@ -12,6 +12,10 @@ import javax.swing.*
 import javax.swing.filechooser.*;
 import javax.swing.text.*
 import java.io.File
+import javax.sound.sampled.Clip
+import javax.sound.sampled.AudioInputStream
+import javax.sound.sampled.AudioSystem
+
 
 sealed class SwingState() {
     abstract fun refresh()
@@ -189,12 +193,13 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         for (msg in m.messages) {
             val _sender = msg.sender
             val message = msg.message
-            val url = msg.url
             val sender = JLabel("$_sender:  ")
 
             val msg_widget =
-                if (url != null) {
-                    val og_image_icon = ImageIcon(url)
+            when(msg) {
+                is SharedUiImgMessage -> {
+                    val img_url = msg.url
+                    val og_image_icon = ImageIcon(img_url)
                     val og_image = og_image_icon.image
                     val img_width: Int = og_image.getWidth(null)
                     val img_height: Int = og_image.getHeight(null)
@@ -205,13 +210,26 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     } else {
                         JLabel(og_image_icon)
                     }
-                } else {
+                }
+                is SharedUiAudioMessage -> {
+                    val audio_url = msg.url
+                    val play_btn = JButton("Play/Pause $audio_url")
+                    play_btn.addActionListener({
+                        val inputStream = AudioSystem.getAudioInputStream(File(audio_url).getAbsoluteFile());
+                        val clip = AudioSystem.getClip()
+                        clip.open(inputStream)
+                        clip.start()
+                    })
+                    play_btn
+                }
+                else -> {
                     val message = JTextArea(message)
                     message.setEditable(false)
                     message.lineWrap = true
                     message.wrapStyleWord = true
                     message
                 }
+            }
             parallel_group.addComponent(sender)
             parallel_group.addComponent(msg_widget)
             seq_vert_groups.addComponent(sender)

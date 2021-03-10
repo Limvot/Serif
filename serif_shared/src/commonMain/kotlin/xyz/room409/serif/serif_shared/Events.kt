@@ -23,6 +23,8 @@ data class SendRoomMessage(val msgtype: String, val body: String) {
     constructor(body: String) : this(msgtype = "m.text", body = body)
 }
 @Serializable
+data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: String)
+@Serializable
 data class ImageInfo(val h: Int, val mimetype: String, val size: Int, val w: Int)
 @Serializable
 data class SendRoomImageMessage(val msgtype: String, val body: String, val info: ImageInfo, val url: String) {
@@ -108,12 +110,35 @@ class RoomMessageEvent(
 ) : RoomEvent() {
     override fun toString() = "RoomMessageEvent(" + raw_self.toString() + ")"
 }
+@Serializable(with = RoomMessageEventContentSerializer::class)
+abstract class RoomMessageEventContent {
+    abstract val body: String
+    abstract val msgtype: String
+}
 @Serializable
-class RoomMessageEventContent(
-    val body: String = "<missing message body, likely redacted>",
-    val msgtype: String = "<missing type, likely redacted>",
-    val url: String? = null
-)
+class TextRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+) : RoomMessageEventContent()
+@Serializable
+class ImageRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+    val info: ImageInfo,
+    val url: String
+) : RoomMessageEventContent()
+@Serializable
+class AudioRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+    val info: AudioInfo,
+    val url: String
+) : RoomMessageEventContent()
+@Serializable
+class FallbackRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+) : RoomMessageEventContent()
 
 @Serializable
 class EventFallback(
@@ -148,6 +173,22 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     }
 }
 
+object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<RoomMessageEventContent>(RoomMessageEventContent::class) {
+    override fun selectDeserializer(element: JsonElement) = element.jsonObject["msgtype"]!!.jsonPrimitive.content.let { type ->
+        when {
+            type == "m.text" -> TextRMECSerializer
+            type == "m.image" -> ImageRMECSerializer
+            type == "m.audio" -> AudioRMECSerializer
+            else -> FallbackRMECSerializer
+        }
+    }
+}
+
+object TextRMECSerializer : GenericJsonRMECSerializer<TextRMEC>(TextRMEC.serializer())
+object ImageRMECSerializer : GenericJsonRMECSerializer<ImageRMEC>(ImageRMEC.serializer())
+object AudioRMECSerializer : GenericJsonRMECSerializer<AudioRMEC>(AudioRMEC.serializer())
+object FallbackRMECSerializer : GenericJsonRMECSerializer<FallbackRMEC>(FallbackRMEC.serializer())
+
 object EventFallbackSerializer : GenericJsonEventSerializer<EventFallback>(EventFallback.serializer())
 object RoomEventFallbackSerializer : GenericJsonEventSerializer<RoomEventFallback>(RoomEventFallback.serializer())
 object RoomMessageEventSerializer : GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
@@ -164,4 +205,14 @@ open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) : JsonTran
     }
     override fun transformSerialize(element: JsonElement): JsonElement =
         element.jsonObject["raw_self"]!!
+}
+
+open class GenericJsonRMECSerializer<T : Any>(clazz: KSerializer<T>) : JsonTransformingSerializer<T>(clazz) {
+    override fun transformDeserialize(element: JsonElement): JsonElement = buildJsonObject {
+        for ((key, value) in element.jsonObject) {
+            put(key, value)
+        }
+    }
+    override fun transformSerialize(element: JsonElement): JsonElement =
+    JsonNull
 }
