@@ -39,7 +39,7 @@ data class CreateRoom(
             username: String,
             url: String
     ) : this(
-            preset = "public_chat",
+            preset = "public_chat", //this should be a choice in enum of private_chat, trusted_private_chat and public_chat. Will rework.
             name = name,
             room_alias_name = room_alias_name,
             topic = topic,
