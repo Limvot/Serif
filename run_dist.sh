@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
-./gradlew :serif_cli:assembleDist && mkdir -p test && cd test && tar xf ../serif_cli/build/distributions/serif_cli.tar && ./serif_cli/bin/serif_cli && cd .. && rm -r test
+target=serif_swing
+tar_loc=../$target/build/distributions/$target.tar
+./gradlew :$target:assembleDist && mkdir -p test && cd test && tar xf $tar_loc && ./$target/bin/$target && cd .. && rm -r test

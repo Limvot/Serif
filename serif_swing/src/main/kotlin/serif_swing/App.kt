@@ -17,6 +17,26 @@ import javax.sound.sampled.AudioInputStream
 import javax.sound.sampled.AudioSystem
 
 
+object AudioPlayer {
+    var url = ""
+    val clip = AudioSystem.getClip()
+    fun loadAudio(audio_url: String) {
+        if(url != audio_url) {
+            clip.stop()
+            url = audio_url
+            val inputStream = AudioSystem.getAudioInputStream(File(url).getAbsoluteFile())
+            clip.open(inputStream)
+        }
+    }
+    fun play() {
+        if(clip.isRunning()) {
+            clip.stop()
+        }
+        clip.setFramePosition(0)
+        clip.start()
+    }
+}
+
 sealed class SwingState() {
     abstract fun refresh()
 }
@@ -217,10 +237,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     val audio_url = msg.url
                     val play_btn = JButton("Play/Pause $audio_url")
                     play_btn.addActionListener({
-                        val inputStream = AudioSystem.getAudioInputStream(File(audio_url).getAbsoluteFile());
-                        val clip = AudioSystem.getClip()
-                        clip.open(inputStream)
-                        clip.start()
+                        AudioPlayer.loadAudio(audio_url)
+                        AudioPlayer.play()
                     })
                     play_btn
                 }
@@ -298,6 +316,7 @@ class App {
                 refresh_all()
             }
         })
+
         var panel = JPanel()
         val to_ret = when (mstate) {
             is MatrixLogin -> SwingLogin(
