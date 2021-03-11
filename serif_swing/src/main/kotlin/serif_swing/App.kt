@@ -261,6 +261,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 class App {
     var frame = JFrame("Serif")
     var sstate: SwingState
+    fun refresh_all() {
+        sstate.refresh()
+        frame.validate()
+        frame.repaint()
+    }
 
     init {
         // Each UI will create it's specific DriverFactory
@@ -272,6 +277,12 @@ class App {
         sstate = constructStateView(MatrixLogin())
         frame.pack()
         frame.setVisible(true)
+        frame.addComponentListener(object : ComponentAdapter() {
+            override fun componentResized(e: ComponentEvent) {
+                println("Refresh-alling!")
+                refresh_all()
+            }
+        })
     }
 
     fun transition(new_state: MatrixState, partial: Boolean) {
@@ -288,21 +299,11 @@ class App {
 
     fun constructStateView(mstate: MatrixState): SwingState {
         frame.contentPane.removeAll()
-        val refresh_all = {
-            sstate.refresh()
-            frame.validate()
-            frame.repaint();
-        }
-        frame.addComponentListener(object : ComponentAdapter() {
-            override fun componentResized(e: ComponentEvent) {
-                refresh_all()
-            }
-        })
         var panel = JPanel()
         val to_ret = when (mstate) {
             is MatrixLogin -> SwingLogin(
                 ::transition,
-                { javax.swing.SwingUtilities.invokeLater(refresh_all) },
+                { javax.swing.SwingUtilities.invokeLater({ refresh_all() }) },
                 panel, mstate
             )
             is MatrixRooms -> SwingRooms(::transition, panel, mstate)
