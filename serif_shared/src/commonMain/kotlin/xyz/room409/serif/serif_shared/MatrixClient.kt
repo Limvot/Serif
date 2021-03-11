@@ -83,6 +83,19 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
             return Error("Message Send Failed", e)
         }
     }
+    fun sendReadReceipt(eventId: String, room_id: String): Outcome<String> {
+        try {
+            val result = runBlocking {
+                val receipt_confirmation =
+                        client.post<String>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/receipt/m.read/$eventId?access_token=$access_token") {
+                            contentType(ContentType.Application.Json)
+                        }
+            }
+            return Success("The receipt was sent")
+        } catch (e: Exception) {
+            return Error("Receipt Failed", e)
+        }
+    }
 
     fun requestBackfill(room_id: String) {
         thread(start = true) {

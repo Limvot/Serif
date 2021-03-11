@@ -141,7 +141,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         message_field.addActionListener(onSend)
         send_button.addActionListener(onSend)
         back_button.addActionListener({ transition(m.exitRoom(), true) })
-
+        m.sendReceipt(m.messages.last().id)
     }
     fun redrawMessages() {
         inner_scroll_pane.removeAll()
