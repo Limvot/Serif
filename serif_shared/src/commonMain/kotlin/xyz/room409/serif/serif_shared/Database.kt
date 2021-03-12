@@ -41,10 +41,9 @@ object Database {
     }
 
     fun getMediaInCache(url: String): String? {
-        val cached_media = this.db?.sessionDbQueries?.selectCachedMedia(url) { _: String, localPath: String ->
+        return = this.db?.sessionDbQueries?.selectCachedMedia(url) { _: String, localPath: String ->
             localPath
         }?.executeAsOneOrNull()
-        return cached_media
     }
 
     fun addMediaToCache(url: String, file_data: ByteArray, update: Boolean): String {
