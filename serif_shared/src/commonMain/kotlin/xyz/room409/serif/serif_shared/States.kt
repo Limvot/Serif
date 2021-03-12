@@ -95,6 +95,12 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     fun requestBackfill() {
         msession.requestBackfill(room_id)
     }
+    fun sendReceipt(eventID: String) {
+        when (val readReceiptResult = msession.sendReadReceipt(eventID, room_id)){
+            is Success -> println("read receipt sent")
+            is Error -> println("read receipt failed because ${readReceiptResult.cause}")
+        }
+    }
     override fun refresh(): MatrixState = MatrixChatRoom(
         msession,
         room_id,
