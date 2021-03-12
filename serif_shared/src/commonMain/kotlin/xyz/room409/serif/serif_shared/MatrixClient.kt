@@ -65,6 +65,24 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
 
     fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
 
+    fun createRoom(name:String, alias: String, topic: String): Outcome<String> {
+        try {
+            val result = runBlocking {
+                val creation_confirmation =
+                client.post<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/createRoom") {
+                    contentType(ContentType.Application.Json)
+                    body = CreateRoom(name, alias, topic, username, url)
+                }
+                transactionId++
+                Database.updateSession(access_token, transactionId)
+                creation_confirmation.event_id
+            }
+            return Success("Our create create room event id is: $result")
+        } catch (e: Exception){
+            return Error("Create Room Failed", e)
+        }
+    }
+
     fun sendMessage(msg: String, room_id: String): Outcome<String> {
         try {
             val result = runBlocking {
