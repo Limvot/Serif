@@ -19,8 +19,13 @@ data class LoginIdentifier(val type: String, val user: String)
 data class LoginResponse(val access_token: String)
 
 @Serializable
-data class SendRoomMessage(val msgtype: String, val body: String) {
+data class SendRoomMessage(
+    val msgtype: String,
+    val body: String,
+    @SerialName("m.relates_to") val replybock: RelationBlock? = null
+) {
     constructor(body: String) : this(msgtype = "m.text", body = body)
+    constructor(body: String, rel_to: RelationBlock) : this(msgtype = "m.text", body = body, replybock = rel_to)
 }
 @Serializable
 data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: String)
@@ -119,6 +124,7 @@ abstract class RoomMessageEventContent {
 class TextRMEC(
     override val body: String = "<missing message body, likely redacted>",
     override val msgtype: String = "<missing type, likely redacted>",
+    @SerialName("m.relates_to") val relates_to: RelationBlock? = null
 ) : RoomMessageEventContent()
 @Serializable
 class ImageRMEC(
@@ -160,6 +166,13 @@ class RoomEventFallback(
 ) : RoomEvent() {
     override fun toString() = "RoomEventFallback(" + raw_self.toString() + ")"
 }
+
+@Serializable
+class ReplyToRelation(val event_id: String)
+@Serializable
+class RelationBlock(
+@SerialName("m.in_reply_to") val in_reply_to: ReplyToRelation?
+)
 
 object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     override fun selectDeserializer(element: JsonElement) = element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->

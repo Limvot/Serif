@@ -149,6 +149,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var c_left = GridBagConstraints()
     var c_right = GridBagConstraints()
     var message_field = JTextField(20)
+    var replied_event_id = ""
     init {
         panel.layout = BorderLayout()
 
@@ -184,7 +185,16 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         val onSend: (ActionEvent) -> Unit = {
             val text = message_field.text
             message_field.text = ""
-            transition(m.sendMessage(text), true)
+            val res =
+            if(replied_event_id == "") {
+                m.sendMessage(text)
+            } else {
+                val eventid = replied_event_id
+                replied_event_id = ""
+                println("Replying to $eventid")
+                m.sendReply(text, eventid)
+            }
+            transition(res, true)
         }
         val onAttach: (ActionEvent) -> Unit = {
             val fc = JFileChooser()
@@ -243,13 +253,25 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     play_btn
                 }
                 else -> {
-                    val message = JTextArea(message)
+                    val message =
+                    if(msg.replied_event != "") {
+                        JTextArea("in reply ${msg.replied_event}:\n$message")
+                    } else {
+                        JTextArea("$message")
+                    }
                     message.setEditable(false)
                     message.lineWrap = true
                     message.wrapStyleWord = true
                     message
                 }
             }
+
+            msg_widget.addMouseListener(object : MouseAdapter() {
+                override fun mouseReleased(e: MouseEvent) {
+                    println("Now writing a reply")
+                    replied_event_id = msg.id
+                }
+            })
             parallel_group.addComponent(sender)
             parallel_group.addComponent(msg_widget)
             seq_vert_groups.addComponent(sender)
