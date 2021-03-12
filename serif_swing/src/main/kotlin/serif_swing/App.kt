@@ -5,10 +5,13 @@ package xyz.room409.serif.serif_swing
 import com.formdev.flatlaf.*
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
+import kotlin.math.min
 import java.awt.*
 import java.awt.event.*
 import javax.swing.*
+import javax.swing.filechooser.*;
 import javax.swing.text.*
+import java.io.File
 
 sealed class SwingState() {
     abstract fun refresh()
@@ -72,7 +75,7 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
         panel.layout = BorderLayout()
         panel.add(message_label, BorderLayout.PAGE_START)
 
-        inner_scroll_pane.layout = GridLayout(0,1)
+        inner_scroll_pane.layout = GridLayout(0, 1)
         for ((id, name, unreadCount, highlightCount, lastMessage) in m.rooms) {
             var button = JButton()
             button.layout = BoxLayout(button, BoxLayout.PAGE_AXIS)
@@ -105,7 +108,19 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
         }
     }
 }
-class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom) : SwingState() {
+class ImageFileFilter : FileFilter() {
+    override fun accept(f: File): Boolean {
+        if(f.isDirectory()) { return true }
+        val fname = f.getName()
+        val extension = fname.split('.').last().toLowerCase()
+        val supported = arrayOf("gif", "png", "jpeg", "jpg")
+        return supported.contains(extension)
+    }
+    override fun getDescription(): String {
+        return "Supported Image files"
+    }
+}
+class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom, var last_window_width: Int) : SwingState() {
     var inner_scroll_pane = JPanel()
     var c_left = GridBagConstraints()
     var c_right = GridBagConstraints()
@@ -119,52 +134,95 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
         val group_layout = GroupLayout(inner_scroll_pane)
         inner_scroll_pane.layout = group_layout
-        group_layout.autoCreateGaps = true
-        group_layout.autoCreateContainerGaps = true
-        redrawMessages()
-        panel.add(JScrollPane(inner_scroll_pane,
-                              JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
-                              JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
-                  BorderLayout.CENTER)
+        redrawMessages(last_window_width)
+        panel.add(
+            JScrollPane(
+                inner_scroll_pane,
+                JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            ),
+            BorderLayout.CENTER
+        )
 
         val message_panel = JPanel()
         message_panel.layout = BorderLayout()
         var back_button = JButton("Back")
         message_panel.add(back_button, BorderLayout.LINE_START)
         message_panel.add(message_field, BorderLayout.CENTER)
+        val msg_panel_actions = JPanel()
+        msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
+        var attach_button = JButton("+")
+        msg_panel_actions.add(attach_button)
         var send_button = JButton("Send")
-        message_panel.add(send_button, BorderLayout.LINE_END)
+        msg_panel_actions.add(send_button)
+        message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
         panel.add(message_panel, BorderLayout.PAGE_END)
         val onSend: (ActionEvent) -> Unit = {
             val text = message_field.text
             message_field.text = ""
             transition(m.sendMessage(text), true)
         }
+        val onAttach: (ActionEvent) -> Unit = {
+            val fc = JFileChooser()
+            val iff = ImageFileFilter()
+            fc.addChoosableFileFilter(iff)
+            fc.setFileFilter(iff)
+            val ret = fc.showDialog(panel, "Attach")
+            if(ret == JFileChooser.APPROVE_OPTION) {
+                val file = fc.getSelectedFile()
+                message_field.text = ""
+                transition(m.sendMessage(file.toPath().toString(), is_img = true), true)
+                println("Selected ${file.toPath()}")
+            }
+        }
         message_field.addActionListener(onSend)
         send_button.addActionListener(onSend)
+        attach_button.addActionListener(onAttach)
         back_button.addActionListener({ transition(m.exitRoom(), true) })
         m.sendReceipt(m.messages.last().id)
     }
-    fun redrawMessages() {
+    fun redrawMessages(draw_width: Int) {
         inner_scroll_pane.removeAll()
         val layout = inner_scroll_pane.layout as GroupLayout
         val parallel_group = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
         var seq_vert_groups = layout.createSequentialGroup()
-        for ((sender, message) in m.messages) {
-            val sender = JLabel("$sender:  ")
+        for (msg in m.messages) {
+            val _sender = msg.sender
+            val message = msg.message
+            val url = msg.url
+            val sender = JTextArea("$_sender:  ")
+            sender.setEditable(false)
+            sender.lineWrap = true
+            sender.wrapStyleWord = true
 
-            val message = JTextArea(message)
-            message.setEditable(false)
-            message.lineWrap = true
-            message.wrapStyleWord = true
-
+            val msg_widget =
+                if (url != null) {
+                    val og_image_icon = ImageIcon(url)
+                    val og_image = og_image_icon.image
+                    val img_width: Int = og_image.getWidth(null)
+                    val img_height: Int = og_image.getHeight(null)
+                    if (draw_width != 0 && img_width != 0 && img_height != 0) {
+                        val new_width = min(draw_width, img_width)
+                        val new_height = min(img_height, (img_height * new_width)/img_width)
+                        JLabel(ImageIcon(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT)))
+                    } else {
+                        JLabel(og_image_icon)
+                    }
+                } else {
+                    val message = JTextArea(message)
+                    message.setEditable(false)
+                    message.lineWrap = true
+                    message.wrapStyleWord = true
+                    message
+                }
             parallel_group.addComponent(sender)
-            parallel_group.addComponent(message)
+            parallel_group.addComponent(msg_widget)
             seq_vert_groups.addComponent(sender)
-            seq_vert_groups.addGroup(layout.createSequentialGroup()
-                            .addPreferredGap(sender, message, LayoutStyle.ComponentPlacement.INDENT)
-                            .addComponent(message))
-
+            seq_vert_groups.addGroup(
+                layout.createSequentialGroup()
+                    .addPreferredGap(sender, msg_widget, LayoutStyle.ComponentPlacement.INDENT)
+                    .addComponent(msg_widget)
+            )
         }
         layout.setHorizontalGroup(parallel_group)
         layout.setVerticalGroup(seq_vert_groups)
@@ -172,10 +230,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     override fun refresh() {
         transition(m.refresh(), true)
     }
-    fun update(new_m: MatrixChatRoom) {
-        if (m.messages != new_m.messages) {
+    fun update(new_m: MatrixChatRoom, window_width: Int) {
+        if (m.messages != new_m.messages || last_window_width != window_width) {
             m = new_m
-            redrawMessages()
+            redrawMessages(window_width)
+            last_window_width = window_width
         } else {
             m = new_m
         }
@@ -203,7 +262,7 @@ class App {
         val s = sstate
         if (partial) {
             when {
-                new_state is MatrixChatRoom && s is SwingChatRoom -> { s.update(new_state); return; }
+                new_state is MatrixChatRoom && s is SwingChatRoom -> { s.update(new_state, frame.width); return; }
                 new_state is MatrixRooms && s is SwingRooms -> { s.update(new_state); return; }
             }
         }
@@ -212,17 +271,25 @@ class App {
 
     fun constructStateView(mstate: MatrixState): SwingState {
         frame.contentPane.removeAll()
+        val refresh_all = {
+            sstate.refresh()
+            frame.validate()
+            frame.repaint();
+        }
+        frame.addComponentListener(object : ComponentAdapter() {
+            override fun componentResized(e: ComponentEvent) {
+                refresh_all()
+            }
+        })
         var panel = JPanel()
         val to_ret = when (mstate) {
-            is MatrixLogin -> SwingLogin(::transition, {
-                javax.swing.SwingUtilities.invokeLater({
-                    sstate.refresh()
-                    frame.validate()
-                    frame.repaint()
-                })
-            }, panel, mstate)
+            is MatrixLogin -> SwingLogin(
+                ::transition,
+                { javax.swing.SwingUtilities.invokeLater(refresh_all) },
+                panel, mstate
+            )
             is MatrixRooms -> SwingRooms(::transition, panel, mstate)
-            is MatrixChatRoom -> SwingChatRoom(::transition, panel, mstate)
+            is MatrixChatRoom -> SwingChatRoom(::transition, panel, mstate, frame.width)
         }
         frame.add(panel)
         frame.validate()
@@ -233,6 +300,6 @@ class App {
 
 fun main(args: Array<String>) {
     FlatDarkLaf.install()
-    UIManager.getLookAndFeelDefaults().put("defaultFont", Font("Serif", Font.PLAIN, 16));
+    UIManager.getLookAndFeelDefaults().put("defaultFont", Font("Serif", Font.PLAIN, 16))
     javax.swing.SwingUtilities.invokeLater({ App() })
 }

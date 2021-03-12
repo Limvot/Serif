@@ -8,6 +8,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlin.concurrent.thread
 import kotlin.synchronized
+import java.io.File
 
 sealed class Outcome<out T : Any>
 data class Success<out T : Any>(val value: T) : Outcome<T>()
@@ -56,8 +57,8 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     // for room name changes too. Also, it's not working when there's not a room name -
     // the way I'm reading the doc heroes should be non-null... maybe it's not decoding right?
 
-    fun <T> mapRooms(f: (String,Room) -> T): List<T> = synchronized(this) {
-        sync_response?.rooms?.join?.entries?.map{ (id,room,) -> f(id, room) }?.toList() ?: listOf()
+    fun <T> mapRooms(f: (String, Room) -> T): List<T> = synchronized(this) {
+        sync_response?.rooms?.join?.entries?.map { (id, room,) -> f(id, room) }?.toList() ?: listOf()
     }
     fun <T> mapRoom(id: String, f: (Room) -> T): T? = synchronized(this) {
         sync_response?.rooms?.join?.get(id)?.let { f(it) }
@@ -94,6 +95,79 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
             return Success("The receipt was sent")
         } catch (e: Exception) {
             return Error("Receipt Failed", e)
+        }
+    }
+
+    fun sendImageMessage(url: String, room_id: String): Outcome<String> {
+        try {
+            val result = runBlocking {
+                val img_f = File(url)
+                val image_data = img_f.readBytes()
+                val f_size = image_data.size
+                var ct = ContentType.Image.JPEG
+                val mimetype =
+                    if(url.endsWith(".png")) {
+                        ct = ContentType.Image.PNG
+                        "image/png"
+                    } else if(url.endsWith(".gif")) {
+                        ct = ContentType.Image.GIF
+                        "image/gif"
+                    } else {
+                        "image/jpeg"
+                    }
+                val image_info = ImageInfo(0, mimetype, f_size, 0)
+
+                //Post Image to server
+                val upload_img_response =
+                    client.post<MediaUploadResponse>("https://synapse.room409.xyz/_matrix/media/r0/upload?access_token=$access_token") {
+                        contentType(ct)
+                        body = image_data
+                    }
+
+                //Send link to image
+                val message_confirmation =
+                    client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
+                        contentType(ContentType.Application.Json)
+                        body = SendRoomImageMessage("image_alt_text", image_info, upload_img_response.content_uri)
+                    }
+
+                transactionId++
+                Database.updateSession(access_token, transactionId)
+                message_confirmation.event_id
+            }
+
+            return Success("Sent event id is: $result")
+        } catch (e: Exception) {
+            return Error("Message Send Failed", e)
+        }
+    }
+
+    fun getLocalImagePathFromUrl(image_url: String): Outcome<String> {
+        try {
+            val cached_img = Database.getImageInCache(image_url)
+            var existing_entry = false
+            if (cached_img != null) {
+                if(File(cached_img).exists()) {
+                    //File is in cache and it exists
+                    return Success(cached_img)
+                } else {
+                    existing_entry = true
+                }
+            }
+
+            //No valid cache hit
+            val result = runBlocking {
+                val url = "https://synapse.room409.xyz/_matrix/media/r0/download/${image_url.replace("mxc://","")}"
+                println("Retrieving image from $url")
+                val media = client.get<ByteArray>(url)
+                Database.addImageToCache(image_url, media, existing_entry)
+            }
+
+            println("Img file at $result")
+            return Success(result)
+        } catch (e: Exception) {
+            println("Error with image retrieval $e")
+            return Error("Image Retrieval Failed", e)
         }
     }
 
