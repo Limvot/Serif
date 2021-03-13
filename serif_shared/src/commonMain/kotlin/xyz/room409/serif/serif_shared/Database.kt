@@ -41,7 +41,7 @@ object Database {
     }
 
     fun getMediaInCache(url: String): String? {
-        return = this.db?.sessionDbQueries?.selectCachedMedia(url) { _: String, localPath: String ->
+        return this.db?.sessionDbQueries?.selectCachedMedia(url) { _: String, localPath: String ->
             localPath
         }?.executeAsOneOrNull()
     }
