@@ -11,7 +11,12 @@ import java.awt.event.*
 import javax.swing.*
 import javax.swing.filechooser.*;
 import javax.swing.text.*
+import javax.swing.text.html.HTML
+import javax.swing.text.html.HTMLEditorKit
+import javax.swing.text.html.InlineView
 import java.io.File
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import javax.sound.sampled.Clip
 import javax.sound.sampled.AudioInputStream
 import javax.sound.sampled.AudioSystem
@@ -144,7 +149,35 @@ class ImageFileFilter : FileFilter() {
         return "Supported Image files"
     }
 }
+
+// adapted from https://stackoverflow.com/questions/30590031/jtextpane-line-wrap-behavior?noredirect=1&lq=1%27
+object WrapEditorKit : StyledEditorKit() {
+    val defaultFactory = object : ViewFactory {
+        override public fun create(element: Element): View = when (val kind = element.name) {
+            AbstractDocument.ContentElementName -> WrapLabelView(element)
+            AbstractDocument.ParagraphElementName -> ParagraphView(element)
+            AbstractDocument.SectionElementName -> BoxView(element, View.Y_AXIS)
+            StyleConstants.ComponentElementName -> ComponentView(element)
+            StyleConstants.IconElementName -> IconView(element)
+            else -> LabelView(element)
+        }
+    }
+    override public fun getViewFactory(): ViewFactory = defaultFactory
+}
+class WrapLabelView(element: Element) : LabelView(element) {
+    override public fun getMinimumSpan(axis: Int): Float  {
+        when (axis) {
+            View.X_AXIS -> return 0.0f;
+            View.Y_AXIS -> return super.getMinimumSpan(axis);
+            else -> throw IllegalArgumentException("Invalid axis: " + axis);
+        }
+    }
+}
+
 class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom, var last_window_width: Int) : SwingState() {
+    // From @stephenhay via https://mathiasbynens.be/demo/url-regex
+    // slightly modified
+    val URL_REGEX = Regex("""(https?|ftp)://[^\s/$.?#].[^\s]*""")
     var inner_scroll_pane = JPanel()
     var c_left = GridBagConstraints()
     var c_right = GridBagConstraints()
@@ -212,7 +245,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         var seq_vert_groups = layout.createSequentialGroup()
         for (msg in m.messages) {
             val _sender = msg.sender
-            val message = msg.message
             val sender = JTextArea("$_sender:  ")
             sender.setEditable(false)
             sender.lineWrap = true
@@ -244,10 +276,70 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     play_btn
                 }
                 else -> {
-                    val message = JTextArea(message)
+                    //val message = CustomTextPane(true)
+                    val message = JTextPane()
+                    message.setEditorKit(WrapEditorKit);
                     message.setEditable(false)
-                    message.lineWrap = true
-                    message.wrapStyleWord = true
+                    // This is mandatory to make it wrap, for some reason
+                    // It's not in the examples I found online
+                    // My best guess is that because of the layout, it
+                    // won't smash it smaller than preferred size, but it will
+                    // stretch it to fit the larger size?
+                    message.setPreferredSize(Dimension(0, 0))
+
+                    var current_idx = 0
+                    val simpleAttrs = SimpleAttributeSet()
+                    for (url_match in URL_REGEX.findAll(msg.message)) {
+                        println("${url_match.value} is a url!!")
+                        if (url_match.range.start > current_idx) {
+                            message.document.insertString(current_idx, msg.message.slice(current_idx .. url_match.range.start-1), simpleAttrs)
+                            current_idx = url_match.range.start
+                        }
+                        val urlAttrs = SimpleAttributeSet()
+                        StyleConstants.setUnderline(urlAttrs, true)
+                        urlAttrs.addAttribute(HTML.Attribute.HREF, url_match.value)
+                        message.document.insertString(current_idx, url_match.value, urlAttrs)
+                        current_idx = url_match.range.endInclusive + 1
+                    }
+                    if (current_idx < msg.message.length) {
+                        message.document.insertString(current_idx, msg.message.slice(current_idx .. msg.message.length-1), simpleAttrs)
+                    }
+
+                    message.addMouseListener(object : MouseAdapter() {
+                        override fun mouseClicked(e: MouseEvent) {
+                            val pos = message.viewToModel(Point(e.x, e.y))
+                            println("you clicked on pos $pos")
+                            if (pos >= 0 && pos < msg.message.length) {
+                                println("That is, character ${msg.message[pos]}")
+                                val doc = (message.document as? DefaultStyledDocument)
+                                if (doc != null) {
+                                    val el = doc.getCharacterElement(pos)
+                                    val href = el.attributes.getAttribute(HTML.Attribute.HREF) as String?
+                                    if (href != null) {
+                                        try {
+                                            println("Trying to open $href with Desktop")
+                                            java.awt.Desktop.getDesktop().browse(java.net.URI(href))
+                                        } catch (e: Exception) {
+                                            try {
+                                                println("Trying to open $href with exec 'xdg-open $href'")
+                                                //Runtime.getRuntime().exec("xdg-open '$href'")
+                                                //val pb = ProcessBuilder("xdg-open", href)
+                                                val pb = ProcessBuilder("bash", "-c", "xdg-open $href")
+                                                pb.redirectErrorStream(true)
+                                                val process = pb.start()
+                                                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                                                while (reader.readLine() != null) {}
+                                                process.waitFor()
+                                                println("done trying to open url")
+                                            } catch (e: Exception) {
+                                                println("Couldn't get Desktop or Runtime.getRuntime().exec('xdg-open $href'), problem was $e")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    })
                     message
                 }
             }
