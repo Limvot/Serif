@@ -195,7 +195,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             if(ret == JFileChooser.APPROVE_OPTION) {
                 val file = fc.getSelectedFile()
                 message_field.text = ""
-                transition(m.sendMessage(file.toPath().toString(), is_img = true), true)
+                transition(m.sendImageMessage(file.toPath().toString()), true)
                 println("Selected ${file.toPath()}")
             }
         }
