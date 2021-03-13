@@ -25,7 +25,7 @@ data class SendRoomMessage(val msgtype: String, val body: String) {
 @Serializable
 data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: String)
 @Serializable
-data class ImageInfo(val h: Int, val mimetype: String, val size: Int, val w: Int)
+data class ImageInfo(val h: Int? = 0, val mimetype: String, val size: Int, val w: Int? = 0)
 @Serializable
 data class SendRoomImageMessage(val msgtype: String, val body: String, val info: ImageInfo, val url: String) {
     constructor(body: String, info: ImageInfo, url: String) : this(
