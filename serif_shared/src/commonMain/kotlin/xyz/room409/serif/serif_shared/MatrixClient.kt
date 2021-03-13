@@ -85,6 +85,19 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
             return Error("Message Send Failed", e)
         }
     }
+    fun sendReadReceipt(eventId: String, room_id: String): Outcome<String> {
+        try {
+            val result = runBlocking {
+                val receipt_confirmation =
+                        client.post<String>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/receipt/m.read/$eventId?access_token=$access_token") {
+                            contentType(ContentType.Application.Json)
+                        }
+            }
+            return Success("The receipt was sent")
+        } catch (e: Exception) {
+            return Error("Receipt Failed", e)
+        }
+    }
 
     fun sendImageMessage(url: String, room_id: String): Outcome<String> {
         try {
@@ -92,16 +105,13 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
                 val img_f = File(url)
                 val image_data = img_f.readBytes()
                 val f_size = image_data.size
-                var ct = ContentType.Image.JPEG
-                val mimetype =
+                val (ct, mimetype) =
                     if(url.endsWith(".png")) {
-                        ct = ContentType.Image.PNG
-                        "image/png"
+                        Pair(ContentType.Image.PNG, "image/png")
                     } else if(url.endsWith(".gif")) {
-                        ct = ContentType.Image.GIF
-                        "image/gif"
+                        Pair(ContentType.Image.GIF, "image/gif")
                     } else {
-                        "image/jpeg"
+                        Pair(ContentType.Image.JPEG, "image/jpeg")
                     }
                 val image_info = ImageInfo(0, mimetype, f_size, 0)
 

@@ -128,9 +128,15 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             }
         } else { null }
     }.filterNotNull()
-    fun sendMessage(msg: String, is_img: Boolean = false): MatrixState {
-        val sendFunc = if(is_img) { msession::sendImageMessage } else { msession::sendMessage }
-        when (val sendMessageResult = sendFunc(msg, room_id)) {
+    fun sendMessage(msg: String): MatrixState {
+        when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
+            is Success -> { println("${sendMessageResult.value}") }
+            is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
+        }
+        return this
+    }
+    fun sendImageMessage(msg: String): MatrixState {
+        when (val sendMessageResult = msession.sendImageMessage(msg, room_id)) {
             is Success -> { println("${sendMessageResult.value}") }
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }
@@ -146,6 +152,12 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     }
     fun requestBackfill() {
         msession.requestBackfill(room_id)
+    }
+    fun sendReceipt(eventID: String) {
+        when (val readReceiptResult = msession.sendReadReceipt(eventID, room_id)){
+            is Success -> println("read receipt sent")
+            is Error -> println("read receipt failed because ${readReceiptResult.cause}")
+        }
     }
     override fun refresh(): MatrixState = MatrixChatRoom(
         msession,

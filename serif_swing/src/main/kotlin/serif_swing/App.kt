@@ -205,7 +205,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             if(ret == JFileChooser.APPROVE_OPTION) {
                 val file = fc.getSelectedFile()
                 message_field.text = ""
-                transition(m.sendMessage(file.toPath().toString(), is_img = true), true)
+                transition(m.sendImageMessage(file.toPath().toString()), true)
                 println("Selected ${file.toPath()}")
             }
         }
@@ -213,6 +213,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         send_button.addActionListener(onSend)
         attach_button.addActionListener(onAttach)
         back_button.addActionListener({ transition(m.exitRoom(), true) })
+        m.sendReceipt(m.messages.last().id)
     }
     fun redrawMessages(draw_width: Int) {
         inner_scroll_pane.removeAll()
