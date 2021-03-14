@@ -127,9 +127,15 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             }
         } else { null }
     }.filterNotNull()
-    fun sendMessage(msg: String, is_img: Boolean = false): MatrixState {
-        val sendFunc = if(is_img) { msession::sendImageMessage } else { msession::sendMessage }
-        when (val sendMessageResult = sendFunc(msg, room_id)) {
+    fun sendMessage(msg: String): MatrixState {
+        when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
+            is Success -> { println("${sendMessageResult.value}") }
+            is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
+        }
+        return this
+    }
+    fun sendImageMessage(msg: String): MatrixState {
+        when (val sendMessageResult = msession.sendImageMessage(msg, room_id)) {
             is Success -> { println("${sendMessageResult.value}") }
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }

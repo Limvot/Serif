@@ -174,7 +174,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
 }
 
 object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<RoomMessageEventContent>(RoomMessageEventContent::class) {
-    override fun selectDeserializer(element: JsonElement) = element.jsonObject["msgtype"]!!.jsonPrimitive.content.let { type ->
+    override fun selectDeserializer(element: JsonElement) = element.jsonObject["msgtype"]?.jsonPrimitive?.content.let { type ->
         when {
             type == "m.text" -> TextRMEC.serializer()
             type == "m.image" -> ImageRMEC.serializer()
