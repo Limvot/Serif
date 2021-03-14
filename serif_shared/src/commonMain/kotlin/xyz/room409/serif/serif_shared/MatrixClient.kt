@@ -43,6 +43,7 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
             } catch (e: Exception) {
                 // Exponential backoff on failure
                 val backoff_ms = timeout_ms shl fail_times
+                e.printStackTrace()
                 println("This sync failed with an exception $e, waiting ${backoff_ms / 1000} seconds before trying again")
                 fail_times += 1
                 Thread.sleep(backoff_ms)
