@@ -83,7 +83,9 @@ open class SharedUiMessage(
     open val message: String,
     open val id: String,
     open val timestamp: Long,
-    open val replied_event: String = ""
+    open val replied_event: String = "",
+    open val edited_event: String = ""
+
 )
 class SharedUiImgMessage(
     override val sender: String,
@@ -121,7 +123,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                 }
             }
             when (msg_content) {
-                is TextRMEC -> SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id)
+                is TextRMEC -> SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
                 is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
                 is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
                 else -> SharedUiMessage(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)
@@ -143,8 +145,14 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         return this
     }
     fun sendReply(msg: String, replied: String): MatrixState {
-        val sendFunc = msession::sendMessage
-        when (val sendMessageResult = sendFunc(msg, room_id, replied)) {
+        when (val sendMessageResult = msession.sendMessage(msg, room_id, replied)) {
+            is Success -> { println("${sendMessageResult.value}") }
+            is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
+        }
+        return this
+    }
+    fun sendEdit(msg: String, edited_id: String): MatrixState {
+        when (val sendMessageResult = msession.sendEdit(msg, room_id, edited_id)) {
             is Success -> { println("${sendMessageResult.value}") }
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }

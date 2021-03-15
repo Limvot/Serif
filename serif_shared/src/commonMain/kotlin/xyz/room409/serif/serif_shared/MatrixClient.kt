@@ -68,7 +68,13 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
 
     fun sendMessage(msg: String, room_id: String, reply_id: String = ""): Outcome<String> {
         try {
-            val relation = if(reply_id != "") { RelationBlock(ReplyToRelation(reply_id)) } else { null }
+            var msg = msg
+            val relation = if(reply_id != "") {
+                msg = "> in reply to $reply_id\n\n$msg"
+                RelationBlock(ReplyToRelation(reply_id))
+            } else {
+                null
+            }
             val result = runBlocking {
                 val message_confirmation =
                     client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
@@ -81,6 +87,25 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
             }
 
             return Success("Hello, ${Platform().platform}, ya cowpeople! - Our sent event id is: $result")
+        } catch (e: Exception) {
+            return Error("Message Send Failed", e)
+        }
+    }
+    fun sendEdit(msg: String, room_id: String, edited_id: String): Outcome<String> {
+        try {
+            val fallback_msg = "* $msg"
+            val result = runBlocking {
+                val message_confirmation =
+                    client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
+                        contentType(ContentType.Application.Json)
+                        body = SendMessageEdit(msg, fallback_msg, edited_id)
+                    }
+                transactionId++
+                Database.updateSession(access_token, transactionId)
+                message_confirmation.event_id
+            }
+
+            return Success("Our sent event id is: $result")
         } catch (e: Exception) {
             return Error("Message Send Failed", e)
         }
