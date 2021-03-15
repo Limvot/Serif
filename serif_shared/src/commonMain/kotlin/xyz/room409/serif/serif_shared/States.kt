@@ -103,6 +103,7 @@ class SharedUiAudioMessage(
 ) : SharedUiMessage(sender,message,id,timestamp)
 
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String) : MatrixState() {
+    val edits: MutableMap<String,SharedUiMessage> = mutableMapOf()
     val messages: List<SharedUiMessage> = msession.getRoomEvents(room_id).map {
         if (it as? RoomMessageEvent != null) {
             val msg_content = it.content
@@ -123,7 +124,25 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                 }
             }
             when (msg_content) {
-                is TextRMEC -> SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                is TextRMEC -> {
+                    if(msg_content.new_content != null) {
+                        //This is an edit
+                        if(msg_content.relates_to?.event_id != null) {
+                            val replaced_id = msg_content.relates_to.event_id
+                            val edit_msg = SharedUiMessage(it.sender, msg_content.new_content.body,
+                                it.event_id, it.origin_server_ts, replied_event="",
+                                edited_event=replaced_id)
+                            edits.put(replaced_id,edit_msg)
+                            null
+                        } else {
+                            //No idea which event this edit is editing, just display fallback
+                            SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts)
+                        }
+                    } else {
+                        //This is a reply or normal text msg
+                        SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                    }
+                }
                 is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
                 is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
                 else -> SharedUiMessage(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)

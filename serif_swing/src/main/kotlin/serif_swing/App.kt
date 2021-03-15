@@ -266,36 +266,51 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     play_btn
                 }
                 else -> {
-                    val message = JTextArea("$message")
+                    val message =
+                    if(m.edits.contains(msg.id)) {
+                        val edited = m.edits.get(msg.id)!!
+                        JTextArea("${edited.message} (edited)")
+                    } else {
+                        JTextArea("$message")
+                    }
                     message.setEditable(false)
                     message.lineWrap = true
                     message.wrapStyleWord = true
                     message
                 }
             }
-            val msg_reply_button = JButton("reply")
-            msg_reply_button.addActionListener({
+            val msg_action_popup = JPopupMenu()
+
+            val reply_option = JMenuItem("reply")
+            reply_option.addActionListener({
                 println("Now writing a reply")
                 replied_event_id = msg.id
             })
-            val msg_edit_button = JButton("edit")
-            msg_edit_button.addActionListener({
+            val edit_option = JMenuItem("edit")
+            edit_option.addActionListener({
                 println("Now editing a message")
                 edited_event_id = msg.id
                 message_field.text = msg.message
             })
+
+            msg_action_popup.add(reply_option)
+            if(show_edit_btn) msg_action_popup.add(edit_option)
+
+            val msg_action_button = JButton("...")
+            msg_action_button.addActionListener({
+                msg_action_popup.show(msg_action_button,0,0)
+            })
+
             parallel_group.addComponent(sender)
             parallel_group.addComponent(msg_widget)
-            parallel_group.addComponent(msg_reply_button)
-            if(show_edit_btn) parallel_group.addComponent(msg_edit_button)
+            parallel_group.addComponent(msg_action_button)
             seq_vert_groups.addComponent(sender)
             seq_vert_groups.addGroup(
                 layout.createSequentialGroup()
                     .addPreferredGap(sender, msg_widget, LayoutStyle.ComponentPlacement.INDENT)
                     .addComponent(msg_widget)
-                    .addComponent(msg_reply_button)
+                    .addComponent(msg_action_button)
             )
-            if(show_edit_btn) seq_vert_groups.addComponent(msg_edit_button)
         }
         layout.setHorizontalGroup(parallel_group)
         layout.setVerticalGroup(seq_vert_groups)

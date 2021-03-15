@@ -124,6 +124,7 @@ abstract class RoomMessageEventContent {
 class TextRMEC(
     override val body: String = "<missing message body, likely redacted>",
     override val msgtype: String = "<missing type, likely redacted>",
+    @SerialName("m.new_content") val new_content: TextRMEC? = null,
     @SerialName("m.relates_to") val relates_to: RelationBlock? = null
 ) : RoomMessageEventContent()
 @Serializable
