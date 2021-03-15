@@ -317,23 +317,33 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                                     val el = doc.getCharacterElement(pos)
                                     val href = el.attributes.getAttribute(HTML.Attribute.HREF) as String?
                                     if (href != null) {
+                                        // In the background, so that GUI doesn't freeze
                                         thread(start = true) {
+                                            // We have to try using xdg-open first,
+                                            // since PinePhone somehow implements the
+                                            // Desktop API but has the same problem with the
+                                            // GTK_BACKEND var
                                             try {
-                                                println("Trying to open $href with Desktop")
-                                                java.awt.Desktop.getDesktop().browse(java.net.URI(href))
-                                            } catch (e: Exception) {
+                                                println("Trying to open $href with exec 'xdg-open $href'")
+                                                val pb = ProcessBuilder("xdg-open", href)
+                                                // Somehow this environment variable gets set for pb
+                                                // when it's NOT in System.getenv(). And of course, this
+                                                // is the one that makes xdg-open try to launch an X version
+                                                // of Firefox, giving the dreaded Firefox is already running
+                                                // message if you've got a Wayland version running already.
+                                                pb.environment().remove("GDK_BACKEND")
+                                                pb.redirectErrorStream(true)
+                                                val process = pb.start()
+                                                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                                                while (reader.readLine() != null) {}
+                                                process.waitFor()
+                                                println("done trying to open url")
+                                            } catch (e1: Exception) {
                                                 try {
-                                                    println("Trying to open $href with exec 'xdg-open $href'")
-                                                    val pb = ProcessBuilder("xdg-open", href)
-                                                    //val pb = ProcessBuilder("bash", "-c", "xdg-open $href")
-                                                    pb.redirectErrorStream(true)
-                                                    val process = pb.start()
-                                                    val reader = BufferedReader(InputStreamReader(process.inputStream))
-                                                    while (reader.readLine() != null) {}
-                                                    process.waitFor()
-                                                    println("done trying to open url")
-                                                } catch (e: Exception) {
-                                                    println("Couldn't get Desktop or Runtime.getRuntime().exec('xdg-open $href'), problem was $e")
+                                                    println("Trying to open $href with Desktop")
+                                                    java.awt.Desktop.getDesktop().browse(java.net.URI(href))
+                                                } catch (e2: Exception) {
+                                                    println("Couldn't get ProcessBuilder('xdg-open $href') or Desktop, problem was $e1 then $e2")
                                                 }
                                             }
                                         }
