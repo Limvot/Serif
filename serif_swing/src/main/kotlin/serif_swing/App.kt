@@ -6,6 +6,7 @@ import com.formdev.flatlaf.*
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
 import kotlin.math.min
+import kotlin.concurrent.thread
 import java.awt.*
 import java.awt.event.*
 import javax.swing.*
@@ -316,23 +317,24 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                                     val el = doc.getCharacterElement(pos)
                                     val href = el.attributes.getAttribute(HTML.Attribute.HREF) as String?
                                     if (href != null) {
-                                        try {
-                                            println("Trying to open $href with Desktop")
-                                            java.awt.Desktop.getDesktop().browse(java.net.URI(href))
-                                        } catch (e: Exception) {
+                                        thread(start = true) {
                                             try {
-                                                println("Trying to open $href with exec 'xdg-open $href'")
-                                                //Runtime.getRuntime().exec("xdg-open '$href'")
-                                                //val pb = ProcessBuilder("xdg-open", href)
-                                                val pb = ProcessBuilder("bash", "-c", "xdg-open $href")
-                                                pb.redirectErrorStream(true)
-                                                val process = pb.start()
-                                                val reader = BufferedReader(InputStreamReader(process.inputStream))
-                                                while (reader.readLine() != null) {}
-                                                process.waitFor()
-                                                println("done trying to open url")
+                                                println("Trying to open $href with Desktop")
+                                                java.awt.Desktop.getDesktop().browse(java.net.URI(href))
                                             } catch (e: Exception) {
-                                                println("Couldn't get Desktop or Runtime.getRuntime().exec('xdg-open $href'), problem was $e")
+                                                try {
+                                                    println("Trying to open $href with exec 'xdg-open $href'")
+                                                    val pb = ProcessBuilder("xdg-open", href)
+                                                    //val pb = ProcessBuilder("bash", "-c", "xdg-open $href")
+                                                    pb.redirectErrorStream(true)
+                                                    val process = pb.start()
+                                                    val reader = BufferedReader(InputStreamReader(process.inputStream))
+                                                    while (reader.readLine() != null) {}
+                                                    process.waitFor()
+                                                    println("done trying to open url")
+                                                } catch (e: Exception) {
+                                                    println("Couldn't get Desktop or Runtime.getRuntime().exec('xdg-open $href'), problem was $e")
+                                                }
                                             }
                                         }
                                     }
