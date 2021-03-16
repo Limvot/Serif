@@ -331,7 +331,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                                                 // is the one that makes xdg-open try to launch an X version
                                                 // of Firefox, giving the dreaded Firefox is already running
                                                 // message if you've got a Wayland version running already.
-                                                pb.environment().remove("GDK_BACKEND")
+                                                pb.environment().clear()
+                                                pb.environment().putAll(System.getenv())
                                                 pb.redirectErrorStream(true)
                                                 val process = pb.start()
                                                 val reader = BufferedReader(InputStreamReader(process.inputStream))
