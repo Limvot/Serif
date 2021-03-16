@@ -281,20 +281,56 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             }
             val msg_action_popup = JPopupMenu()
 
-            val reply_option = JMenuItem("reply")
+            val reply_option = JMenuItem("Reply")
             reply_option.addActionListener({
                 println("Now writing a reply")
                 replied_event_id = msg.id
             })
-            val edit_option = JMenuItem("edit")
+            val edit_option = JMenuItem("Edit")
             edit_option.addActionListener({
                 println("Now editing a message")
                 edited_event_id = msg.id
                 message_field.text = msg.message
             })
+            val show_src_option = JMenuItem("Show Source")
+            show_src_option.addActionListener({
+                val json_str = m.getEventSrc(msg.id)
+
+                val window = SwingUtilities.getWindowAncestor(panel)
+                val dim = window.getSize()
+                val h = dim.height
+                val w = dim.width
+                val dialog = JDialog(window, "Event Source")
+
+                val top_panel = JPanel()
+                top_panel.layout = BoxLayout(top_panel, BoxLayout.LINE_AXIS)
+
+                val dpanel = JPanel(BorderLayout())
+                val src_txt = JTextPane()
+                src_txt.setContentType("text/plain")
+                src_txt.setText(json_str)
+                src_txt.setEditable(false)
+
+                val close_btn = JButton("Close")
+                close_btn.addActionListener({
+                    dialog.setVisible(false)
+                    dialog.dispose()
+                })
+
+                dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
+                dpanel.add(close_btn,BorderLayout.PAGE_END)
+                top_panel.add(dpanel)
+                dialog.add(top_panel)
+
+                dialog.setSize(w,h/2)
+                dialog.setVisible(true)
+                dialog.setResizable(false)
+                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+            })
 
             msg_action_popup.add(reply_option)
             if(show_edit_btn) msg_action_popup.add(edit_option)
+            msg_action_popup.add(show_src_option)
 
             val msg_action_button = JButton("...")
             msg_action_button.addActionListener({

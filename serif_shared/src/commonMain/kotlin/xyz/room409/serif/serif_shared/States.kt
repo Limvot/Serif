@@ -177,6 +177,21 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         }
         return this
     }
+    fun getEventSrc(msg_id: String): String {
+        for(event in msession.getRoomEvents(room_id)) {
+            if (event as? RoomMessageEvent != null) {
+                if(event.event_id == msg_id) {
+                    return event.raw_self.toString()
+                            .replace("\",","\",\n")
+                            .replace(",\"",",\n\"")
+                            .replace("{","{\n")
+                            .replace("}","\n}")
+                            .replace("\" \"","\"\n\"")
+                }
+            }
+        }
+        return "No Source for $msg_id"
+    }
     fun requestBackfill() {
         msession.requestBackfill(room_id)
     }
