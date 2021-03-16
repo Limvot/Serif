@@ -291,7 +291,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     var current_idx = 0
                     val simpleAttrs = SimpleAttributeSet()
                     for (url_match in URL_REGEX.findAll(msg.message)) {
-                        println("${url_match.value} is a url!!")
                         if (url_match.range.start > current_idx) {
                             message.document.insertString(current_idx, msg.message.slice(current_idx .. url_match.range.start-1), simpleAttrs)
                             current_idx = url_match.range.start
