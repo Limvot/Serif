@@ -83,9 +83,7 @@ open class SharedUiMessage(
     open val message: String,
     open val id: String,
     open val timestamp: Long,
-    open val replied_event: String = "",
-    open val edited_event: String = ""
-
+    open val replied_event: String = ""
 )
 class SharedUiImgMessage(
     override val sender: String,
@@ -117,8 +115,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                         if(msg_content.relates_to?.event_id != null) {
                             val replaced_id = msg_content.relates_to.event_id
                             val edit_msg = SharedUiMessage(it.sender, msg_content.new_content.body,
-                                it.event_id, it.origin_server_ts, replied_event="",
-                                edited_event=replaced_id)
+                                it.event_id, it.origin_server_ts)
                             Pair(replaced_id,edit_msg)
                         } else {
                             //No idea which event this edit is editing 
