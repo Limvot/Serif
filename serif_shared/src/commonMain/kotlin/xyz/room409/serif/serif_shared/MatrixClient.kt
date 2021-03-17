@@ -22,7 +22,7 @@ inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.
 // the right T. Java generics are bad, yall, and Kotlin in trying to be nice sometimes makes things much worse.
 inline fun <reified T> List<Event>.firstStateEventContentOfType(): T? = this.map { ((it as? StateEvent<T>?)?.content) as? T? }.firstOrNull { it != null }
 
-class MatrixSession(val client: HttpClient, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
+class MatrixSession(val client: HttpClient, val user: String, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var sync_response: SyncResponse? = null
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
@@ -273,9 +273,9 @@ class MatrixClient {
             // Save to DB
             println("Saving session to db")
             val new_transactionId: Long = 0
-            Database.saveSession(username, loginResponse.access_token, new_transactionId)
+            Database.saveSession(loginResponse.identifier.user, loginResponse.access_token, new_transactionId)
 
-            return Success(MatrixSession(client, loginResponse.access_token, new_transactionId, onUpdate))
+            return Success(MatrixSession(client, loginResponse.identifier.user, loginResponse.access_token, new_transactionId, onUpdate))
         } catch (e: Exception) {
             return Error("Login failed", e)
         }
@@ -295,7 +295,7 @@ class MatrixClient {
         val sessions = Database.getUserSession(username)
         val tok = sessions.second
         val transactionId = sessions.third
-        return Success(MatrixSession(client, tok, transactionId, onUpdate))
+        return Success(MatrixSession(client, username, tok, transactionId, onUpdate))
     }
 
     fun getStoredSessions(): List<String> {

@@ -37,8 +37,6 @@ object AudioPlayer {
     }
 }
 
-var logged_in_user: String = ""
-
 sealed class SwingState() {
     abstract fun refresh()
 }
@@ -51,10 +49,7 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
     var password_field = JPasswordField(20)
     var password_label = JLabel("Password: ")
     var button = JButton("Login")
-    var logIn: (ActionEvent) -> Unit = {
-        logged_in_user = username_field.text
-        transition(m.login(username_field.text, password_field.text, onSync), true)
-    }
+    var logIn: (ActionEvent) -> Unit = { transition(m.login(username_field.text, password_field.text, onSync), true) }
 
     init {
         panel.layout = GridBagLayout()
@@ -192,18 +187,20 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val text = message_field.text
             message_field.text = ""
             val res =
-            if(replied_event_id == "" && edited_event_id == "") {
-                m.sendMessage(text)
-            } else if(replied_event_id != "") {
-                val eventid = replied_event_id
-                replied_event_id = ""
-                println("Replying to $eventid")
-                m.sendReply(text, eventid)
-            } else {
-                val eventid = edited_event_id
-                edited_event_id = ""
-                println("Editing $eventid")
-                m.sendEdit(text, eventid)
+            when {
+                replied_event_id == "" && edited_event_id == "" -> m.sendMessage(text)
+                replied_event_id != "" -> {
+                    val eventid = replied_event_id
+                    replied_event_id = ""
+                    println("Replying to $eventid")
+                    m.sendReply(text, eventid)
+                }
+                else -> {
+                    val eventid = edited_event_id
+                    edited_event_id = ""
+                    println("Editing $eventid")
+                    m.sendEdit(text, eventid)
+                }
             }
             transition(res, true)
         }
@@ -235,7 +232,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val _sender = msg.sender
             val message = msg.message
             val sender = JTextArea("$_sender:  ")
-            val show_edit_btn = _sender.contains(logged_in_user)
+            val show_edit_btn = _sender.contains(m.username)
             sender.setEditable(false)
             sender.lineWrap = true
             sender.wrapStyleWord = true
@@ -273,7 +270,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     message
                 }
             }
-            val msg_action_popup = JPopupMenu()
 
             val reply_option = JMenuItem("Reply")
             reply_option.addActionListener({
@@ -318,8 +314,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
             })
 
+            val msg_action_popup = JPopupMenu()
             msg_action_popup.add(reply_option)
-            if(show_edit_btn) msg_action_popup.add(edit_option)
+            if(show_edit_btn) {
+                msg_action_popup.add(edit_option)
+            }
             msg_action_popup.add(show_src_option)
 
             val msg_action_button = JButton("...")

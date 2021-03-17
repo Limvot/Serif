@@ -16,7 +16,7 @@ data class LoginRequest(val type: String, val identifier: LoginIdentifier, val p
 data class LoginIdentifier(val type: String, val user: String)
 
 @Serializable
-data class LoginResponse(val access_token: String)
+data class LoginResponse(val access_token: String, val identifier: LoginIdentifier)
 
 @Serializable
 data class SendRoomMessage(

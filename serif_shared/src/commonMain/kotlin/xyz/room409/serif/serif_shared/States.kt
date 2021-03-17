@@ -103,6 +103,10 @@ class SharedUiAudioMessage(
 ) : SharedUiMessage(sender,message,id,timestamp)
 
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String) : MatrixState() {
+    val username: String
+        get() {
+            return msession.user
+        }
     val edits: Map<String,SharedUiMessage> = msession.getRoomEvents(room_id).map {
         if (it as? RoomMessageEvent != null) {
             val msg_content = it.content
