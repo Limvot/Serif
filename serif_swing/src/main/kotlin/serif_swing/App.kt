@@ -266,13 +266,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     play_btn
                 }
                 else -> {
-                    val message =
-                    if(m.edits.contains(msg.id)) {
-                        val edited = m.edits.get(msg.id)!!
-                        JTextArea("${edited.message} (edited)")
-                    } else {
-                        JTextArea("$message")
-                    }
+                    val message = JTextArea("$message")
                     message.setEditable(false)
                     message.lineWrap = true
                     message.wrapStyleWord = true
@@ -302,9 +296,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 val w = dim.width
                 val dialog = JDialog(window, "Event Source")
 
-                val top_panel = JPanel()
-                top_panel.layout = BoxLayout(top_panel, BoxLayout.LINE_AXIS)
-
                 val dpanel = JPanel(BorderLayout())
                 val src_txt = JTextPane()
                 src_txt.setContentType("text/plain")
@@ -319,8 +310,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
                 dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
                 dpanel.add(close_btn,BorderLayout.PAGE_END)
-                top_panel.add(dpanel)
-                dialog.add(top_panel)
+                dialog.add(dpanel)
 
                 dialog.setSize(w,h/2)
                 dialog.setVisible(true)

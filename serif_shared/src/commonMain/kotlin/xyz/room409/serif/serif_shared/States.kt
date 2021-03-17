@@ -103,7 +103,34 @@ class SharedUiAudioMessage(
 ) : SharedUiMessage(sender,message,id,timestamp)
 
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String) : MatrixState() {
-    val edits: MutableMap<String,SharedUiMessage> = mutableMapOf()
+    val edits: Map<String,SharedUiMessage> = msession.getRoomEvents(room_id).map {
+        if (it as? RoomMessageEvent != null) {
+            val msg_content = it.content
+            when (msg_content) {
+                is TextRMEC -> {
+                    if(msg_content.new_content != null) {
+                        //This is an edit
+                        if(msg_content.relates_to?.event_id != null) {
+                            val replaced_id = msg_content.relates_to.event_id
+                            val edit_msg = SharedUiMessage(it.sender, msg_content.new_content.body,
+                                it.event_id, it.origin_server_ts, replied_event="",
+                                edited_event=replaced_id)
+                            Pair(replaced_id,edit_msg)
+                        } else {
+                            //No idea which event this edit is editing 
+                            null
+                        }
+                    } else {
+                        //This is not an edit
+                        null
+                    }
+                }
+                else -> null
+            }
+        } else {
+            null
+        }
+    }.filterNotNull().toMap()
     val messages: List<SharedUiMessage> = msession.getRoomEvents(room_id).map {
         if (it as? RoomMessageEvent != null) {
             val msg_content = it.content
@@ -127,20 +154,27 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                 is TextRMEC -> {
                     if(msg_content.new_content != null) {
                         //This is an edit
-                        if(msg_content.relates_to?.event_id != null) {
-                            val replaced_id = msg_content.relates_to.event_id
-                            val edit_msg = SharedUiMessage(it.sender, msg_content.new_content.body,
-                                it.event_id, it.origin_server_ts, replied_event="",
-                                edited_event=replaced_id)
-                            edits.put(replaced_id,edit_msg)
-                            null
-                        } else {
-                            //No idea which event this edit is editing, just display fallback
+                        if(msg_content.relates_to?.event_id == null) {
+                            //No idea which event this edit is editing, just display fallback msg
                             SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts)
+                        } else {
+                            null
                         }
                     } else {
-                        //This is a reply or normal text msg
-                        SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                        //This is not an edit event, check for any edits of this message
+                        if(edits.contains(it.event_id)) {
+                            val edited = edits.get(it.event_id)!!
+                            SharedUiMessage(
+                                it.sender,
+                                "${edited.message} (edited)",
+                                edited.id,
+                                it.origin_server_ts,
+                                msg_content.relates_to?.in_reply_to?.event_id ?: "",
+                                it.event_id)
+                        } else {
+                            //No edits for this event
+                            SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                        }
                     }
                 }
                 is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
