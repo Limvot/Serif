@@ -170,8 +170,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                                 "${edited.message} (edited)",
                                 edited.id,
                                 it.origin_server_ts,
-                                msg_content.relates_to?.in_reply_to?.event_id ?: "",
-                                it.event_id)
+                                msg_content.relates_to?.in_reply_to?.event_id ?: "")
                         } else {
                             //No edits for this event
                             SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")

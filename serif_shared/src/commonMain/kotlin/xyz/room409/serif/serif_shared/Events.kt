@@ -22,11 +22,19 @@ data class LoginResponse(val access_token: String, val identifier: LoginIdentifi
 data class SendRoomMessage(
     val msgtype: String,
     val body: String,
-    @SerialName("m.relates_to") val replybock: RelationBlock? = null
+    @SerialName("m.new_content") val new_content: TextRMEC? = null,
+    @SerialName("m.relates_to") val relates_to: RelationBlock? = null
 ) {
     constructor(body: String) : this(msgtype = "m.text", body = body)
-    constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, replybock = rel_to)
+    constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, relates_to = rel_to)
+    constructor(msg: String, fallback: String, original_event: String) : this(
+        msgtype="m.text",
+        body=fallback,
+        new_content=TextRMEC(msg,"m.text"),
+        relates_to=RelationBlock(null,"m.replace",original_event)
+    )
 }
+
 @Serializable
 data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: String)
 @Serializable
@@ -176,21 +184,6 @@ class RelationBlock(
 val rel_type: String? = null,
 val event_id: String? = null,
 )
-
-@Serializable
-class SendMessageEdit(
-    val body: String,
-    val msgtype: String,
-    @SerialName("m.new_content") val new_content: TextRMEC,
-    @SerialName("m.relates_to") val relates_to: RelationBlock
-) {
-    constructor(msg: String, fallback: String, original_event: String) : this(
-        body=fallback,
-        msgtype="m.text",
-        new_content=TextRMEC(msg,"m.text"),
-        relates_to=RelationBlock(null,"m.replace",original_event)
-    )
-}
 
 object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     override fun selectDeserializer(element: JsonElement) = element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->

@@ -98,7 +98,7 @@ class MatrixSession(val client: HttpClient, val user: String, val access_token: 
                 val message_confirmation =
                     client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
                         contentType(ContentType.Application.Json)
-                        body = SendMessageEdit(msg, fallback_msg, edited_id)
+                        body = SendRoomMessage(msg, fallback_msg, edited_id)
                     }
                 transactionId++
                 Database.updateSession(access_token, transactionId)
