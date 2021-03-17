@@ -66,39 +66,13 @@ class MatrixSession(val client: HttpClient, val user: String, val access_token: 
 
     fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
 
-    fun sendMessage(msg: String, room_id: String, reply_id: String = ""): Outcome<String> {
+    fun sendMessageImpl(message_content: SendRoomMessage, room_id: String): Outcome<String> {
         try {
-            var msg = msg
-            val relation = if(reply_id != "") {
-                msg = "> in reply to $reply_id\n\n$msg"
-                RelationBlock(ReplyToRelation(reply_id))
-            } else {
-                null
-            }
             val result = runBlocking {
                 val message_confirmation =
                     client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
                         contentType(ContentType.Application.Json)
-                        body = SendRoomMessage(msg, relation)
-                    }
-                transactionId++
-                Database.updateSession(access_token, transactionId)
-                message_confirmation.event_id
-            }
-
-            return Success("Hello, ${Platform().platform}, ya cowpeople! - Our sent event id is: $result")
-        } catch (e: Exception) {
-            return Error("Message Send Failed", e)
-        }
-    }
-    fun sendEdit(msg: String, room_id: String, edited_id: String): Outcome<String> {
-        try {
-            val fallback_msg = "* $msg"
-            val result = runBlocking {
-                val message_confirmation =
-                    client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
-                        contentType(ContentType.Application.Json)
-                        body = SendRoomMessage(msg, fallback_msg, edited_id)
+                        body = message_content
                     }
                 transactionId++
                 Database.updateSession(access_token, transactionId)
@@ -109,6 +83,21 @@ class MatrixSession(val client: HttpClient, val user: String, val access_token: 
         } catch (e: Exception) {
             return Error("Message Send Failed", e)
         }
+    }
+    fun sendMessage(msg: String, room_id: String, reply_id: String = ""): Outcome<String> {
+        val (msg, relation) = if(reply_id != "") {
+            Pair("> in reply to $reply_id\n\n$msg",
+                 RelationBlock(ReplyToRelation(reply_id)))
+        } else {
+            Pair(msg, null)
+        }
+        val body = SendRoomMessage(msg, relation)
+        return sendMessageImpl(body, room_id)
+    }
+    fun sendEdit(msg: String, room_id: String, edited_id: String): Outcome<String> {
+        val fallback_msg = "* $msg"
+        val body = SendRoomMessage(msg, fallback_msg, edited_id)
+        return sendMessageImpl(body, room_id)
     }
     fun sendReadReceipt(eventId: String, room_id: String): Outcome<String> {
         try {
