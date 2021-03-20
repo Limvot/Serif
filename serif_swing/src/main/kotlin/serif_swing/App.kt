@@ -277,7 +277,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     play_btn
                 }
                 else -> {
-                    //val message = CustomTextPane(true)
                     val message = JTextPane()
                     message.setEditorKit(WrapEditorKit);
                     message.setEditable(false)
