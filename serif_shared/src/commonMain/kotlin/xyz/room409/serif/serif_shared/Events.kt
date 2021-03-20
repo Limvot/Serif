@@ -19,35 +19,9 @@ data class LoginIdentifier(val type: String, val user: String)
 data class LoginResponse(val access_token: String, val identifier: LoginIdentifier)
 
 @Serializable
-data class SendRoomMessage(
-    val msgtype: String,
-    val body: String,
-    @SerialName("m.new_content") val new_content: TextRMEC? = null,
-    @SerialName("m.relates_to") val relates_to: RelationBlock? = null
-) {
-    constructor(body: String) : this(msgtype = "m.text", body = body)
-    constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, relates_to = rel_to)
-    constructor(msg: String, fallback: String, original_event: String) : this(
-        msgtype="m.text",
-        body=fallback,
-        new_content=TextRMEC(msg,"m.text"),
-        relates_to=RelationBlock(null,"m.replace",original_event)
-    )
-}
-
-@Serializable
 data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: String)
 @Serializable
 data class ImageInfo(val h: Int, val mimetype: String, val size: Int, val w: Int)
-@Serializable
-data class SendRoomImageMessage(val msgtype: String, val body: String, val info: ImageInfo, val url: String) {
-    constructor(body: String, info: ImageInfo, url: String) : this(
-        msgtype = "m.image",
-        body = body,
-        info = info,
-        url = url
-    )
-}
 @Serializable
 data class MediaUploadResponse(val content_uri: String)
 @Serializable
@@ -134,7 +108,15 @@ class TextRMEC(
     override val msgtype: String = "<missing type, likely redacted>",
     @SerialName("m.new_content") val new_content: TextRMEC? = null,
     @SerialName("m.relates_to") val relates_to: RelationBlock? = null
-) : RoomMessageEventContent()
+) : RoomMessageEventContent() {
+    constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, relates_to = rel_to)
+    constructor(msg: String, fallback: String, original_event: String) : this(
+        msgtype="m.text",
+        body=fallback,
+        new_content=TextRMEC(msg,"m.text"),
+        relates_to=RelationBlock(null,"m.replace",original_event)
+    )
+}
 @Serializable
 class ImageRMEC(
     override val body: String = "<missing message body, likely redacted>",

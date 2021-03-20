@@ -66,7 +66,7 @@ class MatrixSession(val client: HttpClient, val user: String, val access_token: 
 
     fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
 
-    fun sendMessageImpl(message_content: SendRoomMessage, room_id: String): Outcome<String> {
+    fun sendMessageImpl(message_content: RoomMessageEventContent, room_id: String): Outcome<String> {
         try {
             val result = runBlocking {
                 val message_confirmation =
@@ -91,12 +91,12 @@ class MatrixSession(val client: HttpClient, val user: String, val access_token: 
         } else {
             Pair(msg, null)
         }
-        val body = SendRoomMessage(msg, relation)
+        val body = TextRMEC(msg, relation)
         return sendMessageImpl(body, room_id)
     }
     fun sendEdit(msg: String, room_id: String, edited_id: String): Outcome<String> {
         val fallback_msg = "* $msg"
-        val body = SendRoomMessage(msg, fallback_msg, edited_id)
+        val body = TextRMEC(msg, fallback_msg, edited_id)
         return sendMessageImpl(body, room_id)
     }
     fun sendReadReceipt(eventId: String, room_id: String): Outcome<String> {
@@ -115,42 +115,33 @@ class MatrixSession(val client: HttpClient, val user: String, val access_token: 
 
     fun sendImageMessage(url: String, room_id: String): Outcome<String> {
         try {
-            val result = runBlocking {
-                val img_f = File(url)
-                val image_data = img_f.readBytes()
-                val f_size = image_data.size
-                val (ct, mimetype) =
-                    if(url.endsWith(".png")) {
-                        Pair(ContentType.Image.PNG, "image/png")
-                    } else if(url.endsWith(".gif")) {
-                        Pair(ContentType.Image.GIF, "image/gif")
-                    } else {
-                        Pair(ContentType.Image.JPEG, "image/jpeg")
-                    }
-                val image_info = ImageInfo(0, mimetype, f_size, 0)
+            val img_f = File(url)
+            val image_data = img_f.readBytes()
+            val f_size = image_data.size
+            val (ct, mimetype) =
+                if(url.endsWith(".png")) {
+                    Pair(ContentType.Image.PNG, "image/png")
+                } else if(url.endsWith(".gif")) {
+                    Pair(ContentType.Image.GIF, "image/gif")
+                } else {
+                    Pair(ContentType.Image.JPEG, "image/jpeg")
+                }
+            val image_info = ImageInfo(0, mimetype, f_size, 0)
 
+            val body = runBlocking {
                 //Post Image to server
                 val upload_img_response =
                     client.post<MediaUploadResponse>("https://synapse.room409.xyz/_matrix/media/r0/upload?access_token=$access_token") {
                         contentType(ct)
                         body = image_data
                     }
-
-                //Send link to image
-                val message_confirmation =
-                    client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
-                        contentType(ContentType.Application.Json)
-                        body = SendRoomImageMessage("image_alt_text", image_info, upload_img_response.content_uri)
-                    }
-
-                transactionId++
-                Database.updateSession(access_token, transactionId)
-                message_confirmation.event_id
+                //Construct Image Message Content with url returned by the server
+                ImageRMEC(msgtype="m.image", body="image_alt_text", info=image_info, url=upload_img_response.content_uri)
             }
-
-            return Success("Sent event id is: $result")
+            //Send Image Event with link
+            return sendMessageImpl(body, room_id)
         } catch (e: Exception) {
-            return Error("Message Send Failed", e)
+            return Error("Image Upload Failed", e)
         }
     }
 
