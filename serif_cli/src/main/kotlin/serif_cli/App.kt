@@ -133,9 +133,9 @@ class App {
         println("==$room_id==")
 
         // print last 20 messages or so
-        val maxSenderLen = messages.map { (sender, _message) -> sender.length }.max()
-        messages.forEach { (sender, message) ->
-            println("${sender.padEnd(maxSenderLen!!, ' ')}: $message")
+        val maxSenderLen = messages.map { message -> message.sender.length }.max()
+        messages.forEach { message ->
+            println("${message.sender.padEnd(maxSenderLen!!, ' ')}: ${message.message}")
         }
     }
 }
