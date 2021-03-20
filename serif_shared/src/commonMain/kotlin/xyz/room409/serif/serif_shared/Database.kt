@@ -40,14 +40,13 @@ object Database {
         this.db?.sessionDbQueries?.deleteAllSessions()
     }
 
-    fun getImageInCache(url: String): String? {
-        val cached_img = this.db?.sessionDbQueries?.selectCachedMedia(url) { mxcUrl: String, localPath: String ->
+    fun getMediaInCache(url: String): String? {
+        return this.db?.sessionDbQueries?.selectCachedMedia(url) { _: String, localPath: String ->
             localPath
         }?.executeAsOneOrNull()
-        return cached_img
     }
 
-    fun addImageToCache(url: String, file_data: ByteArray, update: Boolean): String {
+    fun addMediaToCache(url: String, file_data: ByteArray, update: Boolean): String {
         val cache_path = File(System.getProperty("user.dir") + "/cache/images/")
         cache_path.mkdirs()
         val file = File.createTempFile("media_", "img", cache_path)

@@ -12,6 +12,30 @@ import javax.swing.*
 import javax.swing.filechooser.*;
 import javax.swing.text.*
 import java.io.File
+import javax.sound.sampled.Clip
+import javax.sound.sampled.AudioInputStream
+import javax.sound.sampled.AudioSystem
+
+
+object AudioPlayer {
+    var url = ""
+    val clip = AudioSystem.getClip()
+    fun loadAudio(audio_url: String) {
+        if(url != audio_url) {
+            clip.stop()
+            url = audio_url
+            val inputStream = AudioSystem.getAudioInputStream(File(url).getAbsoluteFile())
+            clip.open(inputStream)
+        }
+    }
+    fun play() {
+        if(clip.isRunning()) {
+            clip.stop()
+        }
+        clip.setFramePosition(0)
+        clip.start()
+    }
+}
 
 sealed class SwingState() {
     abstract fun refresh()
@@ -171,7 +195,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             if(ret == JFileChooser.APPROVE_OPTION) {
                 val file = fc.getSelectedFile()
                 message_field.text = ""
-                transition(m.sendMessage(file.toPath().toString(), is_img = true), true)
+                transition(m.sendImageMessage(file.toPath().toString()), true)
                 println("Selected ${file.toPath()}")
             }
         }
@@ -189,15 +213,16 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         for (msg in m.messages) {
             val _sender = msg.sender
             val message = msg.message
-            val url = msg.url
             val sender = JTextArea("$_sender:  ")
             sender.setEditable(false)
             sender.lineWrap = true
             sender.wrapStyleWord = true
 
             val msg_widget =
-                if (url != null) {
-                    val og_image_icon = ImageIcon(url)
+            when(msg) {
+                is SharedUiImgMessage -> {
+                    val img_url = msg.url
+                    val og_image_icon = ImageIcon(img_url)
                     val og_image = og_image_icon.image
                     val img_width: Int = og_image.getWidth(null)
                     val img_height: Int = og_image.getHeight(null)
@@ -208,13 +233,24 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     } else {
                         JLabel(og_image_icon)
                     }
-                } else {
+                }
+                is SharedUiAudioMessage -> {
+                    val audio_url = msg.url
+                    val play_btn = JButton("Play/Pause $audio_url")
+                    play_btn.addActionListener({
+                        AudioPlayer.loadAudio(audio_url)
+                        AudioPlayer.play()
+                    })
+                    play_btn
+                }
+                else -> {
                     val message = JTextArea(message)
                     message.setEditable(false)
                     message.lineWrap = true
                     message.wrapStyleWord = true
                     message
                 }
+            }
             parallel_group.addComponent(sender)
             parallel_group.addComponent(msg_widget)
             seq_vert_groups.addComponent(sender)
@@ -244,6 +280,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 class App {
     var frame = JFrame("Serif")
     var sstate: SwingState
+    fun refresh_all() {
+        sstate.refresh()
+        frame.validate()
+        frame.repaint()
+    }
 
     init {
         // Each UI will create it's specific DriverFactory
@@ -255,6 +296,12 @@ class App {
         sstate = constructStateView(MatrixLogin())
         frame.pack()
         frame.setVisible(true)
+        frame.addComponentListener(object : ComponentAdapter() {
+            override fun componentResized(e: ComponentEvent) {
+                println("Refresh-alling!")
+                refresh_all()
+            }
+        })
     }
 
     fun transition(new_state: MatrixState, partial: Boolean) {
@@ -271,21 +318,11 @@ class App {
 
     fun constructStateView(mstate: MatrixState): SwingState {
         frame.contentPane.removeAll()
-        val refresh_all = {
-            sstate.refresh()
-            frame.validate()
-            frame.repaint();
-        }
-        frame.addComponentListener(object : ComponentAdapter() {
-            override fun componentResized(e: ComponentEvent) {
-                refresh_all()
-            }
-        })
         var panel = JPanel()
         val to_ret = when (mstate) {
             is MatrixLogin -> SwingLogin(
                 ::transition,
-                { javax.swing.SwingUtilities.invokeLater(refresh_all) },
+                { javax.swing.SwingUtilities.invokeLater({ refresh_all() }) },
                 panel, mstate
             )
             is MatrixRooms -> SwingRooms(::transition, panel, mstate)

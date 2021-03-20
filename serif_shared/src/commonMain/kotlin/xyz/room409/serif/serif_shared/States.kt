@@ -78,39 +78,64 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
         return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
     }
 }
-data class SharedUiMessage(
-    val sender: String,
-    val message: String,
-    val id: String,
-    val timestamp: Long,
-    val url: String? = null
+open class SharedUiMessage(
+    open val sender: String,
+    open val message: String,
+    open val id: String,
+    open val timestamp: Long,
 )
+class SharedUiImgMessage(
+    override val sender: String,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long,
+    val url: String
+) : SharedUiMessage(sender,message,id,timestamp)
+class SharedUiAudioMessage(
+    override val sender: String,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long,
+    val url: String
+) : SharedUiMessage(sender,message,id,timestamp)
+
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String) : MatrixState() {
     val messages: List<SharedUiMessage> = msession.getRoomEvents(room_id).map {
         if (it as? RoomMessageEvent != null) {
-            if (it.content.url != null) {
-                when (val img_local = msession.getLocalImagePathFromUrl(it.content.url)) {
+            val msg_content = it.content
+            var generate_media_msg = { url: String, func: (String,String,String,Long,String) -> SharedUiMessage ->
+                when (val url_local = msession.getLocalMediaPathFromUrl(url)) {
                     is Success -> {
-                        SharedUiMessage(
+                        func(
                             it.sender, it.content.body, it.event_id,
-                            it.origin_server_ts, img_local.value
+                            it.origin_server_ts, url_local.value
                         )
                     }
                     is Error -> {
                         SharedUiMessage(
-                            it.sender, "Failed to load image ${it.content.url}",
+                            it.sender, "Failed to load media ${url}",
                             it.event_id, it.origin_server_ts
                         )
                     }
                 }
-            } else {
-                SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts)
+            }
+            when (msg_content) {
+                is TextRMEC -> SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts)
+                is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
+                is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
+                else -> SharedUiMessage(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)
             }
         } else { null }
     }.filterNotNull()
-    fun sendMessage(msg: String, is_img: Boolean = false): MatrixState {
-        val sendFunc = if(is_img) { msession::sendImageMessage } else { msession::sendMessage }
-        when (val sendMessageResult = sendFunc(msg, room_id)) {
+    fun sendMessage(msg: String): MatrixState {
+        when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
+            is Success -> { println("${sendMessageResult.value}") }
+            is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
+        }
+        return this
+    }
+    fun sendImageMessage(msg: String): MatrixState {
+        when (val sendMessageResult = msession.sendImageMessage(msg, room_id)) {
             is Success -> { println("${sendMessageResult.value}") }
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }
