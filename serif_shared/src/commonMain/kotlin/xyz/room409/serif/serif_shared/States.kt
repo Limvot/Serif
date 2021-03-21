@@ -101,37 +101,34 @@ class SharedUiAudioMessage(
 ) : SharedUiMessage(sender,message,id,timestamp)
 
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String) : MatrixState() {
-    val username: String
-        get() {
-            return msession.user
-        }
-    val edits: Map<String,SharedUiMessage> = msession.getRoomEvents(room_id).map {
-        if (it as? RoomMessageEvent != null) {
-            val msg_content = it.content
-            when (msg_content) {
-                is TextRMEC -> {
-                    if(msg_content.new_content != null) {
+    val username = msession.user
+
+    private val is_edit_content = { msg_content: TextRMEC ->
+        ((msg_content.new_content != null) && (msg_content.relates_to?.event_id != null))
+    }
+    private val edits: Map<String,ArrayList<SharedUiMessage>> = {
+        val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
+        msession.getRoomEvents(room_id).forEach {
+            if (it as? RoomMessageEvent != null) {
+                val msg_content = it.content
+                if (msg_content is TextRMEC) {
+                    if(is_edit_content(msg_content)) {
                         //This is an edit
-                        if(msg_content.relates_to?.event_id != null) {
-                            val replaced_id = msg_content.relates_to.event_id
-                            val edit_msg = SharedUiMessage(it.sender, msg_content.new_content.body,
-                                it.event_id, it.origin_server_ts)
-                            Pair(replaced_id,edit_msg)
+                        val replaced_id = msg_content!!.relates_to!!.event_id!!
+                        val edit_msg = SharedUiMessage(it.sender, msg_content!!.new_content!!.body,
+                            it.event_id, it.origin_server_ts)
+
+                        if(edit_maps.contains(replaced_id)) {
+                            edit_maps.get(replaced_id)!!.add(edit_msg)
                         } else {
-                            //No idea which event this edit is editing 
-                            null
+                            edit_maps.put(replaced_id, arrayListOf(edit_msg))
                         }
-                    } else {
-                        //This is not an edit
-                        null
                     }
                 }
-                else -> null
             }
-        } else {
-            null
         }
-    }.filterNotNull().toMap()
+        edit_maps.toMap()
+    }()
     val messages: List<SharedUiMessage> = msession.getRoomEvents(room_id).map {
         if (it as? RoomMessageEvent != null) {
             val msg_content = it.content
@@ -153,27 +150,36 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             }
             when (msg_content) {
                 is TextRMEC -> {
-                    if(msg_content.new_content != null) {
-                        //This is an edit
-                        if(msg_content.relates_to?.event_id == null) {
-                            //No idea which event this edit is editing, just display fallback msg
-                            SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts)
-                        } else {
-                            null
-                        }
+                    val normal_msg_builder = {
+                        SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                    }
+                    if((msg_content.new_content != null) && (msg_content.relates_to?.event_id == null)) {
+                        //This is a poorly formed edit
+                        //No idea which event this edit is editing, just display fallback msg
+                        SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts)
                     } else {
-                        //This is not an edit event, check for any edits of this message
-                        if(edits.contains(it.event_id)) {
-                            val edited = edits.get(it.event_id)!!
-                            SharedUiMessage(
-                                it.sender,
-                                "${edited.message} (edited)",
-                                edited.id,
-                                it.origin_server_ts,
-                                msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                        if(is_edit_content(msg_content)) {
+                            //Don't display edits
+                            null
                         } else {
-                            //No edits for this event
-                            SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                            //This is a text message, check for any edits of this message
+                            if(edits.contains(it.event_id)) {
+                                val possible_edits = edits.get(it.event_id)!!
+                                val edited = possible_edits.lastOrNull { it.sender.contains(username) }
+                                if(edited != null) {
+                                    SharedUiMessage(
+                                        it.sender,
+                                        "${edited.message} (edited)",
+                                        edited.id,
+                                        it.origin_server_ts,
+                                        msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                                } else {
+                                    normal_msg_builder()
+                                }
+                            } else {
+                                //No edits for this event
+                                normal_msg_builder()
+                            }
                         }
                     }
                 }
