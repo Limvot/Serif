@@ -38,7 +38,7 @@ data class SendRoomMessage(
 @Serializable
 data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: String)
 @Serializable
-data class ImageInfo(val h: Int, val mimetype: String, val size: Int, val w: Int)
+data class ImageInfo(val h: Int? = 0, val mimetype: String, val size: Int, val w: Int? = 0)
 @Serializable
 data class SendRoomImageMessage(val msgtype: String, val body: String, val info: ImageInfo, val url: String) {
     constructor(body: String, info: ImageInfo, url: String) : this(
@@ -198,7 +198,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
 }
 
 object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<RoomMessageEventContent>(RoomMessageEventContent::class) {
-    override fun selectDeserializer(element: JsonElement) = element.jsonObject["msgtype"]!!.jsonPrimitive.content.let { type ->
+    override fun selectDeserializer(element: JsonElement) = element.jsonObject["msgtype"]?.jsonPrimitive?.content.let { type ->
         when {
             type == "m.text" -> TextRMEC.serializer()
             type == "m.image" -> ImageRMEC.serializer()
