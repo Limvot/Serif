@@ -183,6 +183,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var c_left = GridBagConstraints()
     var c_right = GridBagConstraints()
     var message_field = JTextField(20)
+    var replied_event_id = ""
+    var edited_event_id = ""
     init {
         panel.layout = BorderLayout()
 
@@ -218,7 +220,23 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         val onSend: (ActionEvent) -> Unit = {
             val text = message_field.text
             message_field.text = ""
-            transition(m.sendMessage(text), true)
+            val res =
+            when {
+                replied_event_id == "" && edited_event_id == "" -> m.sendMessage(text)
+                replied_event_id != "" -> {
+                    val eventid = replied_event_id
+                    replied_event_id = ""
+                    println("Replying to $eventid")
+                    m.sendReply(text, eventid)
+                }
+                else -> {
+                    val eventid = edited_event_id
+                    edited_event_id = ""
+                    println("Editing $eventid")
+                    m.sendEdit(text, eventid)
+                }
+            }
+            transition(res, true)
         }
         val onAttach: (ActionEvent) -> Unit = {
             val fc = JFileChooser()
@@ -247,6 +265,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         for (msg in m.messages) {
             val _sender = msg.sender
             val sender = JTextArea("$_sender:  ")
+            val show_edit_btn = _sender.contains(m.username)
             sender.setEditable(false)
             sender.lineWrap = true
             sender.wrapStyleWord = true
@@ -354,13 +373,71 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     message
                 }
             }
+
+            val reply_option = JMenuItem("Reply")
+            reply_option.addActionListener({
+                println("Now writing a reply")
+                replied_event_id = msg.id
+            })
+            val edit_option = JMenuItem("Edit")
+            edit_option.addActionListener({
+                println("Now editing a message")
+                edited_event_id = msg.id
+                message_field.text = msg.message
+            })
+            val show_src_option = JMenuItem("Show Source")
+            show_src_option.addActionListener({
+                val json_str = m.getEventSrc(msg.id)
+
+                val window = SwingUtilities.getWindowAncestor(panel)
+                val dim = window.getSize()
+                val h = dim.height
+                val w = dim.width
+                val dialog = JDialog(window, "Event Source")
+
+                val dpanel = JPanel(BorderLayout())
+                val src_txt = JTextPane()
+                src_txt.setContentType("text/plain")
+                src_txt.setText(json_str)
+                src_txt.setEditable(false)
+
+                val close_btn = JButton("Close")
+                close_btn.addActionListener({
+                    dialog.setVisible(false)
+                    dialog.dispose()
+                })
+
+                dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
+                dpanel.add(close_btn,BorderLayout.PAGE_END)
+                dialog.add(dpanel)
+
+                dialog.setSize(w,h/2)
+                dialog.setVisible(true)
+                dialog.setResizable(false)
+                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+            })
+
+            val msg_action_popup = JPopupMenu()
+            msg_action_popup.add(reply_option)
+            if(show_edit_btn) {
+                msg_action_popup.add(edit_option)
+            }
+            msg_action_popup.add(show_src_option)
+
+            val msg_action_button = JButton("...")
+            msg_action_button.addActionListener({
+                msg_action_popup.show(msg_action_button,0,0)
+            })
+
             parallel_group.addComponent(sender)
             parallel_group.addComponent(msg_widget)
+            parallel_group.addComponent(msg_action_button)
             seq_vert_groups.addComponent(sender)
             seq_vert_groups.addGroup(
                 layout.createSequentialGroup()
                     .addPreferredGap(sender, msg_widget, LayoutStyle.ComponentPlacement.INDENT)
                     .addComponent(msg_widget)
+                    .addComponent(msg_action_button)
             )
         }
         layout.setHorizontalGroup(parallel_group)

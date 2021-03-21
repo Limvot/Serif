@@ -16,12 +16,25 @@ data class LoginRequest(val type: String, val identifier: LoginIdentifier, val p
 data class LoginIdentifier(val type: String, val user: String)
 
 @Serializable
-data class LoginResponse(val access_token: String)
+data class LoginResponse(val access_token: String, val identifier: LoginIdentifier)
 
 @Serializable
-data class SendRoomMessage(val msgtype: String, val body: String) {
+data class SendRoomMessage(
+    val msgtype: String,
+    val body: String,
+    @SerialName("m.new_content") val new_content: TextRMEC? = null,
+    @SerialName("m.relates_to") val relates_to: RelationBlock? = null
+) {
     constructor(body: String) : this(msgtype = "m.text", body = body)
+    constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, relates_to = rel_to)
+    constructor(msg: String, fallback: String, original_event: String) : this(
+        msgtype="m.text",
+        body=fallback,
+        new_content=TextRMEC(msg,"m.text"),
+        relates_to=RelationBlock(null,"m.replace",original_event)
+    )
 }
+
 @Serializable
 data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: String)
 @Serializable
@@ -119,6 +132,8 @@ abstract class RoomMessageEventContent {
 class TextRMEC(
     override val body: String = "<missing message body, likely redacted>",
     override val msgtype: String = "<missing type, likely redacted>",
+    @SerialName("m.new_content") val new_content: TextRMEC? = null,
+    @SerialName("m.relates_to") val relates_to: RelationBlock? = null
 ) : RoomMessageEventContent()
 @Serializable
 class ImageRMEC(
@@ -160,6 +175,15 @@ class RoomEventFallback(
 ) : RoomEvent() {
     override fun toString() = "RoomEventFallback(" + raw_self.toString() + ")"
 }
+
+@Serializable
+class ReplyToRelation(val event_id: String)
+@Serializable
+class RelationBlock(
+@SerialName("m.in_reply_to") val in_reply_to: ReplyToRelation? = null,
+val rel_type: String? = null,
+val event_id: String? = null,
+)
 
 object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     override fun selectDeserializer(element: JsonElement) = element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
