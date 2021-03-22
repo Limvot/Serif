@@ -54,7 +54,6 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
     var username_label = JLabel("Username: ")
     var password_field = JPasswordField(20)
     var password_label = JLabel("Password: ")
-    var button = JButton("Login")
     var logIn: (ActionEvent) -> Unit = { transition(m.login(username_field.text, password_field.text, onSync), true) }
 
     init {
@@ -73,9 +72,10 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         panel.add(JLabel("Login with previous session?"), c_right)
 
         for (session in m.getSessions()) {
-            var button = JButton(session)
-            panel.add(button, c_right)
-            button.addActionListener({ transition(m.loginFromSession(session, onSync), true) })
+            panel.add( button {
+                withText { session }
+                onClick { transition(m.loginFromSession(session, onSync), true) }
+            }, c_right)
         }
 
         username_label.labelFor = username_field
@@ -86,10 +86,12 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         panel.add(password_label, c_left)
         panel.add(password_field, c_right)
 
-        panel.add(button, c_right)
+        panel.add(button {
+            withText { "Login" }
+            onClick(logIn)
+        }, c_right)
 
         password_field.addActionListener(logIn)
-        button.addActionListener(logIn)
     }
     override fun refresh() {
         // This should change when we have multiple sessions,
@@ -102,9 +104,6 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
     var message_label = JLabel(m.message)
     var inner_scroll_pane = JPanel()
     init {
-        panel.layout = BorderLayout()
-        panel.add(message_label, BorderLayout.PAGE_START)
-
         inner_scroll_pane.layout = GridLayout(0, 1)
         for ((id, name, unreadCount, highlightCount, lastMessage) in m.rooms) {
             var button = JButton()
@@ -119,11 +118,17 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
             button.addActionListener({ transition(m.getRoom(id), true) })
             inner_scroll_pane.add(button)
         }
-        panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
-
-        var back_button = JButton("(Fake) Logout")
-        panel.add(back_button, BorderLayout.PAGE_END)
-        back_button.addActionListener({ transition(m.fake_logout(), true) })
+        borderLayout {
+            with { panel }
+            north { message_label }
+            center { JScrollPane(inner_scroll_pane) }
+            south {
+                button {
+                    withText { "(Fake) Logout" }
+                    onClick { transition(m.fake_logout(), true) }
+                }
+            }
+        }
     }
     override fun refresh() {
         transition(m.refresh(), true)
@@ -186,37 +191,29 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var replied_event_id = ""
     var edited_event_id = ""
     init {
-        panel.layout = BorderLayout()
-
-        val backfill_button = JButton("Backfill")
-        backfill_button.addActionListener({ m.requestBackfill() })
-        panel.add(backfill_button, BorderLayout.PAGE_START)
-
         val group_layout = GroupLayout(inner_scroll_pane)
         inner_scroll_pane.layout = group_layout
         redrawMessages(last_window_width)
-        panel.add(
-            JScrollPane(
-                inner_scroll_pane,
-                JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-            ),
-            BorderLayout.CENTER
-        )
 
-        val message_panel = JPanel()
-        message_panel.layout = BorderLayout()
-        var back_button = JButton("Back")
-        message_panel.add(back_button, BorderLayout.LINE_START)
-        message_panel.add(message_field, BorderLayout.CENTER)
         val msg_panel_actions = JPanel()
         msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
-        var attach_button = JButton("+")
+        val attach_button = button {
+            withText { "+" }
+            onClick {
+                val fc = JFileChooser()
+                val iff = ImageFileFilter()
+                fc.addChoosableFileFilter(iff)
+                fc.setFileFilter(iff)
+                val ret = fc.showDialog(panel, "Attach")
+                if(ret == JFileChooser.APPROVE_OPTION) {
+                    val file = fc.getSelectedFile()
+                    message_field.text = ""
+                    transition(m.sendImageMessage(file.toPath().toString()), true)
+                    println("Selected ${file.toPath()}")
+                }
+            }
+        }
         msg_panel_actions.add(attach_button)
-        var send_button = JButton("Send")
-        msg_panel_actions.add(send_button)
-        message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
-        panel.add(message_panel, BorderLayout.PAGE_END)
         val onSend: (ActionEvent) -> Unit = {
             val text = message_field.text
             message_field.text = ""
@@ -238,23 +235,45 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             }
             transition(res, true)
         }
-        val onAttach: (ActionEvent) -> Unit = {
-            val fc = JFileChooser()
-            val iff = ImageFileFilter()
-            fc.addChoosableFileFilter(iff)
-            fc.setFileFilter(iff)
-            val ret = fc.showDialog(panel, "Attach")
-            if(ret == JFileChooser.APPROVE_OPTION) {
-                val file = fc.getSelectedFile()
-                message_field.text = ""
-                transition(m.sendImageMessage(file.toPath().toString()), true)
-                println("Selected ${file.toPath()}")
+        val send_button = button {
+            withText { "Send" }
+            onClick(onSend)
+        }
+        msg_panel_actions.add(send_button)
+
+        // message panel layout
+        val message_panel = JPanel()
+        borderLayout {
+            with { message_panel }
+            west {
+                button {
+                    withText { "Back" }
+                    onClick { transition(m.exitRoom(), true) }
+                }
+            }
+            center { message_field }
+            east { msg_panel_actions }
+        }
+
+        // panel layout
+        borderLayout {
+            with { panel }
+            north {
+                button {
+                    withText { "Backfill" }
+                    onClick { m.requestBackfill() }
+                }
+            }
+            south { message_panel }
+            center {
+                JScrollPane(
+                    inner_scroll_pane,
+                    JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
+                    JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                )
             }
         }
         message_field.addActionListener(onSend)
-        send_button.addActionListener(onSend)
-        attach_button.addActionListener(onAttach)
-        back_button.addActionListener({ transition(m.exitRoom(), true) })
         m.sendReceipt(m.messages.last().id)
     }
     fun redrawMessages(draw_width: Int) {
@@ -287,13 +306,13 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     }
                 }
                 is SharedUiAudioMessage -> {
-                    val audio_url = msg.url
-                    val play_btn = JButton("Play/Pause $audio_url")
-                    play_btn.addActionListener({
-                        AudioPlayer.loadAudio(audio_url)
-                        AudioPlayer.play()
-                    })
-                    play_btn
+                    button {
+                        withText { "Play/Pause ${msg.url}" }
+                        onClick {
+                            AudioPlayer.loadAudio(msg.url)
+                            AudioPlayer.play()
+                        }
+                    }
                 }
                 else -> {
                     val message = JTextPane()
@@ -374,60 +393,67 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 }
             }
 
-            val reply_option = JMenuItem("Reply")
-            reply_option.addActionListener({
-                println("Now writing a reply")
-                replied_event_id = msg.id
-            })
-            val edit_option = JMenuItem("Edit")
-            edit_option.addActionListener({
-                println("Now editing a message")
-                edited_event_id = msg.id
-                message_field.text = msg.message
-            })
-            val show_src_option = JMenuItem("Show Source")
-            show_src_option.addActionListener({
-                val json_str = m.getEventSrc(msg.id)
+            val msg_action_popup = popupMenu {
+                item { menuItem {
+                    withText { "Reply" }
+                    onClick {
+                        println("Now writing a reply")
+                        replied_event_id = msg.id
+                    }
+                }}
+                item {
+                    if(!show_edit_btn) { null }
+                    else {
+                        menuItem {
+                            withText { "Edit" }
+                            onClick {
+                                println("Now editing a message")
+                                edited_event_id = msg.id
+                                message_field.text = msg.message
+                            }
+                        }
+                    }
+                }
+                item { menuItem {
+                    withText { "Show Source" }
+                    onClick {
+                        val json_str = m.getEventSrc(msg.id)
 
-                val window = SwingUtilities.getWindowAncestor(panel)
-                val dim = window.getSize()
-                val h = dim.height
-                val w = dim.width
-                val dialog = JDialog(window, "Event Source")
+                        val window = SwingUtilities.getWindowAncestor(panel)
+                        val dim = window.getSize()
+                        val h = dim.height
+                        val w = dim.width
+                        val dialog = JDialog(window, "Event Source")
 
-                val dpanel = JPanel(BorderLayout())
-                val src_txt = JTextPane()
-                src_txt.setContentType("text/plain")
-                src_txt.setText(json_str)
-                src_txt.setEditable(false)
+                        val dpanel = JPanel(BorderLayout())
+                        val src_txt = JTextPane()
+                        src_txt.setContentType("text/plain")
+                        src_txt.setText(json_str)
+                        src_txt.setEditable(false)
 
-                val close_btn = JButton("Close")
-                close_btn.addActionListener({
-                    dialog.setVisible(false)
-                    dialog.dispose()
-                })
+                        val close_btn = button {
+                            withText { "Close" }
+                            onClick {
+                                dialog.setVisible(false)
+                                dialog.dispose()
+                            }
+                        }
+                        dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
+                        dpanel.add(close_btn,BorderLayout.PAGE_END)
+                        dialog.add(dpanel)
 
-                dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
-                dpanel.add(close_btn,BorderLayout.PAGE_END)
-                dialog.add(dpanel)
+                        dialog.setSize(w,h/2)
+                        dialog.setVisible(true)
+                        dialog.setResizable(false)
+                        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+                    }
+                }
+            }}
 
-                dialog.setSize(w,h/2)
-                dialog.setVisible(true)
-                dialog.setResizable(false)
-                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
-            })
-
-            val msg_action_popup = JPopupMenu()
-            msg_action_popup.add(reply_option)
-            if(show_edit_btn) {
-                msg_action_popup.add(edit_option)
+            val msg_action_button = button {
+                withText { "..." }
+                onClick { e -> msg_action_popup.show(e.getSource() as Component,0,0) }
             }
-            msg_action_popup.add(show_src_option)
-
-            val msg_action_button = JButton("...")
-            msg_action_button.addActionListener({
-                msg_action_popup.show(msg_action_button,0,0)
-            })
 
             parallel_group.addComponent(sender)
             parallel_group.addComponent(msg_widget)
