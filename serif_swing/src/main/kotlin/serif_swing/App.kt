@@ -175,14 +175,85 @@ class WrapLabelView(element: Element) : LabelView(element) {
     }
 }
 
+class RecyclingList(private var our_width: Int) : JComponent(), Scrollable {
+    val subs: MutableList<Triple<Int,Int,Component>> = mutableListOf()
+    var our_height = 0
+    init {
+        addMouseListener(object : MouseListener, MouseMotionListener {
+            fun dispatchEvent(e: MouseEvent) {
+                for ((sy,ey,c) in subs) {
+                    if ( (sy <= e.point.y)
+                       &&(ey >= e.point.y) ) {
+                        val new_e = MouseEvent(c, e.id, e.getWhen(), e.modifiers, e.x, e.y-sy, e.xOnScreen, e.yOnScreen, e.clickCount, e.isPopupTrigger(), e.button)
+                        // a hack so that stuff like buttons have a proper parent when the reply/edit menu pops up and uses it
+                        add(c)
+                        c.dispatchEvent(new_e)
+                        remove(c)
+                    }
+                }
+            }
+            override fun mouseClicked(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseEntered(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseExited(e: MouseEvent) = dispatchEvent(e)
+            override fun mousePressed(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseReleased(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseDragged(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseMoved(e: MouseEvent) = dispatchEvent(e)
+        })
+    }
+    fun myadd(c: Component, force_width: Boolean) {
+        c.setSize(our_width, 1000)
+        val d = c.getPreferredSize()
+        if (force_width) {
+            c.setSize(our_width, d.height)
+            c.setBounds(0, our_height, our_width, d.height)
+        } else {
+            c.setSize(d.width, d.height)
+            c.setBounds(0, our_height, d.width, d.height)
+        }
+        subs.add(Triple(our_height, our_height+c.height, c))
+        our_height += c.height
+        // Have to alert our hierarchy that we've changed size
+        invalidate()
+    }
+
+    fun reset(new_width: Int) {
+        our_height = 0
+        our_width = new_width
+        subs.clear()
+    }
+    override fun getPreferredSize() = Dimension(our_width,our_height)
+    override fun getPreferredScrollableViewportSize() = Dimension(our_width,our_height)
+    override fun getScrollableUnitIncrement(p0: Rectangle, p1: Int, p2: Int) = 10
+    override fun getScrollableBlockIncrement(p0: Rectangle, p1: Int, p2: Int) = 100
+    override fun getScrollableTracksViewportWidth() = true
+    override fun getScrollableTracksViewportHeight() = false
+    override fun paintComponent(g: Graphics) {
+        val clip_bounds = g.getClipBounds()
+        val g = g.create()
+        var curr_y = 0
+        var count = 0
+        for ((sy,ey,c) in subs) {
+            if ( (sy <= (clip_bounds.y+clip_bounds.height))
+               &&(ey >= clip_bounds.y) ) {
+                c.paint(g)
+                count += 1
+            }
+            g.translate(0, ey-sy)
+            curr_y = ey
+        }
+        println("painted $count / ${subs.size}")
+    }
+}
+
 class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom, var last_window_width: Int) : SwingState() {
     // From @stephenhay via https://mathiasbynens.be/demo/url-regex
     // slightly modified
     val URL_REGEX = Regex("""(https?|ftp)://[^\s/$.?#].[^\s]*""")
-    var inner_scroll_pane = JPanel()
-    var c_left = GridBagConstraints()
-    var c_right = GridBagConstraints()
-    var message_field = JTextField(20)
+    val recycling_message_list = RecyclingList(last_window_width)
+    val c_left = GridBagConstraints()
+    val c_right = GridBagConstraints()
+    val message_field = JTextField(20)
     var replied_event_id = ""
     var edited_event_id = ""
     init {
@@ -192,12 +263,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         backfill_button.addActionListener({ m.requestBackfill() })
         panel.add(backfill_button, BorderLayout.PAGE_START)
 
-        val group_layout = GroupLayout(inner_scroll_pane)
-        inner_scroll_pane.layout = group_layout
         redrawMessages(last_window_width)
         panel.add(
             JScrollPane(
-                inner_scroll_pane,
+                recycling_message_list,
                 JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
                 JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             ),
@@ -258,14 +327,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         m.sendReceipt(m.messages.last().id)
     }
     fun redrawMessages(draw_width: Int) {
-        inner_scroll_pane.removeAll()
-        val layout = inner_scroll_pane.layout as GroupLayout
-        val parallel_group = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-        var seq_vert_groups = layout.createSequentialGroup()
+        recycling_message_list.reset(draw_width)
         for (msg in m.messages) {
-            val _sender = msg.sender
-            val sender = JTextArea("$_sender:  ")
-            val show_edit_btn = _sender.contains(m.username)
+            val sender = JTextArea("${msg.sender}:  ")
+            val show_edit_btn = msg.sender.contains(m.username)
             sender.setEditable(false)
             sender.lineWrap = true
             sender.wrapStyleWord = true
@@ -299,12 +364,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     val message = JTextPane()
                     message.setEditorKit(WrapEditorKit);
                     message.setEditable(false)
-                    // This is mandatory to make it wrap, for some reason
-                    // It's not in the examples I found online
-                    // My best guess is that because of the layout, it
-                    // won't smash it smaller than preferred size, but it will
-                    // stretch it to fit the larger size?
-                    message.setPreferredSize(Dimension(0, 0))
 
                     var current_idx = 0
                     val simpleAttrs = SimpleAttributeSet()
@@ -429,19 +488,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 msg_action_popup.show(msg_action_button,0,0)
             })
 
-            parallel_group.addComponent(sender)
-            parallel_group.addComponent(msg_widget)
-            parallel_group.addComponent(msg_action_button)
-            seq_vert_groups.addComponent(sender)
-            seq_vert_groups.addGroup(
-                layout.createSequentialGroup()
-                    .addPreferredGap(sender, msg_widget, LayoutStyle.ComponentPlacement.INDENT)
-                    .addComponent(msg_widget)
-                    .addComponent(msg_action_button)
-            )
+            recycling_message_list.myadd(sender, true)
+            recycling_message_list.myadd(msg_widget, true)
+            recycling_message_list.myadd(msg_action_button, false)
         }
-        layout.setHorizontalGroup(parallel_group)
-        layout.setVerticalGroup(seq_vert_groups)
     }
     override fun refresh() {
         transition(m.refresh(), true)
