@@ -5,29 +5,24 @@ package xyz.room409.serif.serif_swing
 import com.formdev.flatlaf.*
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
-import kotlin.math.min
-import kotlin.concurrent.thread
 import java.awt.*
 import java.awt.event.*
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
+import javax.sound.sampled.AudioSystem
 import javax.swing.*
-import javax.swing.filechooser.*;
+import javax.swing.filechooser.*
 import javax.swing.text.*
 import javax.swing.text.html.HTML
-import javax.swing.text.html.HTMLEditorKit
-import javax.swing.text.html.InlineView
-import java.io.File
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import javax.sound.sampled.Clip
-import javax.sound.sampled.AudioInputStream
-import javax.sound.sampled.AudioSystem
-
+import kotlin.concurrent.thread
+import kotlin.math.min
 
 object AudioPlayer {
     var url = ""
     val clip = AudioSystem.getClip()
     fun loadAudio(audio_url: String) {
-        if(url != audio_url) {
+        if (url != audio_url) {
             clip.stop()
             url = audio_url
             val inputStream = AudioSystem.getAudioInputStream(File(url).getAbsoluteFile())
@@ -35,7 +30,7 @@ object AudioPlayer {
         }
     }
     fun play() {
-        if(clip.isRunning()) {
+        if (clip.isRunning()) {
             clip.stop()
         }
         clip.setFramePosition(0)
@@ -103,7 +98,57 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
     var inner_scroll_pane = JPanel()
     init {
         panel.layout = BorderLayout()
-        panel.add(message_label, BorderLayout.PAGE_START)
+        var topPanel = JPanel()
+        topPanel.layout = BoxLayout(topPanel, BoxLayout.LINE_AXIS)
+        topPanel.add(message_label)
+        var newRoomButton = JButton("New Room")
+        topPanel.add(newRoomButton)
+        newRoomButton.addActionListener({
+
+            val window = SwingUtilities.getWindowAncestor(panel)
+            val dim = window.getSize()
+            val h = dim.height
+            val w = dim.width
+            val dialog = JDialog(window, "Create Room")
+
+            val dpanel = JPanel()
+            dpanel.layout = BoxLayout(dpanel, BoxLayout.PAGE_AXIS)
+            // name, room_alias_name, topic
+            var roomname_field = JTextField(20)
+            var roomname_label = JLabel("Room Name: ")
+            var alias_field = JTextField(20)
+            var alias_label = JLabel("Alias: ")
+            var topic_field = JTextField(20)
+            var topic_label = JLabel("Topic: ")
+
+            val create_btn = JButton("Create")
+            create_btn.addActionListener({
+                println(m.createRoom(roomname_field.text, alias_field.text, topic_field.text))
+                dialog.setVisible(false)
+                dialog.dispose()
+            })
+
+            val close_btn = JButton("Close")
+            close_btn.addActionListener({
+                dialog.setVisible(false)
+                dialog.dispose()
+            })
+            dpanel.add(roomname_label)
+            dpanel.add(roomname_field)
+            dpanel.add(alias_label)
+            dpanel.add(alias_field)
+            dpanel.add(topic_label)
+            dpanel.add(topic_field)
+            dpanel.add(create_btn)
+            dpanel.add(close_btn)
+            dialog.add(dpanel)
+
+            dialog.setSize(w, h / 2)
+            dialog.setVisible(true)
+            dialog.setResizable(false)
+            dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+        })
+        panel.add(topPanel, BorderLayout.PAGE_START)
 
         inner_scroll_pane.layout = GridLayout(0, 1)
         for ((id, name, unreadCount, highlightCount, lastMessage) in m.rooms) {
@@ -140,7 +185,7 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
 }
 class ImageFileFilter : FileFilter() {
     override fun accept(f: File): Boolean {
-        if(f.isDirectory()) { return true }
+        if (f.isDirectory()) { return true }
         val fname = f.getName()
         val extension = fname.split('.').last().toLowerCase()
         val supported = arrayOf("gif", "png", "jpeg", "jpg")
@@ -154,7 +199,7 @@ class ImageFileFilter : FileFilter() {
 // adapted from https://stackoverflow.com/questions/30590031/jtextpane-line-wrap-behavior?noredirect=1&lq=1%27
 object WrapEditorKit : StyledEditorKit() {
     val defaultFactory = object : ViewFactory {
-        override public fun create(element: Element): View = when (val kind = element.name) {
+        public override fun create(element: Element): View = when (val kind = element.name) {
             AbstractDocument.ContentElementName -> WrapLabelView(element)
             AbstractDocument.ParagraphElementName -> ParagraphView(element)
             AbstractDocument.SectionElementName -> BoxView(element, View.Y_AXIS)
@@ -163,14 +208,14 @@ object WrapEditorKit : StyledEditorKit() {
             else -> LabelView(element)
         }
     }
-    override public fun getViewFactory(): ViewFactory = defaultFactory
+    public override fun getViewFactory(): ViewFactory = defaultFactory
 }
 class WrapLabelView(element: Element) : LabelView(element) {
-    override public fun getMinimumSpan(axis: Int): Float  {
+    public override fun getMinimumSpan(axis: Int): Float {
         when (axis) {
-            View.X_AXIS -> return 0.0f;
-            View.Y_AXIS -> return super.getMinimumSpan(axis);
-            else -> throw IllegalArgumentException("Invalid axis: " + axis);
+            View.X_AXIS -> return 0.0f
+            View.Y_AXIS -> return super.getMinimumSpan(axis)
+            else -> throw IllegalArgumentException("Invalid axis: " + axis)
         }
     }
 }
@@ -221,21 +266,21 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val text = message_field.text
             message_field.text = ""
             val res =
-            when {
-                replied_event_id == "" && edited_event_id == "" -> m.sendMessage(text)
-                replied_event_id != "" -> {
-                    val eventid = replied_event_id
-                    replied_event_id = ""
-                    println("Replying to $eventid")
-                    m.sendReply(text, eventid)
+                when {
+                    replied_event_id == "" && edited_event_id == "" -> m.sendMessage(text)
+                    replied_event_id != "" -> {
+                        val eventid = replied_event_id
+                        replied_event_id = ""
+                        println("Replying to $eventid")
+                        m.sendReply(text, eventid)
+                    }
+                    else -> {
+                        val eventid = edited_event_id
+                        edited_event_id = ""
+                        println("Editing $eventid")
+                        m.sendEdit(text, eventid)
+                    }
                 }
-                else -> {
-                    val eventid = edited_event_id
-                    edited_event_id = ""
-                    println("Editing $eventid")
-                    m.sendEdit(text, eventid)
-                }
-            }
             transition(res, true)
         }
         val onAttach: (ActionEvent) -> Unit = {
@@ -244,7 +289,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             fc.addChoosableFileFilter(iff)
             fc.setFileFilter(iff)
             val ret = fc.showDialog(panel, "Attach")
-            if(ret == JFileChooser.APPROVE_OPTION) {
+            if (ret == JFileChooser.APPROVE_OPTION) {
                 val file = fc.getSelectedFile()
                 message_field.text = ""
                 transition(m.sendImageMessage(file.toPath().toString()), true)
@@ -255,7 +300,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         send_button.addActionListener(onSend)
         attach_button.addActionListener(onAttach)
         back_button.addActionListener({ transition(m.exitRoom(), true) })
-        m.sendReceipt(m.messages.last().id)
+        m.messages.lastOrNull()?.let { m.sendReceipt(it.id) }
     }
     fun redrawMessages(draw_width: Int) {
         inner_scroll_pane.removeAll()
@@ -271,108 +316,108 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             sender.wrapStyleWord = true
 
             val msg_widget =
-            when(msg) {
-                is SharedUiImgMessage -> {
-                    val img_url = msg.url
-                    val og_image_icon = ImageIcon(img_url)
-                    val og_image = og_image_icon.image
-                    val img_width: Int = og_image.getWidth(null)
-                    val img_height: Int = og_image.getHeight(null)
-                    if (draw_width != 0 && img_width != 0 && img_height != 0) {
-                        val new_width = min(draw_width, img_width)
-                        val new_height = min(img_height, (img_height * new_width)/img_width)
-                        JLabel(ImageIcon(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT)))
-                    } else {
-                        JLabel(og_image_icon)
-                    }
-                }
-                is SharedUiAudioMessage -> {
-                    val audio_url = msg.url
-                    val play_btn = JButton("Play/Pause $audio_url")
-                    play_btn.addActionListener({
-                        AudioPlayer.loadAudio(audio_url)
-                        AudioPlayer.play()
-                    })
-                    play_btn
-                }
-                else -> {
-                    val message = JTextPane()
-                    message.setEditorKit(WrapEditorKit);
-                    message.setEditable(false)
-                    // This is mandatory to make it wrap, for some reason
-                    // It's not in the examples I found online
-                    // My best guess is that because of the layout, it
-                    // won't smash it smaller than preferred size, but it will
-                    // stretch it to fit the larger size?
-                    message.setPreferredSize(Dimension(0, 0))
-
-                    var current_idx = 0
-                    val simpleAttrs = SimpleAttributeSet()
-                    for (url_match in URL_REGEX.findAll(msg.message)) {
-                        if (url_match.range.start > current_idx) {
-                            message.document.insertString(current_idx, msg.message.slice(current_idx .. url_match.range.start-1), simpleAttrs)
-                            current_idx = url_match.range.start
+                when (msg) {
+                    is SharedUiImgMessage -> {
+                        val img_url = msg.url
+                        val og_image_icon = ImageIcon(img_url)
+                        val og_image = og_image_icon.image
+                        val img_width: Int = og_image.getWidth(null)
+                        val img_height: Int = og_image.getHeight(null)
+                        if (draw_width != 0 && img_width != 0 && img_height != 0) {
+                            val new_width = min(draw_width, img_width)
+                            val new_height = min(img_height, (img_height * new_width) / img_width)
+                            JLabel(ImageIcon(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT)))
+                        } else {
+                            JLabel(og_image_icon)
                         }
-                        val urlAttrs = SimpleAttributeSet()
-                        StyleConstants.setUnderline(urlAttrs, true)
-                        urlAttrs.addAttribute(HTML.Attribute.HREF, url_match.value)
-                        message.document.insertString(current_idx, url_match.value, urlAttrs)
-                        current_idx = url_match.range.endInclusive + 1
                     }
-                    if (current_idx < msg.message.length) {
-                        message.document.insertString(current_idx, msg.message.slice(current_idx .. msg.message.length-1), simpleAttrs)
+                    is SharedUiAudioMessage -> {
+                        val audio_url = msg.url
+                        val play_btn = JButton("Play/Pause $audio_url")
+                        play_btn.addActionListener({
+                            AudioPlayer.loadAudio(audio_url)
+                            AudioPlayer.play()
+                        })
+                        play_btn
                     }
+                    else -> {
+                        val message = JTextPane()
+                        message.setEditorKit(WrapEditorKit)
+                        message.setEditable(false)
+                        // This is mandatory to make it wrap, for some reason
+                        // It's not in the examples I found online
+                        // My best guess is that because of the layout, it
+                        // won't smash it smaller than preferred size, but it will
+                        // stretch it to fit the larger size?
+                        message.setPreferredSize(Dimension(0, 0))
 
-                    message.addMouseListener(object : MouseAdapter() {
-                        override fun mouseClicked(e: MouseEvent) {
-                            val pos = message.viewToModel(Point(e.x, e.y))
-                            println("you clicked on pos $pos")
-                            if (pos >= 0 && pos < msg.message.length) {
-                                println("That is, character ${msg.message[pos]}")
-                                val doc = (message.document as? DefaultStyledDocument)
-                                if (doc != null) {
-                                    val el = doc.getCharacterElement(pos)
-                                    val href = el.attributes.getAttribute(HTML.Attribute.HREF) as String?
-                                    if (href != null) {
-                                        // In the background, so that GUI doesn't freeze
-                                        thread(start = true) {
-                                            // We have to try using xdg-open first,
-                                            // since PinePhone somehow implements the
-                                            // Desktop API but has the same problem with the
-                                            // GTK_BACKEND var
-                                            try {
-                                                println("Trying to open $href with exec 'xdg-open $href'")
-                                                val pb = ProcessBuilder("xdg-open", href)
-                                                // Somehow this environment variable gets set for pb
-                                                // when it's NOT in System.getenv(). And of course, this
-                                                // is the one that makes xdg-open try to launch an X version
-                                                // of Firefox, giving the dreaded Firefox is already running
-                                                // message if you've got a Wayland version running already.
-                                                pb.environment().clear()
-                                                pb.environment().putAll(System.getenv())
-                                                pb.redirectErrorStream(true)
-                                                val process = pb.start()
-                                                val reader = BufferedReader(InputStreamReader(process.inputStream))
-                                                while (reader.readLine() != null) {}
-                                                process.waitFor()
-                                                println("done trying to open url")
-                                            } catch (e1: Exception) {
+                        var current_idx = 0
+                        val simpleAttrs = SimpleAttributeSet()
+                        for (url_match in URL_REGEX.findAll(msg.message)) {
+                            if (url_match.range.start > current_idx) {
+                                message.document.insertString(current_idx, msg.message.slice(current_idx..url_match.range.start - 1), simpleAttrs)
+                                current_idx = url_match.range.start
+                            }
+                            val urlAttrs = SimpleAttributeSet()
+                            StyleConstants.setUnderline(urlAttrs, true)
+                            urlAttrs.addAttribute(HTML.Attribute.HREF, url_match.value)
+                            message.document.insertString(current_idx, url_match.value, urlAttrs)
+                            current_idx = url_match.range.endInclusive + 1
+                        }
+                        if (current_idx < msg.message.length) {
+                            message.document.insertString(current_idx, msg.message.slice(current_idx..msg.message.length - 1), simpleAttrs)
+                        }
+
+                        message.addMouseListener(object : MouseAdapter() {
+                            override fun mouseClicked(e: MouseEvent) {
+                                val pos = message.viewToModel(Point(e.x, e.y))
+                                println("you clicked on pos $pos")
+                                if (pos >= 0 && pos < msg.message.length) {
+                                    println("That is, character ${msg.message[pos]}")
+                                    val doc = (message.document as? DefaultStyledDocument)
+                                    if (doc != null) {
+                                        val el = doc.getCharacterElement(pos)
+                                        val href = el.attributes.getAttribute(HTML.Attribute.HREF) as String?
+                                        if (href != null) {
+                                            // In the background, so that GUI doesn't freeze
+                                            thread(start = true) {
+                                                // We have to try using xdg-open first,
+                                                // since PinePhone somehow implements the
+                                                // Desktop API but has the same problem with the
+                                                // GTK_BACKEND var
                                                 try {
-                                                    println("Trying to open $href with Desktop")
-                                                    java.awt.Desktop.getDesktop().browse(java.net.URI(href))
-                                                } catch (e2: Exception) {
-                                                    println("Couldn't get ProcessBuilder('xdg-open $href') or Desktop, problem was $e1 then $e2")
+                                                    println("Trying to open $href with exec 'xdg-open $href'")
+                                                    val pb = ProcessBuilder("xdg-open", href)
+                                                    // Somehow this environment variable gets set for pb
+                                                    // when it's NOT in System.getenv(). And of course, this
+                                                    // is the one that makes xdg-open try to launch an X version
+                                                    // of Firefox, giving the dreaded Firefox is already running
+                                                    // message if you've got a Wayland version running already.
+                                                    pb.environment().clear()
+                                                    pb.environment().putAll(System.getenv())
+                                                    pb.redirectErrorStream(true)
+                                                    val process = pb.start()
+                                                    val reader = BufferedReader(InputStreamReader(process.inputStream))
+                                                    while (reader.readLine() != null) {}
+                                                    process.waitFor()
+                                                    println("done trying to open url")
+                                                } catch (e1: Exception) {
+                                                    try {
+                                                        println("Trying to open $href with Desktop")
+                                                        java.awt.Desktop.getDesktop().browse(java.net.URI(href))
+                                                    } catch (e2: Exception) {
+                                                        println("Couldn't get ProcessBuilder('xdg-open $href') or Desktop, problem was $e1 then $e2")
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                    })
-                    message
+                        })
+                        message
+                    }
                 }
-            }
 
             val reply_option = JMenuItem("Reply")
             reply_option.addActionListener({
@@ -408,10 +453,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 })
 
                 dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
-                dpanel.add(close_btn,BorderLayout.PAGE_END)
+                dpanel.add(close_btn, BorderLayout.PAGE_END)
                 dialog.add(dpanel)
 
-                dialog.setSize(w,h/2)
+                dialog.setSize(w, h / 2)
                 dialog.setVisible(true)
                 dialog.setResizable(false)
                 dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
@@ -419,14 +464,14 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
             val msg_action_popup = JPopupMenu()
             msg_action_popup.add(reply_option)
-            if(show_edit_btn) {
+            if (show_edit_btn) {
                 msg_action_popup.add(edit_option)
             }
             msg_action_popup.add(show_src_option)
 
             val msg_action_button = JButton("...")
             msg_action_button.addActionListener({
-                msg_action_popup.show(msg_action_button,0,0)
+                msg_action_popup.show(msg_action_button, 0, 0)
             })
 
             parallel_group.addComponent(sender)

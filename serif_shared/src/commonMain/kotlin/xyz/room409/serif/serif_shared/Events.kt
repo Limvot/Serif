@@ -5,52 +5,42 @@ import kotlinx.serialization.json.*
 
 @Serializable
 data class LoginRequest(
-        val type: String,
-        val identifier: LoginIdentifier,
-        val password: String,
-        val initial_device_display_name: String
+    val type: String,
+    val identifier: LoginIdentifier,
+    val password: String,
+    val initial_device_display_name: String
 ) {
     constructor(
-            username: String,
-            password: String
+        username: String,
+        password: String
     ) : this(
-            type = "m.login.password",
-            identifier = LoginIdentifier(type = "m.id.user", user = username),
-            password = password,
-            initial_device_display_name = "Serif")
+        type = "m.login.password",
+        identifier = LoginIdentifier(type = "m.id.user", user = username),
+        password = password,
+        initial_device_display_name = "Serif"
+    )
 }
 
 @Serializable data class LoginIdentifier(val type: String, val user: String)
 
-
 @Serializable data class CreateRoom(
-        val preset: String,
-        val name: String,
-        val room_alias_name: String,
-        val topic: String,
-        val creation_content: CreationContent
+    val preset: String,
+    val name: String,
+    val room_alias_name: String,
+    val topic: String,
 ) {
     constructor(
-            name: String,
-            room_alias_name: String,
-            topic: String,
-            username: String,
-            url: String
+        name: String,
+        room_alias_name: String,
+        topic: String
     ) : this(
-            preset = "public_chat", //this should be a choice in enum of private_chat, trusted_private_chat and public_chat. Will rework.
-            name = name,
-            room_alias_name = room_alias_name,
-            topic = topic,
-            creation_content =
-                    CreationContent(
-                            creator = username,
+        preset = "public_chat", // this should be a choice in enum of private_chat, trusted_private_chat and public_chat. Will rework.
+        name = name,
+        room_alias_name = room_alias_name,
+        topic = topic,
 
-         )
     )
 }
-
-
-@Serializable data class CreationContent(val creator: String)
 
 data class LoginResponse(val access_token: String, val identifier: LoginIdentifier)
 
@@ -65,17 +55,16 @@ data class EventIdResponse(val event_id: String)
 @Serializable
 data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
 
-
 @Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms)
 
 @Serializable data class Rooms(val join: MutableMap<String, Room>)
 
 @Serializable
 data class Room(
-        var timeline: Timeline,
-        var state: State,
-        val summary: RoomSummary,
-        var unread_notifications: UnreadNotifications? = null
+    var timeline: Timeline,
+    var state: State,
+    val summary: RoomSummary,
+    var unread_notifications: UnreadNotifications? = null
 )
 
 @Serializable data class Timeline(var events: List<Event>, var prev_batch: String)
@@ -84,17 +73,17 @@ data class Room(
 
 @Serializable
 data class RoomSummary(
-        @SerialName("m.heroes") val heroes: List<String>? = null,
-        @SerialName("m.joined_member_count") val joined_member_count: Long? = null,
-        @SerialName("m.invited_member_count") val invited_member_count: Long? = null
+    @SerialName("m.heroes") val heroes: List<String>? = null,
+    @SerialName("m.joined_member_count") val joined_member_count: Long? = null,
+    @SerialName("m.invited_member_count") val invited_member_count: Long? = null
 )
 
 @Serializable
 data class BackfillResponse(
-        val start: String,
-        val end: String,
-        val chunk: List<Event>? = null,
-        val state: List<Event>? = null
+    val start: String,
+    val end: String,
+    val chunk: List<Event>? = null,
+    val state: List<Event>? = null
 )
 
 @Serializable(with = EventSerializer::class)
@@ -113,22 +102,22 @@ abstract class RoomEvent : Event() {
 
 @Serializable
 data class UnsignedData(
-        val age: Long? = null, /*redacted_because: Event?,*/
-        val transaction_id: String? = null
+    val age: Long? = null, /*redacted_because: Event?,*/
+    val transaction_id: String? = null
 )
 
 @Serializable
 class StateEvent<T>(
-        override val raw_self: JsonObject,
-        override val raw_content: JsonElement,
-        override val type: String,
-        override val event_id: String,
-        override val sender: String,
-        override val origin_server_ts: Long,
-        override val unsigned: UnsignedData? = null,
-        val state_key: String,
-        /*val prev_content: EventContent?*/
-        val content: T,
+    override val raw_self: JsonObject,
+    override val raw_content: JsonElement,
+    override val type: String,
+    override val event_id: String,
+    override val sender: String,
+    override val origin_server_ts: Long,
+    override val unsigned: UnsignedData? = null,
+    val state_key: String,
+    /*val prev_content: EventContent?*/
+    val content: T,
 ) : RoomEvent() {
     override fun toString() = "RoomNameEvent(" + raw_self.toString() + ")"
 }
@@ -141,14 +130,14 @@ class RoomCanonicalAliasContent(val alias: String? = null, val alt_aliases: List
 // RoomMessageEvent and RoomMessageEventContent should eventually be generic on message type
 @Serializable
 class RoomMessageEvent(
-        override val raw_self: JsonObject,
-        override val raw_content: JsonElement,
-        override val type: String,
-        override val event_id: String,
-        override val sender: String,
-        override val origin_server_ts: Long,
-        override val unsigned: UnsignedData? = null,
-        val content: RoomMessageEventContent
+    override val raw_self: JsonObject,
+    override val raw_content: JsonElement,
+    override val type: String,
+    override val event_id: String,
+    override val sender: String,
+    override val origin_server_ts: Long,
+    override val unsigned: UnsignedData? = null,
+    val content: RoomMessageEventContent
 ) : RoomEvent() {
     override fun toString() = "RoomMessageEvent(" + raw_self.toString() + ")"
 }
@@ -166,10 +155,10 @@ class TextRMEC(
 ) : RoomMessageEventContent() {
     constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, relates_to = rel_to)
     constructor(msg: String, fallback: String, original_event: String) : this(
-        msgtype="m.text",
-        body=fallback,
-        new_content=TextRMEC(msg,"m.text"),
-        relates_to=RelationBlock(null,"m.replace",original_event)
+        msgtype = "m.text",
+        body = fallback,
+        new_content = TextRMEC(msg, "m.text"),
+        relates_to = RelationBlock(null, "m.replace", original_event)
     )
 }
 @Serializable
@@ -194,22 +183,22 @@ class FallbackRMEC(
 
 @Serializable
 class EventFallback(
-        override val raw_self: JsonObject,
-        override val raw_content: JsonElement,
-        override val type: String
+    override val raw_self: JsonObject,
+    override val raw_content: JsonElement,
+    override val type: String
 ) : Event() {
     override fun toString() = "EventFallback(" + raw_self.toString() + ")"
 }
 
 @Serializable
 class RoomEventFallback(
-        override val raw_self: JsonObject,
-        override val raw_content: JsonElement,
-        override val type: String,
-        override val event_id: String,
-        override val sender: String,
-        override val origin_server_ts: Long,
-        override val unsigned: UnsignedData? = null
+    override val raw_self: JsonObject,
+    override val raw_content: JsonElement,
+    override val type: String,
+    override val event_id: String,
+    override val sender: String,
+    override val origin_server_ts: Long,
+    override val unsigned: UnsignedData? = null
 ) : RoomEvent() {
     override fun toString() = "RoomEventFallback(" + raw_self.toString() + ")"
 }
@@ -218,22 +207,22 @@ class RoomEventFallback(
 class ReplyToRelation(val event_id: String)
 @Serializable
 class RelationBlock(
-@SerialName("m.in_reply_to") val in_reply_to: ReplyToRelation? = null,
-val rel_type: String? = null,
-val event_id: String? = null,
+    @SerialName("m.in_reply_to") val in_reply_to: ReplyToRelation? = null,
+    val rel_type: String? = null,
+    val event_id: String? = null,
 )
 
 object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     override fun selectDeserializer(element: JsonElement) =
-            element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
-                when {
-                    type == "m.room.message" -> RoomMessageEventSerializer
-                    type == "m.room.name" -> RoomNameStateEventSerializer
-                    type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
-                    type.startsWith("m.room") -> RoomEventFallbackSerializer
-                    else -> EventFallbackSerializer
-                }
+        element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
+            when {
+                type == "m.room.message" -> RoomMessageEventSerializer
+                type == "m.room.name" -> RoomNameStateEventSerializer
+                type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
+                type.startsWith("m.room") -> RoomEventFallbackSerializer
+                else -> EventFallbackSerializer
             }
+        }
 }
 
 object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<RoomMessageEventContent>(RoomMessageEventContent::class) {
@@ -262,5 +251,5 @@ open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) : JsonTran
         }
     }
     override fun transformSerialize(element: JsonElement): JsonElement =
-            element.jsonObject["raw_self"]!!
+        element.jsonObject["raw_self"]!!
 }

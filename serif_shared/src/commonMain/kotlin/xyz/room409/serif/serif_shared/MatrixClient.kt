@@ -6,9 +6,9 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
+import java.io.File
 import kotlin.concurrent.thread
 import kotlin.synchronized
-import java.io.File
 
 sealed class Outcome<out T : Any>
 data class Success<out T : Any>(val value: T) : Outcome<T>()
@@ -67,24 +67,23 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
     fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
 
-    fun createRoom(name:String, room_alias_name: String, topic: String, username: String): Outcome<String> {
+    fun createRoom(name: String, room_alias_name: String, topic: String): Outcome<String> {
         try {
             val result = runBlocking {
                 val creation_confirmation =
-                client.post<EventIdResponse>("$server/_matrix/client/r0/createRoom") {
-                    contentType(ContentType.Application.Json)
-                    body = CreateRoom(name, room_alias_name, topic, username)
-                }
+                    client.post<EventIdResponse>("$server/_matrix/client/r0/createRoom?access_token=$access_token") {
+                        contentType(ContentType.Application.Json)
+                        body = CreateRoom(name, room_alias_name, topic)
+                    }
                 transactionId++
                 Database.updateSession(access_token, transactionId)
                 creation_confirmation.event_id
             }
             return Success("Our create create room event id is: $result")
-        } catch (e: Exception){
+        } catch (e: Exception) {
             return Error("Create Room Failed", e)
         }
     }
-
 
     fun sendMessageImpl(message_content: RoomMessageEventContent, room_id: String): Outcome<String> {
 
@@ -106,9 +105,11 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
     fun sendMessage(msg: String, room_id: String, reply_id: String = ""): Outcome<String> {
-        val (msg, relation) = if(reply_id != "") {
-            Pair("> in reply to $reply_id\n\n$msg",
-                 RelationBlock(ReplyToRelation(reply_id)))
+        val (msg, relation) = if (reply_id != "") {
+            Pair(
+                "> in reply to $reply_id\n\n$msg",
+                RelationBlock(ReplyToRelation(reply_id))
+            )
         } else {
             Pair(msg, null)
         }
@@ -124,9 +125,9 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         try {
             val result = runBlocking {
                 val receipt_confirmation =
-                        client.post<String>("$server/_matrix/client/r0/rooms/$room_id/receipt/m.read/$eventId?access_token=$access_token") {
-                            contentType(ContentType.Application.Json)
-                        }
+                    client.post<String>("$server/_matrix/client/r0/rooms/$room_id/receipt/m.read/$eventId?access_token=$access_token") {
+                        contentType(ContentType.Application.Json)
+                    }
             }
             return Success("The receipt was sent")
         } catch (e: Exception) {
@@ -140,9 +141,9 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             val image_data = img_f.readBytes()
             val f_size = image_data.size
             val (ct, mimetype) =
-                if(url.endsWith(".png")) {
+                if (url.endsWith(".png")) {
                     Pair(ContentType.Image.PNG, "image/png")
-                } else if(url.endsWith(".gif")) {
+                } else if (url.endsWith(".gif")) {
                     Pair(ContentType.Image.GIF, "image/gif")
                 } else {
                     Pair(ContentType.Image.JPEG, "image/jpeg")
@@ -150,16 +151,16 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             val image_info = ImageInfo(0, mimetype, f_size, 0)
 
             val body = runBlocking {
-                //Post Image to server
+                // Post Image to server
                 val upload_img_response =
                     client.post<MediaUploadResponse>("$server/_matrix/media/r0/upload?access_token=$access_token") {
                         contentType(ct)
                         body = image_data
                     }
-                //Construct Image Message Content with url returned by the server
-                ImageRMEC(msgtype="m.image", body="image_alt_text", info=image_info, url=upload_img_response.content_uri)
+                // Construct Image Message Content with url returned by the server
+                ImageRMEC(msgtype = "m.image", body = "image_alt_text", info = image_info, url = upload_img_response.content_uri)
             }
-            //Send Image Event with link
+            // Send Image Event with link
             return sendMessageImpl(body, room_id)
         } catch (e: Exception) {
             return Error("Image Upload Failed", e)
@@ -171,15 +172,15 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             val cached_media = Database.getMediaInCache(media_url)
             var existing_entry = false
             if (cached_media != null) {
-                if(File(cached_media).exists()) {
-                    //File is in cache and it exists
+                if (File(cached_media).exists()) {
+                    // File is in cache and it exists
                     return Success(cached_media)
                 } else {
                     existing_entry = true
                 }
             }
 
-            //No valid cache hit
+            // No valid cache hit
             val result = runBlocking {
                 val url = "$server/_matrix/media/r0/download/${media_url.replace("mxc://","")}"
                 println("Retrieving image from $url")
