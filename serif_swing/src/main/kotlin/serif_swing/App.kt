@@ -8,6 +8,7 @@ import xyz.room409.serif.serif_shared.db.DriverFactory
 import kotlin.math.min
 import kotlin.concurrent.thread
 import java.awt.*
+import java.awt.image.*
 import java.awt.event.*
 import javax.swing.*
 import javax.swing.filechooser.*;
@@ -175,20 +176,79 @@ class WrapLabelView(element: Element) : LabelView(element) {
     }
 }
 
-class RecyclingList(private var our_width: Int) : JComponent(), Scrollable {
-    val subs: MutableList<Triple<Int,Int,Component>> = mutableListOf()
+class URLMouseListener(var message: JTextPane) : MouseAdapter() {
+    override fun mouseClicked(e: MouseEvent) {
+        val pos = message.viewToModel(Point(e.x, e.y))
+        println("you clicked on pos $pos, message length is ${message.text.length} because it is ${message.text}")
+        if (pos >= 0 && pos < message.text.length) {
+            println("That is, character ${message.text[pos]}")
+            val doc = (message.document as? DefaultStyledDocument)
+            if (doc != null) {
+                val el = doc.getCharacterElement(pos)
+                val href = el.attributes.getAttribute(HTML.Attribute.HREF) as String?
+                if (href != null) {
+                    // In the background, so that GUI doesn't freeze
+                    thread(start = true) {
+                        // We have to try using xdg-open first,
+                        // since PinePhone somehow implements the
+                        // Desktop API but has the same problem with the
+                        // GTK_BACKEND var
+                        try {
+                            println("Trying to open $href with exec 'xdg-open $href'")
+                            val pb = ProcessBuilder("xdg-open", href)
+                            // Somehow this environment variable gets set for pb
+                            // when it's NOT in System.getenv(). And of course, this
+                            // is the one that makes xdg-open try to launch an X version
+                            // of Firefox, giving the dreaded Firefox is already running
+                            // message if you've got a Wayland version running already.
+                            pb.environment().clear()
+                            pb.environment().putAll(System.getenv())
+                            pb.redirectErrorStream(true)
+                            val process = pb.start()
+                            val reader = BufferedReader(InputStreamReader(process.inputStream))
+                            while (reader.readLine() != null) {}
+                            process.waitFor()
+                            println("done trying to open url")
+                        } catch (e1: Exception) {
+                            try {
+                                println("Trying to open $href with Desktop")
+                                java.awt.Desktop.getDesktop().browse(java.net.URI(href))
+                            } catch (e2: Exception) {
+                                println("Couldn't get ProcessBuilder('xdg-open $href') or Desktop, problem was $e1 then $e2")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val make: Map<String, (T,()->Unit) -> Triple<List<Component>,()->Unit,(T,()->Unit) -> Unit>>) : JComponent(), Scrollable {
+    data class RecyclableItem<T>(var start: Int, var end: Int, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,()->Unit) -> Unit)
+    val recycle_map: MutableMap<String, ArrayDeque<RecyclableItem<T>>> = mutableMapOf()
+    val subs: MutableList<Pair<String, RecyclableItem<T>>> = mutableListOf()
     var our_height = 0
     init {
         addMouseListener(object : MouseListener, MouseMotionListener {
             fun dispatchEvent(e: MouseEvent) {
-                for ((sy,ey,c) in subs) {
+                for ((_typ, recycleable) in subs) {
+                    val (sy, ey, sub_components, _deactivate, _recycle) = recycleable
                     if ( (sy <= e.point.y)
                        &&(ey >= e.point.y) ) {
-                        val new_e = MouseEvent(c, e.id, e.getWhen(), e.modifiers, e.x, e.y-sy, e.xOnScreen, e.yOnScreen, e.clickCount, e.isPopupTrigger(), e.button)
-                        // a hack so that stuff like buttons have a proper parent when the reply/edit menu pops up and uses it
-                        add(c)
-                        c.dispatchEvent(new_e)
-                        remove(c)
+                        var sub_offset = sy
+                        for (c in sub_components) {
+                            if (e.point.y < sub_offset + c.height) {
+                                val new_e = MouseEvent(c, e.id, e.getWhen(), e.modifiers, e.x, e.y-sub_offset, e.xOnScreen, e.yOnScreen, e.clickCount, e.isPopupTrigger(), e.button)
+                                // a hack so that stuff like buttons have a proper parent when the reply/edit menu pops up and uses it
+                                add(c)
+                                c.dispatchEvent(new_e)
+                                remove(c)
+                                return;
+                            } else {
+                                sub_offset += c.height
+                            }
+                        }
                     }
                 }
             }
@@ -201,26 +261,50 @@ class RecyclingList(private var our_width: Int) : JComponent(), Scrollable {
             override fun mouseMoved(e: MouseEvent) = dispatchEvent(e)
         })
     }
-    fun myadd(c: Component, force_width: Boolean) {
-        c.setSize(our_width, 1000)
-        val d = c.getPreferredSize()
-        if (force_width) {
-            c.setSize(our_width, d.height)
-            c.setBounds(0, our_height, our_width, d.height)
-        } else {
-            c.setSize(d.width, d.height)
-            c.setBounds(0, our_height, d.width, d.height)
-        }
-        subs.add(Triple(our_height, our_height+c.height, c))
-        our_height += c.height
-        // Have to alert our hierarchy that we've changed size
-        invalidate()
-    }
-
-    fun reset(new_width: Int) {
+    fun cleanup() = reset(1000, listOf())
+    fun reset(new_width: Int, items: List<T>) {
         our_height = 0
         our_width = new_width
+        for ((typ, recycleable) in subs) {
+            recycleable.deactivate()
+            recycle_map.getOrPut(typ, { ArrayDeque() }).add(recycleable)
+        }
         subs.clear()
+        for (i in items) {
+            var height_delta = 0
+            val typ = choose(i)
+            val our_height_copy = our_height
+            val repaint_lambda = { println("repaint(0, $our_height_copy, $our_width, $height_delta)"); repaint(0, our_height_copy, our_width, height_delta) }
+            val possible_recycleable = recycle_map[typ]?.removeLastOrNull()
+            val recycleable = if (possible_recycleable != null) {
+                println("Recycling a $typ")
+                possible_recycleable.recycle(i, repaint_lambda)
+                possible_recycleable.start = our_height
+                possible_recycleable
+            } else {
+                println("Creating a new $typ")
+                val (sub_components, deactivate, recycle) = make[typ]!!(i, repaint_lambda)
+                RecyclableItem<T>(our_height, -1, sub_components, deactivate, recycle)
+            }
+            for (c in recycleable.sub_components) {
+                c.setSize(our_width, 1000)
+                val d = c.getPreferredSize()
+                val force_width = true
+                if (force_width) {
+                    c.setSize(our_width, d.height)
+                    c.setBounds(0, our_height, our_width, d.height)
+                } else {
+                    c.setSize(d.width, d.height)
+                    c.setBounds(0, our_height, d.width, d.height)
+                }
+                height_delta += c.height
+                // Have to alert our hierarchy that we've changed size
+            }
+            recycleable.end = our_height + height_delta
+            subs.add(Pair(typ, recycleable))
+            our_height += height_delta
+        }
+        invalidate()
     }
     override fun getPreferredSize() = Dimension(our_width,our_height)
     override fun getPreferredScrollableViewportSize() = Dimension(our_width,our_height)
@@ -231,18 +315,26 @@ class RecyclingList(private var our_width: Int) : JComponent(), Scrollable {
     override fun paintComponent(g: Graphics) {
         val clip_bounds = g.getClipBounds()
         val g = g.create()
-        var curr_y = 0
         var count = 0
-        for ((sy,ey,c) in subs) {
+        var total = 0
+        var sets = 0
+        for ((_typ, recycleable) in subs) {
+            val (sy, ey, sub_components, _refresh) = recycleable
             if ( (sy <= (clip_bounds.y+clip_bounds.height))
                &&(ey >= clip_bounds.y) ) {
-                c.paint(g)
-                count += 1
+                println("Drawing component from $sy to $ey")
+                for (c in sub_components) {
+                    c.paint(g)
+                    count += 1
+                    g.translate(0, c.height)
+                }
+                sets += 1
+            } else {
+                g.translate(0, ey-sy)
             }
-            g.translate(0, ey-sy)
-            curr_y = ey
+            total += sub_components.size
         }
-        println("painted $count / ${subs.size}")
+        println("painted $sets / ${subs.size}, $count / $total")
     }
 }
 
@@ -250,7 +342,158 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     // From @stephenhay via https://mathiasbynens.be/demo/url-regex
     // slightly modified
     val URL_REGEX = Regex("""(https?|ftp)://[^\s/$.?#].[^\s]*""")
-    val recycling_message_list = RecyclingList(last_window_width)
+    val mk_sender = { msg: SharedUiMessage ->
+        val sender = JTextArea()
+        sender.setEditable(false)
+        sender.lineWrap = true
+        sender.wrapStyleWord = true
+        val set_sender = { msg: SharedUiMessage -> sender.text = "${msg.sender}:  " }
+        set_sender(msg)
+        Pair(sender, set_sender)
+    }
+    val mk_menu = { msg_in: SharedUiMessage  ->
+        var msg = msg_in
+        val reply_option = JMenuItem("Reply")
+        reply_option.addActionListener({
+            println("Now writing a reply")
+            replied_event_id = msg.id
+        })
+        val edit_option = JMenuItem("Edit")
+        edit_option.addActionListener({
+            println("Now editing a message")
+            edited_event_id = msg.id
+            message_field.text = msg.message
+        })
+        val show_src_option = JMenuItem("Show Source")
+        show_src_option.addActionListener({
+            val json_str = m.getEventSrc(msg.id)
+
+            val window = SwingUtilities.getWindowAncestor(panel)
+            val dim = window.getSize()
+            val h = dim.height
+            val w = dim.width
+            val dialog = JDialog(window, "Event Source")
+
+            val dpanel = JPanel(BorderLayout())
+            val src_txt = JTextPane()
+            src_txt.setContentType("text/plain")
+            src_txt.setText(json_str)
+            src_txt.setEditable(false)
+
+            val close_btn = JButton("Close")
+            close_btn.addActionListener({
+                dialog.setVisible(false)
+                dialog.dispose()
+            })
+
+            dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
+            dpanel.add(close_btn,BorderLayout.PAGE_END)
+            dialog.add(dpanel)
+
+            dialog.setSize(w,h/2)
+            dialog.setVisible(true)
+            dialog.setResizable(false)
+            dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+        })
+
+        val msg_action_popup = JPopupMenu()
+        msg_action_popup.add(reply_option)
+        if(msg.sender.contains(m.username)) {
+            msg_action_popup.add(edit_option)
+        }
+        msg_action_popup.add(show_src_option)
+
+        val msg_action_button = JButton("...")
+        msg_action_button.addActionListener({
+            msg_action_popup.show(msg_action_button,0,0)
+        })
+        Pair(msg_action_button, { new_msg: SharedUiMessage -> msg = new_msg; })
+    }
+    val recycling_message_list = RecyclingList<SharedUiMessage>(last_window_width,
+        { when (it) {
+                is SharedUiImgMessage -> "img"
+                is SharedUiAudioMessage -> "audio"
+                else -> "text"
+        } },
+        mapOf(
+            "img" to { msg: SharedUiMessage, repaint_cell ->
+                msg as SharedUiImgMessage
+                val set_icon_image = { icon: ImageIcon, msg: SharedUiImgMessage, repaint_cell: ()->Unit ->
+                    val img_url = msg.url
+                    val og_image_icon = ImageIcon(img_url)
+                    val og_image = og_image_icon.image
+                    val img_width: Int = og_image.getWidth(null)
+                    val img_height: Int = og_image.getHeight(null)
+                    if (last_window_width != 0 && img_width != 0 && img_height != 0) {
+                        val new_width = min(last_window_width, img_width)
+                        val new_height = min(img_height, (img_height * new_width)/img_width)
+                        icon.setImage(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT))
+                    } else {
+                        icon.setImage(og_image)
+                    }
+                    icon.setImageObserver(object : ImageObserver {
+                        override fun imageUpdate(img: Image, infoFlags: Int, x: Int, y: Int, w: Int, h: Int): Boolean {
+                            repaint_cell()
+                            return ((infoFlags and (ImageObserver.ALLBITS or ImageObserver.ABORT)) == 0)
+                        }
+                    })
+                }
+                val icon = ImageIcon()
+                set_icon_image(icon, msg, repaint_cell)
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, JLabel(icon), menu), { icon.setImageObserver(null) }, { msg, repaint_cell ->
+                    set_icon_image(icon, msg as SharedUiImgMessage, repaint_cell)
+                    set_sender(msg)
+                    set_menu(msg)
+                })
+            },
+            "audio" to { msg, repaint_cell ->
+                msg as SharedUiAudioMessage
+                var audio_url = msg.url
+                val play_btn = JButton("Play/Pause $audio_url")
+                play_btn.addActionListener({
+                    AudioPlayer.loadAudio(audio_url)
+                    AudioPlayer.play()
+                })
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, play_btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); audio_url = (msg as SharedUiAudioMessage).url; })
+            },
+            "text" to { msg, repaint_cell ->
+                val message = JTextPane()
+                message.setEditorKit(WrapEditorKit);
+                message.setEditable(false)
+                message.addMouseListener(URLMouseListener(message))
+
+                val simpleAttrs = SimpleAttributeSet()
+                val set_text = { msg: SharedUiMessage ->
+                    message.document.remove(0, message.document.length)
+                    var current_idx = 0
+                    for (url_match in URL_REGEX.findAll(msg.message)) {
+                        if (url_match.range.start > current_idx) {
+                            message.document.insertString(current_idx, msg.message.slice(current_idx .. url_match.range.start-1), simpleAttrs)
+                            current_idx = url_match.range.start
+                        }
+                        val urlAttrs = SimpleAttributeSet()
+                        StyleConstants.setUnderline(urlAttrs, true)
+                        urlAttrs.addAttribute(HTML.Attribute.HREF, url_match.value)
+                        message.document.insertString(current_idx, url_match.value, urlAttrs)
+                        current_idx = url_match.range.endInclusive + 1
+                    }
+                    if (current_idx < msg.message.length) {
+                        message.document.insertString(current_idx, msg.message.slice(current_idx .. msg.message.length-1), simpleAttrs)
+                    }
+                }
+
+                set_text(msg)
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+
+                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> set_text(msg); set_sender(msg); set_menu(msg) })
+            }
+        )
+    )
     val c_left = GridBagConstraints()
     val c_right = GridBagConstraints()
     val message_field = JTextField(20)
@@ -263,7 +506,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         backfill_button.addActionListener({ m.requestBackfill() })
         panel.add(backfill_button, BorderLayout.PAGE_START)
 
-        redrawMessages(last_window_width)
+        recycling_message_list.reset(last_window_width, m.messages)
         panel.add(
             JScrollPane(
                 recycling_message_list,
@@ -323,175 +566,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         message_field.addActionListener(onSend)
         send_button.addActionListener(onSend)
         attach_button.addActionListener(onAttach)
-        back_button.addActionListener({ transition(m.exitRoom(), true) })
+        back_button.addActionListener({ recycling_message_list.cleanup(); transition(m.exitRoom(), true) })
         m.sendReceipt(m.messages.last().id)
-    }
-    fun redrawMessages(draw_width: Int) {
-        recycling_message_list.reset(draw_width)
-        for (msg in m.messages) {
-            val sender = JTextArea("${msg.sender}:  ")
-            val show_edit_btn = msg.sender.contains(m.username)
-            sender.setEditable(false)
-            sender.lineWrap = true
-            sender.wrapStyleWord = true
-
-            val msg_widget =
-            when(msg) {
-                is SharedUiImgMessage -> {
-                    val img_url = msg.url
-                    val og_image_icon = ImageIcon(img_url)
-                    val og_image = og_image_icon.image
-                    val img_width: Int = og_image.getWidth(null)
-                    val img_height: Int = og_image.getHeight(null)
-                    if (draw_width != 0 && img_width != 0 && img_height != 0) {
-                        val new_width = min(draw_width, img_width)
-                        val new_height = min(img_height, (img_height * new_width)/img_width)
-                        JLabel(ImageIcon(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT)))
-                    } else {
-                        JLabel(og_image_icon)
-                    }
-                }
-                is SharedUiAudioMessage -> {
-                    val audio_url = msg.url
-                    val play_btn = JButton("Play/Pause $audio_url")
-                    play_btn.addActionListener({
-                        AudioPlayer.loadAudio(audio_url)
-                        AudioPlayer.play()
-                    })
-                    play_btn
-                }
-                else -> {
-                    val message = JTextPane()
-                    message.setEditorKit(WrapEditorKit);
-                    message.setEditable(false)
-
-                    var current_idx = 0
-                    val simpleAttrs = SimpleAttributeSet()
-                    for (url_match in URL_REGEX.findAll(msg.message)) {
-                        if (url_match.range.start > current_idx) {
-                            message.document.insertString(current_idx, msg.message.slice(current_idx .. url_match.range.start-1), simpleAttrs)
-                            current_idx = url_match.range.start
-                        }
-                        val urlAttrs = SimpleAttributeSet()
-                        StyleConstants.setUnderline(urlAttrs, true)
-                        urlAttrs.addAttribute(HTML.Attribute.HREF, url_match.value)
-                        message.document.insertString(current_idx, url_match.value, urlAttrs)
-                        current_idx = url_match.range.endInclusive + 1
-                    }
-                    if (current_idx < msg.message.length) {
-                        message.document.insertString(current_idx, msg.message.slice(current_idx .. msg.message.length-1), simpleAttrs)
-                    }
-
-                    message.addMouseListener(object : MouseAdapter() {
-                        override fun mouseClicked(e: MouseEvent) {
-                            val pos = message.viewToModel(Point(e.x, e.y))
-                            println("you clicked on pos $pos")
-                            if (pos >= 0 && pos < msg.message.length) {
-                                println("That is, character ${msg.message[pos]}")
-                                val doc = (message.document as? DefaultStyledDocument)
-                                if (doc != null) {
-                                    val el = doc.getCharacterElement(pos)
-                                    val href = el.attributes.getAttribute(HTML.Attribute.HREF) as String?
-                                    if (href != null) {
-                                        // In the background, so that GUI doesn't freeze
-                                        thread(start = true) {
-                                            // We have to try using xdg-open first,
-                                            // since PinePhone somehow implements the
-                                            // Desktop API but has the same problem with the
-                                            // GTK_BACKEND var
-                                            try {
-                                                println("Trying to open $href with exec 'xdg-open $href'")
-                                                val pb = ProcessBuilder("xdg-open", href)
-                                                // Somehow this environment variable gets set for pb
-                                                // when it's NOT in System.getenv(). And of course, this
-                                                // is the one that makes xdg-open try to launch an X version
-                                                // of Firefox, giving the dreaded Firefox is already running
-                                                // message if you've got a Wayland version running already.
-                                                pb.environment().clear()
-                                                pb.environment().putAll(System.getenv())
-                                                pb.redirectErrorStream(true)
-                                                val process = pb.start()
-                                                val reader = BufferedReader(InputStreamReader(process.inputStream))
-                                                while (reader.readLine() != null) {}
-                                                process.waitFor()
-                                                println("done trying to open url")
-                                            } catch (e1: Exception) {
-                                                try {
-                                                    println("Trying to open $href with Desktop")
-                                                    java.awt.Desktop.getDesktop().browse(java.net.URI(href))
-                                                } catch (e2: Exception) {
-                                                    println("Couldn't get ProcessBuilder('xdg-open $href') or Desktop, problem was $e1 then $e2")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    })
-                    message
-                }
-            }
-
-            val reply_option = JMenuItem("Reply")
-            reply_option.addActionListener({
-                println("Now writing a reply")
-                replied_event_id = msg.id
-            })
-            val edit_option = JMenuItem("Edit")
-            edit_option.addActionListener({
-                println("Now editing a message")
-                edited_event_id = msg.id
-                message_field.text = msg.message
-            })
-            val show_src_option = JMenuItem("Show Source")
-            show_src_option.addActionListener({
-                val json_str = m.getEventSrc(msg.id)
-
-                val window = SwingUtilities.getWindowAncestor(panel)
-                val dim = window.getSize()
-                val h = dim.height
-                val w = dim.width
-                val dialog = JDialog(window, "Event Source")
-
-                val dpanel = JPanel(BorderLayout())
-                val src_txt = JTextPane()
-                src_txt.setContentType("text/plain")
-                src_txt.setText(json_str)
-                src_txt.setEditable(false)
-
-                val close_btn = JButton("Close")
-                close_btn.addActionListener({
-                    dialog.setVisible(false)
-                    dialog.dispose()
-                })
-
-                dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
-                dpanel.add(close_btn,BorderLayout.PAGE_END)
-                dialog.add(dpanel)
-
-                dialog.setSize(w,h/2)
-                dialog.setVisible(true)
-                dialog.setResizable(false)
-                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
-            })
-
-            val msg_action_popup = JPopupMenu()
-            msg_action_popup.add(reply_option)
-            if(show_edit_btn) {
-                msg_action_popup.add(edit_option)
-            }
-            msg_action_popup.add(show_src_option)
-
-            val msg_action_button = JButton("...")
-            msg_action_button.addActionListener({
-                msg_action_popup.show(msg_action_button,0,0)
-            })
-
-            recycling_message_list.myadd(sender, true)
-            recycling_message_list.myadd(msg_widget, true)
-            recycling_message_list.myadd(msg_action_button, false)
-        }
     }
     override fun refresh() {
         transition(m.refresh(), true)
@@ -499,7 +575,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     fun update(new_m: MatrixChatRoom, window_width: Int) {
         if (m.messages != new_m.messages || last_window_width != window_width) {
             m = new_m
-            redrawMessages(window_width)
+            recycling_message_list.reset(window_width, m.messages)
             last_window_width = window_width
         } else {
             m = new_m
