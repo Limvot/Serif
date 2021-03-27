@@ -67,13 +67,13 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
     fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
 
-    fun createRoom(name:String, room_alias_name: String, topic: String, username: String, url: String): Outcome<String> {
+    fun createRoom(name:String, room_alias_name: String, topic: String, username: String): Outcome<String> {
         try {
             val result = runBlocking {
                 val creation_confirmation =
-                client.post<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/createRoom") {
+                client.post<EventIdResponse>("$server/_matrix/client/r0/createRoom") {
                     contentType(ContentType.Application.Json)
-                    body = CreateRoom(name, room_alias_name, topic, username, url)
+                    body = CreateRoom(name, room_alias_name, topic, username)
                 }
                 transactionId++
                 Database.updateSession(access_token, transactionId)

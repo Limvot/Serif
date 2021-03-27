@@ -66,6 +66,9 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
         msession = msession,
         message = "updated...\n"
     )
+    fun createRoom(name:String, room_alias_name: String, topic: String, username: String) = m.createRoom(name, room_alias_name, topic, username)
+
+
     fun getRoom(id: String): MatrixState {
         return MatrixChatRoom(
             msession,
