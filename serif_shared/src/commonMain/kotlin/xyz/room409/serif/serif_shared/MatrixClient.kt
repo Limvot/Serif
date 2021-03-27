@@ -67,7 +67,26 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
     fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
 
+    fun createRoom(name:String, room_alias_name: String, topic: String): Outcome<String> {
+        try {
+            val result = runBlocking {
+                val creation_confirmation =
+                client.post<String>("$server/_matrix/client/r0/createRoom?access_token=$access_token") {
+                    contentType(ContentType.Application.Json)
+                    body = CreateRoom(name, room_alias_name, topic)
+                }
+                Database.updateSession(access_token, transactionId)
+                creation_confirmation
+            }
+            return Success("Our create create room event id is: $result")
+        } catch (e: Exception){
+            return Error("Create Room Failed", e)
+        }
+    }
+
+
     fun sendMessageImpl(message_content: RoomMessageEventContent, room_id: String): Outcome<String> {
+
         try {
             val result = runBlocking {
                 val message_confirmation =
