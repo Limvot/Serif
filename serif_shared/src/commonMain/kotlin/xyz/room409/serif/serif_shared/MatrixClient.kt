@@ -71,7 +71,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         try {
             val result = runBlocking {
                 val creation_confirmation =
-                    client.post<EventIdResponse>("$server/_matrix/client/r0/createRoom?access_token=$access_token") {
+                    client.post<EventIdResponse>("$server/_matrix/client/r0/createRoom/$transactionId?access_token=$access_token") {
                         contentType(ContentType.Application.Json)
                         body = CreateRoom(name, room_alias_name, topic)
                     }
