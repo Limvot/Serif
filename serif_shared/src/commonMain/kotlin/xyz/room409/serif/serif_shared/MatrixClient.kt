@@ -8,6 +8,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlin.concurrent.thread
 import kotlin.synchronized
+import java.io.File
 
 sealed class Outcome<out T : Any>
 data class Success<out T : Any>(val value: T) : Outcome<T>()
@@ -21,7 +22,7 @@ inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.
 // the right T. Java generics are bad, yall, and Kotlin in trying to be nice sometimes makes things much worse.
 inline fun <reified T> List<Event>.firstStateEventContentOfType(): T? = this.map { ((it as? StateEvent<T>?)?.content) as? T? }.firstOrNull { it != null }
 
-class MatrixSession(val client: HttpClient, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
+class MatrixSession(val client: HttpClient, val server: String, val user: String, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var sync_response: SyncResponse? = null
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
@@ -30,10 +31,10 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
         while (sync_should_run) {
             val next_batch = synchronized(this) { sync_response?.next_batch }
             val url = if (next_batch != null) {
-                "https://synapse.room409.xyz/_matrix/client/r0/sync?since=$next_batch&timeout=$timeout_ms&access_token=$access_token"
+                "$server/_matrix/client/r0/sync?since=$next_batch&timeout=$timeout_ms&access_token=$access_token"
             } else {
                 val limit = 5
-                "https://synapse.room409.xyz/_matrix/client/r0/sync?filter={\"room\":{\"timeline\":{\"limit\":$limit}}}&access_token=$access_token"
+                "$server/_matrix/client/r0/sync?filter={\"room\":{\"timeline\":{\"limit\":$limit}}}&access_token=$access_token"
             }
             try {
                 mergeInSync(runBlocking { client.get<SyncResponse>(url) })
@@ -42,6 +43,7 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
             } catch (e: Exception) {
                 // Exponential backoff on failure
                 val backoff_ms = timeout_ms shl fail_times
+                e.printStackTrace()
                 println("This sync failed with an exception $e, waiting ${backoff_ms / 1000} seconds before trying again")
                 fail_times += 1
                 Thread.sleep(backoff_ms)
@@ -56,8 +58,8 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
     // for room name changes too. Also, it's not working when there's not a room name -
     // the way I'm reading the doc heroes should be non-null... maybe it's not decoding right?
 
-    fun <T> mapRooms(f: (String,Room) -> T): List<T> = synchronized(this) {
-        sync_response?.rooms?.join?.entries?.map{ (id,room,) -> f(id, room) }?.toList() ?: listOf()
+    fun <T> mapRooms(f: (String, Room) -> T): List<T> = synchronized(this) {
+        sync_response?.rooms?.join?.entries?.map { (id, room,) -> f(id, room) }?.toList() ?: listOf()
     }
     fun <T> mapRoom(id: String, f: (Room) -> T): T? = synchronized(this) {
         sync_response?.rooms?.join?.get(id)?.let { f(it) }
@@ -83,22 +85,113 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
         }
     }
 
-    fun sendMessage(msg: String, room_id: String): Outcome<String> {
+
+    fun sendMessageImpl(message_content: RoomMessageEventContent, room_id: String): Outcome<String> {
+
         try {
             val result = runBlocking {
                 val message_confirmation =
-                    client.put<EventIdResponse>("https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
+                    client.put<EventIdResponse>("$server/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
                         contentType(ContentType.Application.Json)
-                        body = SendRoomMessage(msg)
+                        body = message_content
                     }
                 transactionId++
                 Database.updateSession(access_token, transactionId)
                 message_confirmation.event_id
             }
 
-            return Success("Hello, ${Platform().platform}, ya cowpeople! - Our sent event id is: $result")
+            return Success("Our sent event id is: $result")
         } catch (e: Exception) {
             return Error("Message Send Failed", e)
+        }
+    }
+    fun sendMessage(msg: String, room_id: String, reply_id: String = ""): Outcome<String> {
+        val (msg, relation) = if(reply_id != "") {
+            Pair("> in reply to $reply_id\n\n$msg",
+                 RelationBlock(ReplyToRelation(reply_id)))
+        } else {
+            Pair(msg, null)
+        }
+        val body = TextRMEC(msg, relation)
+        return sendMessageImpl(body, room_id)
+    }
+    fun sendEdit(msg: String, room_id: String, edited_id: String): Outcome<String> {
+        val fallback_msg = "* $msg"
+        val body = TextRMEC(msg, fallback_msg, edited_id)
+        return sendMessageImpl(body, room_id)
+    }
+    fun sendReadReceipt(eventId: String, room_id: String): Outcome<String> {
+        try {
+            val result = runBlocking {
+                val receipt_confirmation =
+                        client.post<String>("$server/_matrix/client/r0/rooms/$room_id/receipt/m.read/$eventId?access_token=$access_token") {
+                            contentType(ContentType.Application.Json)
+                        }
+            }
+            return Success("The receipt was sent")
+        } catch (e: Exception) {
+            return Error("Receipt Failed", e)
+        }
+    }
+
+    fun sendImageMessage(url: String, room_id: String): Outcome<String> {
+        try {
+            val img_f = File(url)
+            val image_data = img_f.readBytes()
+            val f_size = image_data.size
+            val (ct, mimetype) =
+                if(url.endsWith(".png")) {
+                    Pair(ContentType.Image.PNG, "image/png")
+                } else if(url.endsWith(".gif")) {
+                    Pair(ContentType.Image.GIF, "image/gif")
+                } else {
+                    Pair(ContentType.Image.JPEG, "image/jpeg")
+                }
+            val image_info = ImageInfo(0, mimetype, f_size, 0)
+
+            val body = runBlocking {
+                //Post Image to server
+                val upload_img_response =
+                    client.post<MediaUploadResponse>("$server/_matrix/media/r0/upload?access_token=$access_token") {
+                        contentType(ct)
+                        body = image_data
+                    }
+                //Construct Image Message Content with url returned by the server
+                ImageRMEC(msgtype="m.image", body="image_alt_text", info=image_info, url=upload_img_response.content_uri)
+            }
+            //Send Image Event with link
+            return sendMessageImpl(body, room_id)
+        } catch (e: Exception) {
+            return Error("Image Upload Failed", e)
+        }
+    }
+
+    fun getLocalMediaPathFromUrl(media_url: String): Outcome<String> {
+        try {
+            val cached_media = Database.getMediaInCache(media_url)
+            var existing_entry = false
+            if (cached_media != null) {
+                if(File(cached_media).exists()) {
+                    //File is in cache and it exists
+                    return Success(cached_media)
+                } else {
+                    existing_entry = true
+                }
+            }
+
+            //No valid cache hit
+            val result = runBlocking {
+                val url = "$server/_matrix/media/r0/download/${media_url.replace("mxc://","")}"
+                println("Retrieving image from $url")
+                val media = client.get<ByteArray>(url)
+                Database.addMediaToCache(media_url, media, existing_entry)
+            }
+
+            println("Media file at $result")
+            return Success(result)
+        } catch (e: Exception) {
+            println("Error with image retrieval $e")
+            return Error("Image Retrieval Failed", e)
         }
     }
 
@@ -106,7 +199,7 @@ class MatrixSession(val client: HttpClient, val access_token: String, var transa
         thread(start = true) {
             try {
                 val from = synchronized(this) { sync_response!!.rooms.join[room_id]!!.timeline.prev_batch }
-                val url = "https://synapse.room409.xyz/_matrix/client/r0/rooms/$room_id/messages?access_token=$access_token&from=$from&dir=b"
+                val url = "$server/_matrix/client/r0/rooms/$room_id/messages?access_token=$access_token&from=$from&dir=b"
                 val response = runBlocking { client.get<BackfillResponse>(url) }
                 synchronized(this) {
                     // This also needs to be changed to something that supports discontinuous
@@ -170,9 +263,10 @@ class MatrixClient {
                 )
             }
         }
+        val server = "https://synapse.room409.xyz"
         try {
             val loginResponse = runBlocking {
-                client.post<LoginResponse>("https://synapse.room409.xyz/_matrix/client/r0/login") {
+                client.post<LoginResponse>("$server/_matrix/client/r0/login") {
                     contentType(ContentType.Application.Json)
                     body = LoginRequest(username, password)
                 }
@@ -181,9 +275,9 @@ class MatrixClient {
             // Save to DB
             println("Saving session to db")
             val new_transactionId: Long = 0
-            Database.saveSession(username, loginResponse.access_token, new_transactionId)
+            Database.saveSession(loginResponse.identifier.user, loginResponse.access_token, new_transactionId)
 
-            return Success(MatrixSession(client, loginResponse.access_token, new_transactionId, onUpdate))
+            return Success(MatrixSession(client, server, loginResponse.identifier.user, loginResponse.access_token, new_transactionId, onUpdate))
         } catch (e: Exception) {
             return Error("Login failed", e)
         }
@@ -198,12 +292,13 @@ class MatrixClient {
                 )
             }
         }
+        val server = "https://synapse.room409.xyz"
         // Load from DB
         println("loading specific session from db")
         val sessions = Database.getUserSession(username)
         val tok = sessions.second
         val transactionId = sessions.third
-        return Success(MatrixSession(client, tok, transactionId, onUpdate))
+        return Success(MatrixSession(client, server, username, tok, transactionId, onUpdate))
     }
 
     fun getStoredSessions(): List<String> {

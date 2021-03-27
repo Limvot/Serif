@@ -2,6 +2,7 @@ package xyz.room409.serif.serif_shared
 import xyz.room409.serif.serif_shared.db.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
 import xyz.room409.serif.serif_shared.db.SessionDb
+import java.io.File
 
 object Database {
     // See platform specific code in serif_shared for the
@@ -37,5 +38,25 @@ object Database {
 
     fun deleteAllSessions() {
         this.db?.sessionDbQueries?.deleteAllSessions()
+    }
+
+    fun getMediaInCache(url: String): String? {
+        return this.db?.sessionDbQueries?.selectCachedMedia(url) { _: String, localPath: String ->
+            localPath
+        }?.executeAsOneOrNull()
+    }
+
+    fun addMediaToCache(url: String, file_data: ByteArray, update: Boolean): String {
+        val cache_path = File(System.getProperty("user.dir") + "/cache/")
+        cache_path.mkdirs()
+        val file = File.createTempFile("serif_media_", "", cache_path)
+        file.outputStream().write(file_data)
+        val local = file.toPath().toString()
+        if(update) {
+            this.db?.sessionDbQueries?.updateMedia(local, url)
+        } else {
+            this.db?.sessionDbQueries?.insertMedia(url, local)
+        }
+        return local
     }
 }

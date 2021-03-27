@@ -22,10 +22,8 @@ data class LoginRequest(
 
 @Serializable data class LoginIdentifier(val type: String, val user: String)
 
-@Serializable data class LoginResponse(val access_token: String)
 
-@Serializable
-data class CreateRoom(
+@Serializable data class CreateRoom(
         val preset: String,
         val name: String,
         val room_alias_name: String,
@@ -46,35 +44,27 @@ data class CreateRoom(
             creation_content =
                     CreationContent(
                             creator = username,
-                            info =
-                                    ImageInfo(
-                                            h = 398,
-                                            mimetype = "image/jpeg",
-                                            size = 31037,
-                                            w = 394),
-                             url = url
-                            )
+
          )
+    )
 }
 
 
-@Serializable data class CreationContent(val creator: String, val info: ImageInfo, val url: String)
+@Serializable data class CreationContent(val creator: String)
 
-@Serializable data class ImageInfo(val h: Int, val mimetype: String, val size: Int, val w: Int)
-
-
-@Serializable
-data class SendRoomMessage(val msgtype: String, val body: String) {
-    constructor(body: String) : this(msgtype = "m.text", body = body)
-}
-
-@Serializable data class EventIdResponse(val event_id: String)
+data class LoginResponse(val access_token: String, val identifier: LoginIdentifier)
 
 @Serializable
-data class UnreadNotifications(
-        val highlight_count: Int? = null,
-        val notification_count: Int? = null
-)
+data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: String)
+@Serializable
+data class ImageInfo(val h: Int? = 0, val mimetype: String, val size: Int, val w: Int? = 0)
+@Serializable
+data class MediaUploadResponse(val content_uri: String)
+@Serializable
+data class EventIdResponse(val event_id: String)
+@Serializable
+data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
+
 
 @Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms)
 
@@ -162,12 +152,45 @@ class RoomMessageEvent(
 ) : RoomEvent() {
     override fun toString() = "RoomMessageEvent(" + raw_self.toString() + ")"
 }
-
+@Serializable(with = RoomMessageEventContentSerializer::class)
+abstract class RoomMessageEventContent {
+    abstract val body: String
+    abstract val msgtype: String
+}
 @Serializable
-class RoomMessageEventContent(
-        val body: String = "<missing message body, likely redacted>",
-        val msgtype: String = "<missing type, likely redacted>"
-)
+class TextRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+    @SerialName("m.new_content") val new_content: TextRMEC? = null,
+    @SerialName("m.relates_to") val relates_to: RelationBlock? = null
+) : RoomMessageEventContent() {
+    constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, relates_to = rel_to)
+    constructor(msg: String, fallback: String, original_event: String) : this(
+        msgtype="m.text",
+        body=fallback,
+        new_content=TextRMEC(msg,"m.text"),
+        relates_to=RelationBlock(null,"m.replace",original_event)
+    )
+}
+@Serializable
+class ImageRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+    val info: ImageInfo,
+    val url: String
+) : RoomMessageEventContent()
+@Serializable
+class AudioRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+    val info: AudioInfo,
+    val url: String
+) : RoomMessageEventContent()
+@Serializable
+class FallbackRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+) : RoomMessageEventContent()
 
 @Serializable
 class EventFallback(
@@ -191,6 +214,15 @@ class RoomEventFallback(
     override fun toString() = "RoomEventFallback(" + raw_self.toString() + ")"
 }
 
+@Serializable
+class ReplyToRelation(val event_id: String)
+@Serializable
+class RelationBlock(
+@SerialName("m.in_reply_to") val in_reply_to: ReplyToRelation? = null,
+val rel_type: String? = null,
+val event_id: String? = null,
+)
+
 object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     override fun selectDeserializer(element: JsonElement) =
             element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
@@ -204,33 +236,31 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
             }
 }
 
-object EventFallbackSerializer :
-        GenericJsonEventSerializer<EventFallback>(EventFallback.serializer())
+object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<RoomMessageEventContent>(RoomMessageEventContent::class) {
+    override fun selectDeserializer(element: JsonElement) = element.jsonObject["msgtype"]?.jsonPrimitive?.content.let { type ->
+        when {
+            type == "m.text" -> TextRMEC.serializer()
+            type == "m.image" -> ImageRMEC.serializer()
+            type == "m.audio" -> AudioRMEC.serializer()
+            else -> FallbackRMEC.serializer()
+        }
+    }
+}
 
-object RoomEventFallbackSerializer :
-        GenericJsonEventSerializer<RoomEventFallback>(RoomEventFallback.serializer())
+object EventFallbackSerializer : GenericJsonEventSerializer<EventFallback>(EventFallback.serializer())
+object RoomEventFallbackSerializer : GenericJsonEventSerializer<RoomEventFallback>(RoomEventFallback.serializer())
+object RoomMessageEventSerializer : GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
+object RoomNameStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomNameContent>>(StateEvent.serializer(RoomNameContent.serializer()))
+object RoomCanonicalAliasStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
 
-object RoomMessageEventSerializer :
-        GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
-
-object RoomNameStateEventSerializer :
-        GenericJsonEventSerializer<StateEvent<RoomNameContent>>(
-                StateEvent.serializer(RoomNameContent.serializer()))
-
-object RoomCanonicalAliasStateEventSerializer :
-        GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(
-                StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
-
-open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) :
-        JsonTransformingSerializer<T>(clazz) {
-    override fun transformDeserialize(element: JsonElement): JsonElement =
-            buildJsonObject {
-                put("raw_self", element)
-                put("raw_content", element.jsonObject["content"]!!)
-                for ((key, value) in element.jsonObject) {
-                    put(key, value)
-                }
-            }
+open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) : JsonTransformingSerializer<T>(clazz) {
+    override fun transformDeserialize(element: JsonElement): JsonElement = buildJsonObject {
+        put("raw_self", element)
+        put("raw_content", element.jsonObject["content"]!!)
+        for ((key, value) in element.jsonObject) {
+            put(key, value)
+        }
+    }
     override fun transformSerialize(element: JsonElement): JsonElement =
             element.jsonObject["raw_self"]!!
 }
