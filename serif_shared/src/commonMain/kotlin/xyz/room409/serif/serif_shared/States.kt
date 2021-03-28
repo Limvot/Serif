@@ -66,11 +66,14 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
         msession = msession,
         message = "updated...\n"
     )
-    fun getRoom(id: String): MatrixState {
+    fun getRoom(id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): MatrixState {
         return MatrixChatRoom(
             msession,
             id,
-            this.rooms.find({ room -> room.id == id })!!.name
+            this.rooms.find({ room -> room.id == id })!!.name,
+            window_back_length,
+            message_window_base,
+            window_forward_length
         )
     }
     fun fake_logout(): MatrixState {
@@ -100,7 +103,7 @@ class SharedUiAudioMessage(
     val url: String
 ) : SharedUiMessage(sender,message,id,timestamp)
 
-class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String) : MatrixState() {
+class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, val window_back_length: Int, val message_window_base: String?, val window_forward_length: Int) : MatrixState() {
     val username = msession.user
 
     private val is_edit_content = { msg_content: TextRMEC ->
@@ -188,7 +191,23 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                 else -> SharedUiMessage(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)
             }
         } else { null }
-    }.filterNotNull()
+    }.filterNotNull().let { all_messages ->
+        val base_idx = if (message_window_base == null) {
+            all_messages.size - 1
+        } else {
+            all_messages.indexOfFirst({ it.id == message_window_base })
+        }
+        val desired_first_index = base_idx - window_back_length
+        val first_index = if (desired_first_index < 0) {
+            msession.requestBackfill(room_id)
+            0
+        } else {
+            desired_first_index
+        }
+        // we don't have a forward-fill yet, and indeed can't get ourselves into that position (yet)
+        val last_index = kotlin.math.min(all_messages.size - 1, base_idx + window_forward_length)
+        all_messages.slice(first_index .. last_index)
+    }
     fun sendMessage(msg: String): MatrixState {
         when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
             is Success -> { println("${sendMessageResult.value}") }
@@ -232,19 +251,20 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         }
         return "No Source for $msg_id"
     }
-    fun requestBackfill() {
-        msession.requestBackfill(room_id)
-    }
     fun sendReceipt(eventID: String) {
         when (val readReceiptResult = msession.sendReadReceipt(eventID, room_id)){
             is Success -> println("read receipt sent")
             is Error -> println("read receipt failed because ${readReceiptResult.cause}")
         }
     }
-    override fun refresh(): MatrixState = MatrixChatRoom(
+    override fun refresh(): MatrixState = refresh(window_back_length, message_window_base, window_forward_length)
+    fun refresh(new_window_back_length: Int, new_message_window_base: String?, new_window_forward_length: Int): MatrixState = MatrixChatRoom(
         msession,
         room_id,
-        msession.mapRoom(room_id, { determineRoomName(it, room_id) }) ?: "<room gone?>"
+        msession.mapRoom(room_id, { determineRoomName(it, room_id) }) ?: "<room gone?>",
+        new_window_back_length,
+        new_message_window_base,
+        new_window_forward_length,
     )
     fun exitRoom(): MatrixState {
         return MatrixRooms(msession, "Back to rooms.")

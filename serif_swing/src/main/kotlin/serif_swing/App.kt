@@ -117,7 +117,7 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
             button.add(room_name)
             button.add(last_message)
 
-            button.addActionListener({ transition(m.getRoom(id), true) })
+            button.addActionListener({ transition(m.getRoom(id, 20, null, 0), true) })
             inner_scroll_pane.add(button)
         }
         panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
@@ -224,7 +224,7 @@ class URLMouseListener(var message: JTextPane) : MouseAdapter() {
     }
 }
 
-class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val make: Map<String, (T,()->Unit) -> Triple<List<Component>,()->Unit,(T,()->Unit) -> Unit>>) : JComponent(), Scrollable {
+class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val make: Map<String, (T,()->Unit) -> Triple<List<Component>,()->Unit,(T,()->Unit) -> Unit>>, val render_report: (Int,Int)-> Unit) : JComponent(), Scrollable {
     data class RecyclableItem<T>(var start: Int, var end: Int, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,()->Unit) -> Unit)
     val recycle_map: MutableMap<String, ArrayDeque<RecyclableItem<T>>> = mutableMapOf()
     val subs: MutableList<Pair<String, RecyclableItem<T>>> = mutableListOf()
@@ -274,7 +274,7 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
             var height_delta = 0
             val typ = choose(i)
             val our_height_copy = our_height
-            val repaint_lambda = { println("repaint(0, $our_height_copy, $our_width, $height_delta)"); repaint(0, our_height_copy, our_width, height_delta) }
+            val repaint_lambda = { println("repaint request for (0, $our_height_copy, $our_width, $height_delta)"); repaint(0, our_height_copy, our_width, height_delta) }
             val possible_recycleable = recycle_map[typ]?.removeLastOrNull()
             val recycleable = if (possible_recycleable != null) {
                 println("Recycling a $typ")
@@ -314,15 +314,22 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
     override fun getScrollableTracksViewportHeight() = false
     override fun paintComponent(g: Graphics) {
         val clip_bounds = g.getClipBounds()
+        println("RecycleList paintComponent for $clip_bounds")
         val g = g.create()
         var count = 0
         var total = 0
         var sets = 0
-        for ((_typ, recycleable) in subs) {
-            val (sy, ey, sub_components, _refresh) = recycleable
+        var began: Int? = null
+        var ended: Int? = null
+        for ((i, typ_recycleable) in subs.withIndex()) {
+            val (sy, ey, sub_components, _refresh) = typ_recycleable.second
             if ( (sy <= (clip_bounds.y+clip_bounds.height))
                &&(ey >= clip_bounds.y) ) {
                 println("Drawing component from $sy to $ey")
+                if (began == null) {
+                    began = i
+                }
+                ended = i
                 for (c in sub_components) {
                     c.paint(g)
                     count += 1
@@ -335,6 +342,9 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
             total += sub_components.size
         }
         println("painted $sets / ${subs.size}, $count / $total")
+        if (began != null && ended != null) {
+            render_report(began, ended)
+        }
     }
 }
 
@@ -492,7 +502,20 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
                 Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> set_text(msg); set_sender(msg); set_menu(msg) })
             }
-        )
+        ),
+        { began, ended ->
+            println("Render report $began to $ended")
+            // This is a super basic condition for backfilling
+            // It really needs to track a window around a moving base
+            // and realize both when we hit the room beginning and the latest
+            // message by coordinating with m...
+            if (began < 10 && m.window_back_length <= m.messages.size) {
+                // This is called from the middle of rendering, so let's be careful
+                javax.swing.SwingUtilities.invokeLater({
+                    transition(m.refresh(m.window_back_length + 10, m.message_window_base, m.window_forward_length), true)
+                })
+            }
+        }
     )
     val c_left = GridBagConstraints()
     val c_right = GridBagConstraints()
@@ -501,10 +524,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var edited_event_id = ""
     init {
         panel.layout = BorderLayout()
-
-        val backfill_button = JButton("Backfill")
-        backfill_button.addActionListener({ m.requestBackfill() })
-        panel.add(backfill_button, BorderLayout.PAGE_START)
 
         recycling_message_list.reset(last_window_width, m.messages)
         panel.add(
