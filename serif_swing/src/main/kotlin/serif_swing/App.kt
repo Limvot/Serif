@@ -72,10 +72,7 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         panel.add(JLabel("Login with previous session?"), c_right)
 
         for (session in m.getSessions()) {
-            panel.add( button {
-                withText { session }
-                onClick { transition(m.loginFromSession(session, onSync), true) }
-            }, c_right)
+            panel.add(button(session) { onClick { transition(m.loginFromSession(session, onSync), true) }}, c_right)
         }
 
         username_label.labelFor = username_field
@@ -86,10 +83,7 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         panel.add(password_label, c_left)
         panel.add(password_field, c_right)
 
-        panel.add(button {
-            withText { "Login" }
-            onClick(logIn)
-        }, c_right)
+        panel.add(button("Login") { onClick(logIn) }, c_right)
 
         password_field.addActionListener(logIn)
     }
@@ -106,16 +100,13 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
     init {
         inner_scroll_pane.layout = GridLayout(0, 1)
         for ((id, name, unreadCount, highlightCount, lastMessage) in m.rooms) {
-            var button = JButton()
-            button.layout = BoxLayout(button, BoxLayout.PAGE_AXIS)
-
-            val room_name = JLabel("$name ($unreadCount unread / $highlightCount mentions)")
-            val last_message = JLabel(lastMessage?.message?.take(80) ?: "")
-
-            button.add(room_name)
-            button.add(last_message)
-
-            button.addActionListener({ transition(m.getRoom(id), true) })
+            val button = button { onClick { transition(m.getRoom(id), true) }}
+            boxLayout {
+                with { button }
+                type { BoxLayout.PAGE_AXIS }
+                add { JLabel("$name ($unreadCount unread / $highlightCount mentions)") }
+                add { JLabel(lastMessage?.message?.take(80) ?: "") }
+            }
             inner_scroll_pane.add(button)
         }
         borderLayout {
@@ -123,10 +114,7 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
             north { message_label }
             center { JScrollPane(inner_scroll_pane) }
             south {
-                button {
-                    withText { "(Fake) Logout" }
-                    onClick { transition(m.fake_logout(), true) }
-                }
+                button("(Fake) Logout") { onClick { transition(m.fake_logout(), true) }}
             }
         }
     }
@@ -195,25 +183,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         inner_scroll_pane.layout = group_layout
         redrawMessages(last_window_width)
 
-        val msg_panel_actions = JPanel()
-        msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
-        val attach_button = button {
-            withText { "+" }
-            onClick {
-                val fc = JFileChooser()
-                val iff = ImageFileFilter()
-                fc.addChoosableFileFilter(iff)
-                fc.setFileFilter(iff)
-                val ret = fc.showDialog(panel, "Attach")
-                if(ret == JFileChooser.APPROVE_OPTION) {
-                    val file = fc.getSelectedFile()
-                    message_field.text = ""
-                    transition(m.sendImageMessage(file.toPath().toString()), true)
-                    println("Selected ${file.toPath()}")
-                }
-            }
-        }
-        msg_panel_actions.add(attach_button)
         val onSend: (ActionEvent) -> Unit = {
             val text = message_field.text
             message_field.text = ""
@@ -235,22 +204,34 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             }
             transition(res, true)
         }
-        val send_button = button {
-            withText { "Send" }
-            onClick(onSend)
+
+        val msg_panel_actions = JPanel()
+        boxLayout {
+            with { msg_panel_actions }
+            type { BoxLayout.LINE_AXIS }
+            add { button("+") {
+                onClick {
+                    val fc = JFileChooser()
+                    val iff = ImageFileFilter()
+                    fc.addChoosableFileFilter(iff)
+                    fc.setFileFilter(iff)
+                    val ret = fc.showDialog(panel, "Attach")
+                    if(ret == JFileChooser.APPROVE_OPTION) {
+                        val file = fc.getSelectedFile()
+                        message_field.text = ""
+                        transition(m.sendImageMessage(file.toPath().toString()), true)
+                        println("Selected ${file.toPath()}")
+                    }
+                }
+            }}
+            add { button("Send") { onClick(onSend) } }
         }
-        msg_panel_actions.add(send_button)
 
         // message panel layout
         val message_panel = JPanel()
         borderLayout {
             with { message_panel }
-            west {
-                button {
-                    withText { "Back" }
-                    onClick { transition(m.exitRoom(), true) }
-                }
-            }
+            west { button("Back") { onClick { transition(m.exitRoom(), true) }} }
             center { message_field }
             east { msg_panel_actions }
         }
@@ -258,12 +239,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         // panel layout
         borderLayout {
             with { panel }
-            north {
-                button {
-                    withText { "Backfill" }
-                    onClick { m.requestBackfill() }
-                }
-            }
+            north { button("Backfill") { onClick { m.requestBackfill() }} }
             south { message_panel }
             center {
                 JScrollPane(
@@ -282,9 +258,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         val parallel_group = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
         var seq_vert_groups = layout.createSequentialGroup()
         for (msg in m.messages) {
-            val _sender = msg.sender
-            val sender = JTextArea("$_sender:  ")
-            val show_edit_btn = _sender.contains(m.username)
+            val sender = JTextArea("${msg.sender}:  ")
             sender.setEditable(false)
             sender.lineWrap = true
             sender.wrapStyleWord = true
@@ -306,8 +280,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     }
                 }
                 is SharedUiAudioMessage -> {
-                    button {
-                        withText { "Play/Pause ${msg.url}" }
+                    button("Play/Pause ${msg.url}") {
                         onClick {
                             AudioPlayer.loadAudio(msg.url)
                             AudioPlayer.play()
@@ -394,18 +367,15 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             }
 
             val msg_action_popup = popupMenu {
-                item { menuItem {
-                    withText { "Reply" }
-                    onClick {
-                        println("Now writing a reply")
-                        replied_event_id = msg.id
+                items {
+                    menuItem("Reply") {
+                        onClick {
+                            println("Now writing a reply")
+                            replied_event_id = msg.id
+                        }
                     }
-                }}
-                item {
-                    if(!show_edit_btn) { null }
-                    else {
-                        menuItem {
-                            withText { "Edit" }
+                    if(msg.sender.contains(m.username)) {
+                        menuItem("Edit") {
                             onClick {
                                 println("Now editing a message")
                                 edited_event_id = msg.id
@@ -413,47 +383,12 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                             }
                         }
                     }
+                    menuItem("Show Source") { onClick { showEventSourceDialog(msg.id) } }
                 }
-                item { menuItem {
-                    withText { "Show Source" }
-                    onClick {
-                        val json_str = m.getEventSrc(msg.id)
-
-                        val window = SwingUtilities.getWindowAncestor(panel)
-                        val dim = window.getSize()
-                        val h = dim.height
-                        val w = dim.width
-                        val dialog = JDialog(window, "Event Source")
-
-                        val dpanel = JPanel(BorderLayout())
-                        val src_txt = JTextPane()
-                        src_txt.setContentType("text/plain")
-                        src_txt.setText(json_str)
-                        src_txt.setEditable(false)
-
-                        val close_btn = button {
-                            withText { "Close" }
-                            onClick {
-                                dialog.setVisible(false)
-                                dialog.dispose()
-                            }
-                        }
-                        dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
-                        dpanel.add(close_btn,BorderLayout.PAGE_END)
-                        dialog.add(dpanel)
-
-                        dialog.setSize(w,h/2)
-                        dialog.setVisible(true)
-                        dialog.setResizable(false)
-                        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
-                    }
-                }
-            }}
-
-            val msg_action_button = button {
-                withText { "..." }
-                onClick { e -> msg_action_popup.show(e.getSource() as Component,0,0) }
             }
+
+            val msg_action_button =
+                button("...") { onClick { e -> msg_action_popup.show(e.getSource() as Component,0,0) } }
 
             parallel_group.addComponent(sender)
             parallel_group.addComponent(msg_widget)
@@ -468,6 +403,40 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         }
         layout.setHorizontalGroup(parallel_group)
         layout.setVerticalGroup(seq_vert_groups)
+    }
+    fun showEventSourceDialog(msg_id: String) {
+        val json_str = m.getEventSrc(msg_id)
+
+        val window = SwingUtilities.getWindowAncestor(panel)
+        val dim = window.getSize()
+        val h = dim.height
+        val w = dim.width
+        val dialog = JDialog(window, "Event Source")
+
+        val dpanel = JPanel()
+        borderLayout {
+            with { dpanel }
+            center {
+                val src_txt = JTextPane()
+                src_txt.setContentType("text/plain")
+                src_txt.setText(json_str)
+                src_txt.setEditable(false)
+                JScrollPane(src_txt)
+            }
+            south {
+                button("Close") {
+                    onClick {
+                        dialog.setVisible(false)
+                        dialog.dispose()
+                    }
+                }
+            }
+        }
+        dialog.add(dpanel)
+        dialog.setSize(w,h/2)
+        dialog.setVisible(true)
+        dialog.setResizable(false)
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
     }
     override fun refresh() {
         transition(m.refresh(), true)

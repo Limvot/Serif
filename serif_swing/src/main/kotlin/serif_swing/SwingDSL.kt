@@ -27,6 +27,11 @@ class JButtonBuilder {
 }
 
 fun button(lambda: JButtonBuilder.() -> Unit): JButton = JButtonBuilder().apply(lambda).build()
+fun button(textLabel: String, lambda: JButtonBuilder.() -> Unit): JButton {
+    val builder = JButtonBuilder()
+    builder.text = textLabel
+    return builder.apply(lambda).build()
+}
 
 class BorderLayoutBuilder {
     var container: Container? = null
@@ -100,6 +105,11 @@ class MenuItems: ArrayList<JMenuItem?>() {
     fun menuItem(builder: JMenuItemBuilder.() -> Unit) {
         add(JMenuItemBuilder().apply(builder).build())
     }
+    fun menuItem(text: String, lambda: JMenuItemBuilder.() -> Unit) {
+        val b = JMenuItemBuilder()
+        b.text = text
+        add(b.apply(lambda).build())
+    }
 }
 
 class JPopupMenuBuilder {
@@ -107,6 +117,9 @@ class JPopupMenuBuilder {
 
     fun item(item: () -> JMenuItem?) {
         items.add(item())
+    }
+    fun items(lambda: MenuItems.() -> Unit) {
+        items.addAll(MenuItems().apply(lambda))
     }
 
     fun build(): JPopupMenu {
@@ -116,3 +129,35 @@ class JPopupMenuBuilder {
     }
 }
 fun popupMenu(lambda: JPopupMenuBuilder.() -> Unit): JPopupMenu = JPopupMenuBuilder().apply(lambda).build()
+
+
+class BoxLayoutBuilder {
+    var container: Container? = null
+    var type = BoxLayout.LINE_AXIS
+    val components = mutableListOf<Component>()
+
+    inline fun with(container: () -> Container) {
+        this.container = container()
+    }
+    
+    inline fun type(type: () -> Int) {
+        this.type = type()
+    }
+    
+    inline fun add(lambda: () -> Component) {
+        this.components.add(lambda())
+    }
+    
+    fun build(): BoxLayout {
+        val layout = BoxLayout(this.container!!, this.type)
+        this.container!!.layout = layout
+        this.components.forEach({
+            this.container!!.add(it)
+        })
+        return layout
+    }
+}
+
+fun boxLayout(lambda: BoxLayoutBuilder.() -> Unit): BoxLayout = BoxLayoutBuilder().apply(lambda).build()
+
+
