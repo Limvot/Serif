@@ -58,7 +58,7 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
             room.unread_notifications?.highlight_count ?: 0,
             room.timeline.events.findLast { it as? RoomMessageEvent != null }?.let {
                 val it = it as RoomMessageEvent
-                SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts)
+                SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts)
             }
         )
     }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
@@ -81,27 +81,36 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
         return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
     }
 }
-open class SharedUiMessage(
-    open val sender: String,
-    open val message: String,
-    open val id: String,
-    open val timestamp: Long,
-    open val replied_event: String = ""
-)
+abstract class SharedUiMessage() {
+    abstract val sender: String
+    abstract val message: String
+    abstract val id: String
+    abstract val timestamp: Long
+    abstract val replied_event: String
+}
+data class SharedUiMessagePlain(
+    override val sender: String,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long,
+    override val replied_event: String = ""
+) : SharedUiMessage()
 class SharedUiImgMessage(
     override val sender: String,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
+    override val replied_event: String = "",
     val url: String
-) : SharedUiMessage(sender,message,id,timestamp)
+) : SharedUiMessage()
 class SharedUiAudioMessage(
     override val sender: String,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
+    override val replied_event: String = "",
     val url: String
-) : SharedUiMessage(sender,message,id,timestamp)
+) : SharedUiMessage()
 
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, val window_back_length: Int, val message_window_base: String?, val window_forward_length: Int) : MatrixState() {
     val username = msession.user
@@ -118,7 +127,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                     if(is_edit_content(msg_content)) {
                         //This is an edit
                         val replaced_id = msg_content!!.relates_to!!.event_id!!
-                        val edit_msg = SharedUiMessage(it.sender, msg_content!!.new_content!!.body,
+                        val edit_msg = SharedUiMessagePlain(it.sender, msg_content!!.new_content!!.body,
                             it.event_id, it.origin_server_ts)
 
                         if(edit_maps.contains(replaced_id)) {
@@ -135,18 +144,18 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     val messages: List<SharedUiMessage> = msession.getRoomEvents(room_id).map {
         if (it as? RoomMessageEvent != null) {
             val msg_content = it.content
-            var generate_media_msg = { url: String, func: (String,String,String,Long,String) -> SharedUiMessage ->
+            var generate_media_msg = { url: String, func: (String,String,String,Long,String,String) -> SharedUiMessage ->
                 when (val url_local = msession.getLocalMediaPathFromUrl(url)) {
                     is Success -> {
                         func(
                             it.sender, it.content.body, it.event_id,
-                            it.origin_server_ts, url_local.value
+                            it.origin_server_ts, "", url_local.value
                         )
                     }
                     is Error -> {
-                        SharedUiMessage(
+                        SharedUiMessagePlain(
                             it.sender, "Failed to load media ${url}",
-                            it.event_id, it.origin_server_ts
+                            it.event_id, it.origin_server_ts, ""
                         )
                     }
                 }
@@ -154,12 +163,12 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             when (msg_content) {
                 is TextRMEC -> {
                     val normal_msg_builder = {
-                        SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                        SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
                     }
                     if((msg_content.new_content != null) && (msg_content.relates_to?.event_id == null)) {
                         //This is a poorly formed edit
                         //No idea which event this edit is editing, just display fallback msg
-                        SharedUiMessage(it.sender, it.content.body, it.event_id, it.origin_server_ts)
+                        SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts)
                     } else {
                         if(is_edit_content(msg_content)) {
                             //Don't display edits
@@ -170,7 +179,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                                 val possible_edits = edits.get(it.event_id)!!
                                 val edited = possible_edits.lastOrNull { it.sender.contains(username) }
                                 if(edited != null) {
-                                    SharedUiMessage(
+                                    SharedUiMessagePlain(
                                         it.sender,
                                         "${edited.message} (edited)",
                                         edited.id,
@@ -188,7 +197,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                 }
                 is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
                 is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
-                else -> SharedUiMessage(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)
+                else -> SharedUiMessagePlain(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)
             }
         } else { null }
     }.filterNotNull().let { all_messages ->
@@ -199,6 +208,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         }
         val desired_first_index = base_idx - window_back_length
         val first_index = if (desired_first_index < 0) {
+            println("Backfilling from States becuase $desired_first_index is < 0")
             msession.requestBackfill(room_id)
             0
         } else {

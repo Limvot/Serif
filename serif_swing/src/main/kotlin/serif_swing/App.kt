@@ -228,7 +228,10 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
     data class RecyclableItem<T>(var start: Int, var end: Int, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,()->Unit) -> Unit)
     val recycle_map: MutableMap<String, ArrayDeque<RecyclableItem<T>>> = mutableMapOf()
     val subs: MutableList<Pair<String, RecyclableItem<T>>> = mutableListOf()
+    var current_items: List<T> = listOf()
     var our_height = 0
+    var began: Int? = null
+    var ended: Int? = null
     init {
         addMouseListener(object : MouseListener, MouseMotionListener {
             fun dispatchEvent(e: MouseEvent) {
@@ -274,10 +277,10 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
             var height_delta = 0
             val typ = choose(i)
             val our_height_copy = our_height
-            val repaint_lambda = { println("repaint request for (0, $our_height_copy, $our_width, $height_delta)"); repaint(0, our_height_copy, our_width, height_delta) }
+            val repaint_lambda = { /*println("repaint request for (0, $our_height_copy, $our_width, $height_delta)");*/ repaint(0, our_height_copy, our_width, height_delta) }
             val possible_recycleable = recycle_map[typ]?.removeLastOrNull()
             val recycleable = if (possible_recycleable != null) {
-                println("Recycling a $typ")
+                //println("Recycling a $typ")
                 possible_recycleable.recycle(i, repaint_lambda)
                 possible_recycleable.start = our_height
                 possible_recycleable
@@ -304,6 +307,21 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
             subs.add(Pair(typ, recycleable))
             our_height += height_delta
         }
+        if (ended != null && began != null) {
+            println("ended and began not null on reset!")
+            for (targetIdx in ended!! downTo began!!) {
+                if (targetIdx >= current_items.size)
+                    continue
+                val new_idx = items.indexOf(current_items[targetIdx])
+                if (new_idx != -1) {
+                    println("Found matching idx $targetIdx and $new_idx")
+                    scrollRectToVisible(Rectangle(0, subs[new_idx].second.start, our_width, subs[new_idx].second.end))
+                    break;
+                }
+            }
+            println("Was anything found?")
+        }
+        current_items = items
         invalidate()
     }
     override fun getPreferredSize() = Dimension(our_width,our_height)
@@ -314,18 +332,18 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
     override fun getScrollableTracksViewportHeight() = false
     override fun paintComponent(g: Graphics) {
         val clip_bounds = g.getClipBounds()
-        println("RecycleList paintComponent for $clip_bounds")
+        //println("RecycleList paintComponent for $clip_bounds")
         val g = g.create()
         var count = 0
         var total = 0
         var sets = 0
-        var began: Int? = null
-        var ended: Int? = null
+        began = null
+        ended = null
         for ((i, typ_recycleable) in subs.withIndex()) {
             val (sy, ey, sub_components, _refresh) = typ_recycleable.second
             if ( (sy <= (clip_bounds.y+clip_bounds.height))
                &&(ey >= clip_bounds.y) ) {
-                println("Drawing component from $sy to $ey")
+                //println("Drawing component from $sy to $ey")
                 if (began == null) {
                     began = i
                 }
@@ -341,9 +359,9 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
             }
             total += sub_components.size
         }
-        println("painted $sets / ${subs.size}, $count / $total")
+        //println("painted $sets / ${subs.size}, $count / $total")
         if (began != null && ended != null) {
-            render_report(began, ended)
+            render_report(began!!, ended!!)
         }
     }
 }
@@ -503,17 +521,41 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> set_text(msg); set_sender(msg); set_menu(msg) })
             }
         ),
-        { began, ended ->
+       { began, ended ->
             println("Render report $began to $ended")
-            // This is a super basic condition for backfilling
-            // It really needs to track a window around a moving base
-            // and realize both when we hit the room beginning and the latest
-            // message by coordinating with m...
-            if (began < 10 && m.window_back_length <= m.messages.size) {
-                // This is called from the middle of rendering, so let's be careful
-                javax.swing.SwingUtilities.invokeLater({
-                    transition(m.refresh(m.window_back_length + 10, m.message_window_base, m.window_forward_length), true)
-                })
+            if (began < 10 && (m.window_back_length + m.window_forward_length) <= m.messages.size) {
+                val old_base = m.message_window_base ?: m.messages.last()?.id
+                val old_idx = m.messages.indexOfFirst({ it.id == old_base })
+                println("need to backfill, old_idx was $old_idx, looking for ${m.message_window_base}, total window size is currently ${m.window_back_length + m.window_forward_length}")
+                if (old_idx != -1 && old_idx >= 10 && m.window_back_length + m.window_forward_length > 40) {
+                    println("Trying to move window up")
+                    //move, don't expand window
+                    val new_base = m.messages[old_idx - 10].id
+                    javax.swing.SwingUtilities.invokeLater({
+                        transition(m.refresh(m.window_back_length, new_base, m.window_forward_length), true)
+                    })
+                } else {
+                    // If window small (< 100 messages) or the other failed for some reason, expand it without changing the reference point
+                    // This is called from the middle of rendering, so let's be careful
+                    println("Trying to expand window")
+                    javax.swing.SwingUtilities.invokeLater({
+                        transition(m.refresh(m.window_back_length + 10, m.message_window_base, m.window_forward_length), true)
+                    })
+                }
+            } else if (m.messages.size - ended < 10 && m.message_window_base != null) {
+                val old_base = m.message_window_base ?: m.messages.last()?.id
+                val old_idx = m.messages.indexOfFirst({ it.id == old_base })
+                println("Trying to move window down")
+                if (old_idx + 10 < m.messages.size) {
+                    val new_base = m.messages[old_idx + 10].id
+                    javax.swing.SwingUtilities.invokeLater({
+                        transition(m.refresh(m.window_back_length, new_base, m.window_forward_length), true)
+                    })
+                } else {
+                    javax.swing.SwingUtilities.invokeLater({
+                        transition(m.refresh(m.window_back_length, m.message_window_base, m.window_forward_length + 10), true)
+                    })
+                }
             }
         }
     )
