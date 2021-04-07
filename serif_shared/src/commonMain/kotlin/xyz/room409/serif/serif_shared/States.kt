@@ -112,13 +112,15 @@ class SharedUiAudioMessage(
     val url: String
 ) : SharedUiMessage()
 
-class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, val window_back_length: Int, val message_window_base: String?, val window_forward_length: Int) : MatrixState() {
+class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, window_back_length_in: Int, message_window_base_in: String?, window_forward_length_in: Int) : MatrixState() {
     val username = msession.user
 
     private val is_edit_content = { msg_content: TextRMEC ->
         ((msg_content.new_content != null) && (msg_content.relates_to?.event_id != null))
     }
-    private val edits: Map<String,ArrayList<SharedUiMessage>> = {
+    val messages: List<SharedUiMessage>
+    val message_window_base: String?
+    init {
         val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
         msession.getRoomEvents(room_id).forEach {
             if (it as? RoomMessageEvent != null) {
@@ -139,85 +141,92 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                 }
             }
         }
-        edit_maps.toMap()
-    }()
-    val messages: List<SharedUiMessage> = msession.getRoomEvents(room_id).map {
-        if (it as? RoomMessageEvent != null) {
-            val msg_content = it.content
-            var generate_media_msg = { url: String, func: (String,String,String,Long,String,String) -> SharedUiMessage ->
-                when (val url_local = msession.getLocalMediaPathFromUrl(url)) {
-                    is Success -> {
-                        func(
-                            it.sender, it.content.body, it.event_id,
-                            it.origin_server_ts, "", url_local.value
-                        )
-                    }
-                    is Error -> {
-                        SharedUiMessagePlain(
-                            it.sender, "Failed to load media ${url}",
-                            it.event_id, it.origin_server_ts, ""
-                        )
-                    }
-                }
-            }
-            when (msg_content) {
-                is TextRMEC -> {
-                    val normal_msg_builder = {
-                        SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
-                    }
-                    if((msg_content.new_content != null) && (msg_content.relates_to?.event_id == null)) {
-                        //This is a poorly formed edit
-                        //No idea which event this edit is editing, just display fallback msg
-                        SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts)
-                    } else {
-                        if(is_edit_content(msg_content)) {
-                            //Don't display edits
-                            null
-                        } else {
-                            //This is a text message, check for any edits of this message
-                            if(edits.contains(it.event_id)) {
-                                val possible_edits = edits.get(it.event_id)!!
-                                val edited = possible_edits.lastOrNull { it.sender.contains(username) }
-                                if(edited != null) {
-                                    SharedUiMessagePlain(
-                                        it.sender,
-                                        "${edited.message} (edited)",
-                                        edited.id,
-                                        it.origin_server_ts,
-                                        msg_content.relates_to?.in_reply_to?.event_id ?: "")
-                                } else {
-                                    normal_msg_builder()
-                                }
-                            } else {
-                                //No edits for this event
-                                normal_msg_builder()
-                            }
+        val edits: Map<String,ArrayList<SharedUiMessage>> = edit_maps.toMap()
+        messages = msession.getRoomEvents(room_id).map {
+            if (it as? RoomMessageEvent != null) {
+                val msg_content = it.content
+                var generate_media_msg = { url: String, func: (String,String,String,Long,String,String) -> SharedUiMessage ->
+                    when (val url_local = msession.getLocalMediaPathFromUrl(url)) {
+                        is Success -> {
+                            func(
+                                it.sender, it.content.body, it.event_id,
+                                it.origin_server_ts, "", url_local.value
+                            )
+                        }
+                        is Error -> {
+                            SharedUiMessagePlain(
+                                it.sender, "Failed to load media ${url}",
+                                it.event_id, it.origin_server_ts, ""
+                            )
                         }
                     }
                 }
-                is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
-                is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
-                else -> SharedUiMessagePlain(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)
+                when (msg_content) {
+                    is TextRMEC -> {
+                        val normal_msg_builder = {
+                            SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                        }
+                        if((msg_content.new_content != null) && (msg_content.relates_to?.event_id == null)) {
+                            //This is a poorly formed edit
+                            //No idea which event this edit is editing, just display fallback msg
+                            SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts)
+                        } else {
+                            if(is_edit_content(msg_content)) {
+                                //Don't display edits
+                                null
+                            } else {
+                                //This is a text message, check for any edits of this message
+                                if(edits.contains(it.event_id)) {
+                                    val possible_edits = edits.get(it.event_id)!!
+                                    val edited = possible_edits.lastOrNull { it.sender.contains(username) }
+                                    if(edited != null) {
+                                        SharedUiMessagePlain(
+                                            it.sender,
+                                            "${edited.message} (edited)",
+                                            edited.id,
+                                            it.origin_server_ts,
+                                            msg_content.relates_to?.in_reply_to?.event_id ?: "")
+                                    } else {
+                                        normal_msg_builder()
+                                    }
+                                } else {
+                                    //No edits for this event
+                                    normal_msg_builder()
+                                }
+                            }
+                        }
+                    }
+                    is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
+                    is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
+                    else -> SharedUiMessagePlain(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)
+                }
+            } else { null }
+        }.filterNotNull().let { all_messages ->
+            val base_idx = if (message_window_base_in == null) {
+                all_messages.size - 1
+            } else {
+                all_messages.indexOfFirst({ it.id == message_window_base_in })
             }
-        } else { null }
-    }.filterNotNull().let { all_messages ->
-        val base_idx = if (message_window_base == null) {
-            all_messages.size - 1
-        } else {
-            all_messages.indexOfFirst({ it.id == message_window_base })
+            val desired_first_index = base_idx - window_back_length_in
+            val first_index = if (desired_first_index < 0) {
+                println("Backfilling from States becuase $desired_first_index is < 0")
+                msession.requestBackfill(room_id)
+                0
+            } else {
+                desired_first_index
+            }
+            // we don't have a forward-fill yet, and indeed can't get ourselves into that position (yet)
+            val last_index = kotlin.math.min(all_messages.size - 1, base_idx + window_forward_length_in)
+            if (last_index == all_messages.size - 1) {
+                message_window_base = null
+            } else {
+                message_window_base = message_window_base_in
+            }
+            all_messages.slice(first_index .. last_index)
         }
-        val desired_first_index = base_idx - window_back_length
-        val first_index = if (desired_first_index < 0) {
-            println("Backfilling from States becuase $desired_first_index is < 0")
-            msession.requestBackfill(room_id)
-            0
-        } else {
-            desired_first_index
-        }
-        // we don't have a forward-fill yet, and indeed can't get ourselves into that position (yet)
-        val last_index = kotlin.math.min(all_messages.size - 1, base_idx + window_forward_length)
-        all_messages.slice(first_index .. last_index)
     }
+    val window_back_length: Int = window_back_length_in
+    val window_forward_length: Int = if (message_window_base != null) { window_forward_length_in } else { 0 }
     fun sendMessage(msg: String): MatrixState {
         when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
             is Success -> { println("${sendMessageResult.value}") }

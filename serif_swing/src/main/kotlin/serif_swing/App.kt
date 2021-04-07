@@ -266,6 +266,30 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
     }
     fun cleanup() = reset(1000, listOf())
     fun reset(new_width: Int, items: List<T>) {
+
+        // First, find where the first item in our last drawn range
+        // that matches with an item in our new list falls on screen,
+        // so that we can scroll the new item to that location.
+        var new_idx = -1
+        var before_new = 0
+        var after_new = 0
+        if (ended != null && began != null) {
+            println("ended and began not null on reset!")
+            for (targetIdx in began!!..ended!!) {
+                if (targetIdx >= current_items.size)
+                    continue
+                if (new_idx == -1) {
+                    new_idx = items.indexOf(current_items[targetIdx])
+                    if (new_idx == -1) {
+                        before_new += subs[targetIdx].second.end - subs[targetIdx].second.start
+                    }
+                } else {
+                    after_new += subs[targetIdx].second.end - subs[targetIdx].second.start
+                }
+            }
+            println("Was anything found? $new_idx $before_new $after_new")
+        }
+
         our_height = 0
         our_width = new_width
         for ((typ, recycleable) in subs) {
@@ -307,21 +331,12 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
             subs.add(Pair(typ, recycleable))
             our_height += height_delta
         }
-        if (ended != null && began != null) {
-            println("ended and began not null on reset!")
-            for (targetIdx in ended!! downTo began!!) {
-                if (targetIdx >= current_items.size)
-                    continue
-                val new_idx = items.indexOf(current_items[targetIdx])
-                if (new_idx != -1) {
-                    println("Found matching idx $targetIdx and $new_idx")
-                    scrollRectToVisible(Rectangle(0, subs[new_idx].second.start, our_width, subs[new_idx].second.end))
-                    break;
-                }
-            }
-            println("Was anything found?")
-        }
         current_items = items
+
+        if (new_idx != -1) {
+            scrollRectToVisible(Rectangle(0, subs[new_idx].second.start-before_new, our_width, subs[new_idx].second.end+after_new))
+        }
+
         invalidate()
     }
     override fun getPreferredSize() = Dimension(our_width,our_height)
@@ -522,40 +537,23 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             }
         ),
        { began, ended ->
-            println("Render report $began to $ended")
-            if (began < 10 && (m.window_back_length + m.window_forward_length) <= m.messages.size) {
-                val old_base = m.message_window_base ?: m.messages.last()?.id
-                val old_idx = m.messages.indexOfFirst({ it.id == old_base })
-                println("need to backfill, old_idx was $old_idx, looking for ${m.message_window_base}, total window size is currently ${m.window_back_length + m.window_forward_length}")
-                if (old_idx != -1 && old_idx >= 10 && m.window_back_length + m.window_forward_length > 40) {
-                    println("Trying to move window up")
-                    //move, don't expand window
-                    val new_base = m.messages[old_idx - 10].id
-                    javax.swing.SwingUtilities.invokeLater({
-                        transition(m.refresh(m.window_back_length, new_base, m.window_forward_length), true)
-                    })
-                } else {
-                    // If window small (< 100 messages) or the other failed for some reason, expand it without changing the reference point
-                    // This is called from the middle of rendering, so let's be careful
-                    println("Trying to expand window")
-                    javax.swing.SwingUtilities.invokeLater({
-                        transition(m.refresh(m.window_back_length + 10, m.message_window_base, m.window_forward_length), true)
-                    })
-                }
-            } else if (m.messages.size - ended < 10 && m.message_window_base != null) {
-                val old_base = m.message_window_base ?: m.messages.last()?.id
-                val old_idx = m.messages.indexOfFirst({ it.id == old_base })
-                println("Trying to move window down")
-                if (old_idx + 10 < m.messages.size) {
-                    val new_base = m.messages[old_idx + 10].id
-                    javax.swing.SwingUtilities.invokeLater({
-                        transition(m.refresh(m.window_back_length, new_base, m.window_forward_length), true)
-                    })
-                } else {
-                    javax.swing.SwingUtilities.invokeLater({
-                        transition(m.refresh(m.window_back_length, m.message_window_base, m.window_forward_length + 10), true)
-                    })
-                }
+            val drawn_length = ended - began
+            val desired_window_half = drawn_length * 3
+            val buffer_space = drawn_length
+            val in_upper_buffer = began < buffer_space
+            val in_lower_buffer = m.messages.size - ended < buffer_space
+            val tracking_current = m.message_window_base == null
+            val no_request_out = (m.window_back_length + m.window_forward_length + 1) <= m.messages.size
+            if (in_upper_buffer && no_request_out) {
+                javax.swing.SwingUtilities.invokeLater({
+                    transition(m.refresh(desired_window_half, m.messages[began].id, desired_window_half), true)
+                })
+            } else if (in_lower_buffer && !tracking_current) {
+                javax.swing.SwingUtilities.invokeLater({
+                    transition(m.refresh(desired_window_half, m.messages[ended].id, desired_window_half), true)
+                })
+            } else {
+                println("Render report $began to $ended - top(in_upper_buffer=$in_upper_buffer && no_request_out=$no_request_out), bottom(in_lower_buffer=$in_lower_buffer && no_request_out=$no_request_out && !tracking_current=!$tracking_current) - no_request_out=(m.window_back_length=${m.window_back_length} + m.window_forward_length=${m.window_forward_length} + 1) <= m.messages.size=${m.messages.size}")
             }
         }
     )
