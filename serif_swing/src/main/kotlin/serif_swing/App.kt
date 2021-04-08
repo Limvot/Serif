@@ -157,8 +157,10 @@ object WrapEditorKit : StyledEditorKit() {
     val defaultFactory = object : ViewFactory {
         override public fun create(element: Element): View = when (val kind = element.name) {
             AbstractDocument.ContentElementName -> WrapLabelView(element)
-            AbstractDocument.ParagraphElementName -> ParagraphView(element)
-            AbstractDocument.SectionElementName -> BoxView(element, View.Y_AXIS)
+            AbstractDocument.ParagraphElementName -> WrapLabelView(element)
+            //AbstractDocument.ParagraphElementName -> ParagraphView(element)
+            AbstractDocument.SectionElementName -> WrapLabelView(element)
+            //AbstractDocument.SectionElementName -> BoxView(element, View.Y_AXIS)
             StyleConstants.ComponentElementName -> ComponentView(element)
             StyleConstants.IconElementName -> IconView(element)
             else -> LabelView(element)
@@ -220,6 +222,38 @@ class URLMouseListener(var message: JTextPane) : MouseAdapter() {
                     }
                 }
             }
+        }
+    }
+}
+
+class SerifText(private var text: String) : JComponent() {
+    private val line_height: Int
+    private val max_char_width: Int
+    private var size: Dimension
+    private var lines: List<String>
+    private var max_line_length: Int
+    init {
+        val metrics = getFontMetrics(javax.swing.UIManager.getDefaults().getFont("Label.font"))
+        line_height = metrics.height
+        max_char_width = metrics.charWidth('W')
+        lines = text.lines()
+        max_line_length = lines.map { it.length }.max() ?: 1
+        size = Dimension(max_char_width * max_line_length, line_height * (lines.size + 1))
+    }
+    fun setText(new_text: String) {
+        text = new_text
+        lines = text.lines().flatMap { it.chunked(size.width / max_char_width) }
+        max_line_length = lines.map { it.length }.max() ?: 1
+    }
+    override fun setSize(d: Dimension) {
+        size = d
+    }
+    override fun setSize(width: Int, height: Int) = setSize(Dimension(width, height))
+    override fun getSize() = size
+    override fun getPreferredSize() = Dimension(max_char_width * max_line_length,line_height * (lines.size + 1))
+    override fun paintComponent(g: Graphics) {
+        lines.forEachIndexed { i, line ->
+            g.drawString(line, 0, (i+1) * line_height)
         }
     }
 }
@@ -504,37 +538,43 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 Triple(listOf(sender, play_btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); audio_url = (msg as SharedUiAudioMessage).url; })
             },
             "text" to { msg, repaint_cell ->
-                val message = JTextPane()
-                message.setEditorKit(WrapEditorKit);
-                message.setEditable(false)
-                message.addMouseListener(URLMouseListener(message))
-
-                val simpleAttrs = SimpleAttributeSet()
-                val set_text = { msg: SharedUiMessage ->
-                    message.document.remove(0, message.document.length)
-                    var current_idx = 0
-                    for (url_match in URL_REGEX.findAll(msg.message)) {
-                        if (url_match.range.start > current_idx) {
-                            message.document.insertString(current_idx, msg.message.slice(current_idx .. url_match.range.start-1), simpleAttrs)
-                            current_idx = url_match.range.start
-                        }
-                        val urlAttrs = SimpleAttributeSet()
-                        StyleConstants.setUnderline(urlAttrs, true)
-                        urlAttrs.addAttribute(HTML.Attribute.HREF, url_match.value)
-                        message.document.insertString(current_idx, url_match.value, urlAttrs)
-                        current_idx = url_match.range.endInclusive + 1
-                    }
-                    if (current_idx < msg.message.length) {
-                        message.document.insertString(current_idx, msg.message.slice(current_idx .. msg.message.length-1), simpleAttrs)
-                    }
-                }
-
-                set_text(msg)
+                val message = SerifText(msg.message)
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-
-                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> set_text(msg); set_sender(msg); set_menu(msg) })
+                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> message.setText(msg.message); set_sender(msg); set_menu(msg) })
             }
+            //"text" to { msg, repaint_cell ->
+            //    val message = JTextPane()
+            //    message.setEditorKit(WrapEditorKit);
+            //    message.setEditable(false)
+            //    message.addMouseListener(URLMouseListener(message))
+
+            //    val simpleAttrs = SimpleAttributeSet()
+            //    val set_text = { msg: SharedUiMessage ->
+            //        message.document.remove(0, message.document.length)
+            //        var current_idx = 0
+            //        for (url_match in URL_REGEX.findAll(msg.message)) {
+            //            if (url_match.range.start > current_idx) {
+            //                message.document.insertString(current_idx, msg.message.slice(current_idx .. url_match.range.start-1), simpleAttrs)
+            //                current_idx = url_match.range.start
+            //            }
+            //            val urlAttrs = SimpleAttributeSet()
+            //            StyleConstants.setUnderline(urlAttrs, true)
+            //            urlAttrs.addAttribute(HTML.Attribute.HREF, url_match.value)
+            //            message.document.insertString(current_idx, url_match.value, urlAttrs)
+            //            current_idx = url_match.range.endInclusive + 1
+            //        }
+            //        if (current_idx < msg.message.length) {
+            //            message.document.insertString(current_idx, msg.message.slice(current_idx .. msg.message.length-1), simpleAttrs)
+            //        }
+            //    }
+
+            //    set_text(msg)
+            //    val (sender, set_sender) = mk_sender(msg)
+            //    val (menu, set_menu) = mk_menu(msg)
+
+            //    Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> set_text(msg); set_sender(msg); set_menu(msg) })
+            //}
         ),
        { began, ended ->
             val drawn_length = ended - began
@@ -553,7 +593,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     transition(m.refresh(desired_window_half, m.messages[ended].id, desired_window_half), true)
                 })
             } else {
-                println("Render report $began to $ended - top(in_upper_buffer=$in_upper_buffer && no_request_out=$no_request_out), bottom(in_lower_buffer=$in_lower_buffer && no_request_out=$no_request_out && !tracking_current=!$tracking_current) - no_request_out=(m.window_back_length=${m.window_back_length} + m.window_forward_length=${m.window_forward_length} + 1) <= m.messages.size=${m.messages.size}")
+                //println("Render report $began to $ended - top(in_upper_buffer=$in_upper_buffer && no_request_out=$no_request_out), bottom(in_lower_buffer=$in_lower_buffer && no_request_out=$no_request_out && !tracking_current=!$tracking_current) - no_request_out=(m.window_back_length=${m.window_back_length} + m.window_forward_length=${m.window_forward_length} + 1) <= m.messages.size=${m.messages.size}")
             }
         }
     )

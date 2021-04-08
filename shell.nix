@@ -6,6 +6,7 @@ pkgs.mkShell {
     buildInputs = with pkgs; [
         android-studio
         jdk
+        steam-run-native
     ];
     _JAVA_AWT_WM_NONREPARENTING=1;
 }
