@@ -788,9 +788,9 @@ class App {
 
 fun main(args: Array<String>) {
     FlatDarkLaf.install()
-    //val font = Font.createFont(Font.TRUETYPE_FONT, File("/home/nathan/SerifTogether/iosevka/iosevka-fixed-slab-extended.ttf")).deriveFont(16f)
-    val font = Font.createFont(Font.TRUETYPE_FONT, File("/home/nathan/SerifTogether/iosevka_sans/iosevka-fixed-extended.ttf")).deriveFont(16f)
+
+    val fontStream = object {}.javaClass.getResourceAsStream("iosevka-fixed-extended.ttf")
+    val font = Font.createFont(Font.TRUETYPE_FONT, fontStream).deriveFont(16f)
     UIManager.getLookAndFeelDefaults().put("defaultFont", font)
-    //UIManager.getLookAndFeelDefaults().put("defaultFont", Font("Iosevka", Font.PLAIN, 16))
     javax.swing.SwingUtilities.invokeLater({ App() })
 }
