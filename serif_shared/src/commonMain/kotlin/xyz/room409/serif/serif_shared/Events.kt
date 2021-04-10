@@ -42,7 +42,8 @@ data class LoginRequest(
     )
 }
 
-data class LoginResponse(val access_token: String, val identifier: LoginIdentifier)
+@Serializable
+data class LoginResponse(val access_token: String, val user_id: String, val device_id: String)
 
 @Serializable
 data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: String)
