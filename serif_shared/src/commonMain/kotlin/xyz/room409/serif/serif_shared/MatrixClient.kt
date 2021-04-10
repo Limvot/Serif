@@ -274,9 +274,9 @@ class MatrixClient {
             // Save to DB
             println("Saving session to db")
             val new_transactionId: Long = 0
-            Database.saveSession(loginResponse.identifier.user, loginResponse.access_token, new_transactionId)
+            Database.saveSession(loginResponse.user_id, loginResponse.access_token, new_transactionId)
 
-            return Success(MatrixSession(client, server, loginResponse.identifier.user, loginResponse.access_token, new_transactionId, onUpdate))
+            return Success(MatrixSession(client, server, loginResponse.user_id, loginResponse.access_token, new_transactionId, onUpdate))
         } catch (e: Exception) {
             return Error("Login failed", e)
         }
