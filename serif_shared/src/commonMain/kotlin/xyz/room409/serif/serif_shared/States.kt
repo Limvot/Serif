@@ -101,6 +101,31 @@ class SharedUiAudioMessage(
     override val timestamp: Long,
     val url: String
 ) : SharedUiMessage(sender, message, id, timestamp)
+class SharedUiVideoMessage(
+    override val sender: String,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long,
+    val url: String
+) : SharedUiMessage(sender, message, id, timestamp)
+class SharedUiFileMessage(
+    override val sender: String,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long,
+    val filename: String,
+    val mimetype: String,
+    val url: String
+) : SharedUiMessage(sender, message, id, timestamp)
+class SharedUiLocationMessage(
+    override val sender: String,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long,
+    val location: String
+) : SharedUiMessage(sender, message, id, timestamp)
+
+
 
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String) : MatrixState() {
     val username = msession.user
@@ -190,6 +215,20 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                 }
                 is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
                 is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
+                is VideoRMEC -> generate_media_msg(msg_content.url, ::SharedUiVideoMessage)
+                is FileRMEC -> {
+                    SharedUiFileMessage(
+                        it.sender, it.content.body, it.event_id,
+                        it.origin_server_ts, msg_content.filename,
+                        msg_content.info.mimetype, msg_content.url
+                    )
+                }
+                is LocationRMEC -> {
+                    SharedUiLocationMessage(
+                        it.sender, it.content.body, it.event_id,
+                        it.origin_server_ts, msg_content.geo_uri
+                    )
+                }
                 else -> SharedUiMessage(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)
             }
         } else { null }
