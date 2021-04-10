@@ -82,6 +82,7 @@ class VideoPlayer {
             pic_out.setIcon(ImageIcon(image_array[idx]))
         }
     }
+    //Adapted from Jcodec https://github.com/jcodec/jcodec/blob/6e1ec651eca92d21b41f9790143a0e6e4d26811e/javase/src/main/java/org/jcodec/javase/scale/AWTUtil.java
     private fun toBufferedImage(_src: Picture): BufferedImage {
         var src = _src
 		if (src.getColor() != ColorSpace.BGR) {
@@ -106,6 +107,7 @@ class VideoPlayer {
 
         return dst
     }
+    //Adapted from Jcodec https://github.com/jcodec/jcodec/blob/6e1ec651eca92d21b41f9790143a0e6e4d26811e/javase/src/main/java/org/jcodec/javase/scale/AWTUtil.java
     private fun toBufferedImageCropped(src: Picture, dst: BufferedImage) {
         val data = (dst.getRaster().getDataBuffer() as DataBufferByte).getData();
         val srcData = src.getPlaneData(0);
@@ -128,6 +130,7 @@ class VideoPlayer {
             dstOff += dstStride;
         }
     }
+    //Adapted from Jcodec https://github.com/jcodec/jcodec/blob/6e1ec651eca92d21b41f9790143a0e6e4d26811e/javase/src/main/java/org/jcodec/javase/scale/AWTUtil.java
     private fun toBufferedImage(src: Picture, dst: BufferedImage) {
         val _data = (dst.getRaster().getDataBuffer() as DataBufferByte).getData();
         val srcData = src.getPlaneData(0);
@@ -465,7 +468,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                         val message_panel = JPanel()
                         message_panel.layout = BoxLayout(message_panel, BoxLayout.PAGE_AXIS)
                         val video_url = msg.url
-                        val video_btn = JButton("Video $video_url")
+                        val video_btn = JButton()
                         val pic_chan = ImageIcon()
 
                         val vp = VideoPlayer()
