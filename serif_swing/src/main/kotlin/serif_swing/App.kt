@@ -482,17 +482,31 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     }
                     is SharedUiFileMessage -> {
                         val file_url = msg.url
-                        val filename = msg.filename
+                        val filename = if(msg.filename != "") {
+                            msg.filename
+                        } else {
+                            msg.message
+                        }
                         val mimetype = msg.mimetype
                         val btn = JButton()
                         val message_panel = JPanel()
                         message_panel.layout = BoxLayout(message_panel, BoxLayout.PAGE_AXIS)
-                        val l = JLabel("Download $filename")
-                        message_panel.add(l)
-                        arrayOf(mimetype, file_url).forEach {
-                            message_panel.add(JLabel(it))
-                        }
+                        message_panel.add(JLabel("Download $filename"))
+                        message_panel.add(JLabel(mimetype))
                         btn.add(message_panel)
+                        btn.addActionListener({
+                            val chooser = JFileChooser()
+                            chooser.setSelectedFile(File(filename))
+                            val ret = chooser.showSaveDialog(btn)
+                            if(ret == JFileChooser.APPROVE_OPTION) {
+                                val user_file_path = chooser.getSelectedFile().getAbsolutePath()
+                                try {
+                                    m.saveMediaToPath(user_file_path, file_url)
+                                } catch (e: Exception) {
+                                    println("Couldn't save media, $e")
+                                }
+                            }
+                        })
                         btn
                     }
                     is SharedUiLocationMessage -> {

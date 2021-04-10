@@ -191,7 +191,7 @@ class FileRMEC(
     override val body: String = "<missing message body, likely redacted>",
     override val msgtype: String = "<missing type, likely redacted>",
     val info: FileInfo,
-    val filename: String,
+    val filename: String = "",
     val url: String
 ) : RoomMessageEventContent()
 @Serializable

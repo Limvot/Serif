@@ -276,6 +276,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         }
         return "No Source for $msg_id"
     }
+    fun saveMediaToPath(path: String, url: String) = msession.saveMediaAtPathFromUrl(path,url)
     fun requestBackfill() {
         msession.requestBackfill(room_id)
     }

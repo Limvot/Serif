@@ -165,6 +165,11 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
+    fun mediaQuery(media_url: String): ByteArray {
+        val url = "$server/_matrix/media/r0/download/${media_url.replace("mxc://","")}"
+        println("Retrieving media from $url")
+        return runBlocking { client.get<ByteArray>(url) }
+    }
     fun getLocalMediaPathFromUrl(media_url: String): Outcome<String> {
         try {
             val cached_media = Database.getMediaInCache(media_url)
@@ -179,18 +184,28 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             }
 
             //No valid cache hit
-            val result = runBlocking {
-                val url = "$server/_matrix/media/r0/download/${media_url.replace("mxc://","")}"
-                println("Retrieving image from $url")
-                val media = client.get<ByteArray>(url)
-                Database.addMediaToCache(media_url, media, existing_entry)
-            }
+            val media = mediaQuery(media_url)
+            val result = Database.addMediaToCache(media_url, media, existing_entry)
 
             println("Media file at $result")
             return Success(result)
         } catch (e: Exception) {
-            println("Error with image retrieval $e")
-            return Error("Image Retrieval Failed", e)
+            println("Error with media retrieval $e")
+            return Error("Media Retrieval Failed", e)
+        }
+    }
+    fun saveMediaAtPathFromUrl(path: String, media_url: String): Outcome<String> {
+        try {
+            val media = mediaQuery(media_url)
+            val file = File(path)
+            file.outputStream().write(media)
+            val result = file.toPath().toString()
+
+            println("Media file at $result")
+            return Success(result)
+        } catch (e: Exception) {
+            println("Error with file retrieval $e")
+            return Error("File Retrieval Failed", e)
         }
     }
 
