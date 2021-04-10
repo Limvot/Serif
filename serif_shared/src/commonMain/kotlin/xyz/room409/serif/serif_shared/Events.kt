@@ -4,18 +4,44 @@ import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 
 @Serializable
-data class LoginRequest(val type: String, val identifier: LoginIdentifier, val password: String, val initial_device_display_name: String) {
-    constructor(username: String, password: String) : this(
+data class LoginRequest(
+    val type: String,
+    val identifier: LoginIdentifier,
+    val password: String,
+    val initial_device_display_name: String
+) {
+    constructor(
+        username: String,
+        password: String
+    ) : this(
         type = "m.login.password",
         identifier = LoginIdentifier(type = "m.id.user", user = username),
         password = password,
         initial_device_display_name = "Serif"
     )
 }
-@Serializable
-data class LoginIdentifier(val type: String, val user: String)
 
-@Serializable
+@Serializable data class LoginIdentifier(val type: String, val user: String)
+
+@Serializable data class CreateRoom(
+    val preset: String,
+    val name: String,
+    val room_alias_name: String,
+    val topic: String,
+) {
+    constructor(
+        name: String,
+        room_alias_name: String,
+        topic: String
+    ) : this(
+        preset = "public_chat", // this should be a choice in enum of private_chat, trusted_private_chat and public_chat. Will rework.
+        name = name,
+        room_alias_name = room_alias_name,
+        topic = topic,
+
+    )
+}
+
 data class LoginResponse(val access_token: String, val identifier: LoginIdentifier)
 
 @Serializable
@@ -28,17 +54,23 @@ data class MediaUploadResponse(val content_uri: String)
 data class EventIdResponse(val event_id: String)
 @Serializable
 data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
-@Serializable
-data class SyncResponse(var next_batch: String, val rooms: Rooms)
-@Serializable
-data class Rooms(val join: MutableMap<String, Room>)
-@Serializable
-data class Room(var timeline: Timeline, var state: State, val summary: RoomSummary, var unread_notifications: UnreadNotifications? = null)
+
+@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms)
+
+@Serializable data class Rooms(val join: MutableMap<String, Room>)
 
 @Serializable
-data class Timeline(var events: List<Event>, var prev_batch: String)
-@Serializable
-data class State(var events: List<Event>)
+data class Room(
+    var timeline: Timeline,
+    var state: State,
+    val summary: RoomSummary,
+    var unread_notifications: UnreadNotifications? = null
+)
+
+@Serializable data class Timeline(var events: List<Event>, var prev_batch: String)
+
+@Serializable data class State(var events: List<Event>)
+
 @Serializable
 data class RoomSummary(
     @SerialName("m.heroes") val heroes: List<String>? = null,
@@ -47,7 +79,12 @@ data class RoomSummary(
 )
 
 @Serializable
-data class BackfillResponse(val start: String, val end: String, val chunk: List<Event>? = null, val state: List<Event>? = null)
+data class BackfillResponse(
+    val start: String,
+    val end: String,
+    val chunk: List<Event>? = null,
+    val state: List<Event>? = null
+)
 
 @Serializable(with = EventSerializer::class)
 abstract class Event {
@@ -55,14 +92,20 @@ abstract class Event {
     abstract val raw_content: JsonElement
     abstract val type: String
 }
+
 abstract class RoomEvent : Event() {
     abstract val event_id: String
     abstract val sender: String
     abstract val origin_server_ts: Long
     abstract val unsigned: UnsignedData?
 }
+
 @Serializable
-data class UnsignedData(val age: Long? = null, /*redacted_because: Event?,*/ val transaction_id: String? = null)
+data class UnsignedData(
+    val age: Long? = null, /*redacted_because: Event?,*/
+    val transaction_id: String? = null
+)
+
 @Serializable
 class StateEvent<T>(
     override val raw_self: JsonObject,
@@ -78,8 +121,9 @@ class StateEvent<T>(
 ) : RoomEvent() {
     override fun toString() = "RoomNameEvent(" + raw_self.toString() + ")"
 }
-@Serializable
-class RoomNameContent(val name: String)
+
+@Serializable class RoomNameContent(val name: String)
+
 @Serializable
 class RoomCanonicalAliasContent(val alias: String? = null, val alt_aliases: List<String>? = null)
 
@@ -111,10 +155,10 @@ class TextRMEC(
 ) : RoomMessageEventContent() {
     constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, relates_to = rel_to)
     constructor(msg: String, fallback: String, original_event: String) : this(
-        msgtype="m.text",
-        body=fallback,
-        new_content=TextRMEC(msg,"m.text"),
-        relates_to=RelationBlock(null,"m.replace",original_event)
+        msgtype = "m.text",
+        body = fallback,
+        new_content = TextRMEC(msg, "m.text"),
+        relates_to = RelationBlock(null, "m.replace", original_event)
     )
 }
 @Serializable
@@ -145,6 +189,7 @@ class EventFallback(
 ) : Event() {
     override fun toString() = "EventFallback(" + raw_self.toString() + ")"
 }
+
 @Serializable
 class RoomEventFallback(
     override val raw_self: JsonObject,
@@ -162,21 +207,22 @@ class RoomEventFallback(
 class ReplyToRelation(val event_id: String)
 @Serializable
 class RelationBlock(
-@SerialName("m.in_reply_to") val in_reply_to: ReplyToRelation? = null,
-val rel_type: String? = null,
-val event_id: String? = null,
+    @SerialName("m.in_reply_to") val in_reply_to: ReplyToRelation? = null,
+    val rel_type: String? = null,
+    val event_id: String? = null,
 )
 
 object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
-    override fun selectDeserializer(element: JsonElement) = element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
-        when {
-            type == "m.room.message" -> RoomMessageEventSerializer
-            type == "m.room.name" -> RoomNameStateEventSerializer
-            type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
-            type.startsWith("m.room") -> RoomEventFallbackSerializer
-            else -> EventFallbackSerializer
+    override fun selectDeserializer(element: JsonElement) =
+        element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
+            when {
+                type == "m.room.message" -> RoomMessageEventSerializer
+                type == "m.room.name" -> RoomNameStateEventSerializer
+                type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
+                type.startsWith("m.room") -> RoomEventFallbackSerializer
+                else -> EventFallbackSerializer
+            }
         }
-    }
 }
 
 object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<RoomMessageEventContent>(RoomMessageEventContent::class) {

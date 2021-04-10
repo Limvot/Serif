@@ -52,7 +52,7 @@ object Database {
         val file = File.createTempFile("serif_media_", "", cache_path)
         file.outputStream().write(file_data)
         val local = file.toPath().toString()
-        if(update) {
+        if (update) {
             this.db?.sessionDbQueries?.updateMedia(local, url)
         } else {
             this.db?.sessionDbQueries?.insertMedia(url, local)

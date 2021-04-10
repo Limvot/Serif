@@ -5,30 +5,25 @@ package xyz.room409.serif.serif_swing
 import com.formdev.flatlaf.*
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
-import kotlin.math.min
-import kotlin.concurrent.thread
 import java.awt.*
 import java.awt.image.*
 import java.awt.event.*
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
+import javax.sound.sampled.AudioSystem
 import javax.swing.*
-import javax.swing.filechooser.*;
+import javax.swing.filechooser.*
 import javax.swing.text.*
 import javax.swing.text.html.HTML
-import javax.swing.text.html.HTMLEditorKit
-import javax.swing.text.html.InlineView
-import java.io.File
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import javax.sound.sampled.Clip
-import javax.sound.sampled.AudioInputStream
-import javax.sound.sampled.AudioSystem
-
+import kotlin.concurrent.thread
+import kotlin.math.min
 
 object AudioPlayer {
     var url = ""
     val clip = AudioSystem.getClip()
     fun loadAudio(audio_url: String) {
-        if(url != audio_url) {
+        if (url != audio_url) {
             clip.stop()
             url = audio_url
             val inputStream = AudioSystem.getAudioInputStream(File(url).getAbsoluteFile())
@@ -36,7 +31,7 @@ object AudioPlayer {
         }
     }
     fun play() {
-        if(clip.isRunning()) {
+        if (clip.isRunning()) {
             clip.stop()
         }
         clip.setFramePosition(0)
@@ -50,11 +45,11 @@ sealed class SwingState() {
 class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () -> Unit, val panel: JPanel, val m: MatrixLogin) : SwingState() {
     var c_left = GridBagConstraints()
     var c_right = GridBagConstraints()
-    var login_message_label = JLabel(m.login_message)
+    var login_message_label = SerifText(m.login_message)
     var username_field = JTextField(20)
-    var username_label = JLabel("Username: ")
+    var username_label = SerifText("Username: ")
     var password_field = JPasswordField(20)
-    var password_label = JLabel("Password: ")
+    var password_label = SerifText("Password: ")
     var button = JButton("Login")
     var logIn: (ActionEvent) -> Unit = { transition(m.login(username_field.text, password_field.text, onSync), true) }
 
@@ -71,7 +66,7 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         c_right.weightx = 1.0
 
         panel.add(login_message_label, c_right)
-        panel.add(JLabel("Login with previous session?"), c_right)
+        panel.add(SerifText("Login with previous session?"), c_right)
 
         for (session in m.getSessions()) {
             var button = JButton(session)
@@ -79,11 +74,11 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
             button.addActionListener({ transition(m.loginFromSession(session, onSync), true) })
         }
 
-        username_label.labelFor = username_field
+        //username_label.labelFor = username_field
         panel.add(username_label, c_left)
         panel.add(username_field, c_right)
 
-        password_label.labelFor = password_field
+        //password_label.labelFor = password_field
         panel.add(password_label, c_left)
         panel.add(password_field, c_right)
 
@@ -100,19 +95,69 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
     }
 }
 class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixRooms) : SwingState() {
-    var message_label = JLabel(m.message)
+    var message_label = SerifText(m.message)
     var inner_scroll_pane = JPanel()
     init {
         panel.layout = BorderLayout()
-        panel.add(message_label, BorderLayout.PAGE_START)
+        var topPanel = JPanel()
+        topPanel.layout = BoxLayout(topPanel, BoxLayout.LINE_AXIS)
+        topPanel.add(message_label)
+        var newRoomButton = JButton("New Room")
+        topPanel.add(newRoomButton)
+        newRoomButton.addActionListener({
+
+            val window = SwingUtilities.getWindowAncestor(panel)
+            val dim = window.getSize()
+            val h = dim.height
+            val w = dim.width
+            val dialog = JDialog(window, "Create Room")
+
+            val dpanel = JPanel()
+            dpanel.layout = BoxLayout(dpanel, BoxLayout.PAGE_AXIS)
+            // name, room_alias_name, topic
+            var roomname_field = JTextField(20)
+            var roomname_label = SerifText("Room Name: ")
+            var alias_field = JTextField(20)
+            var alias_label = SerifText("Alias: ")
+            var topic_field = JTextField(20)
+            var topic_label = SerifText("Topic: ")
+
+            val create_btn = JButton("Create")
+            create_btn.addActionListener({
+                println(m.createRoom(roomname_field.text, alias_field.text, topic_field.text))
+                dialog.setVisible(false)
+                dialog.dispose()
+            })
+
+            val close_btn = JButton("Close")
+            close_btn.addActionListener({
+                dialog.setVisible(false)
+                dialog.dispose()
+            })
+            dpanel.add(roomname_label)
+            dpanel.add(roomname_field)
+            dpanel.add(alias_label)
+            dpanel.add(alias_field)
+            dpanel.add(topic_label)
+            dpanel.add(topic_field)
+            dpanel.add(create_btn)
+            dpanel.add(close_btn)
+            dialog.add(dpanel)
+
+            dialog.setSize(w, h / 2)
+            dialog.setVisible(true)
+            dialog.setResizable(false)
+            dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+        })
+        panel.add(topPanel, BorderLayout.PAGE_START)
 
         inner_scroll_pane.layout = GridLayout(0, 1)
         for ((id, name, unreadCount, highlightCount, lastMessage) in m.rooms) {
             var button = JButton()
             button.layout = BoxLayout(button, BoxLayout.PAGE_AXIS)
 
-            val room_name = JLabel("$name ($unreadCount unread / $highlightCount mentions)")
-            val last_message = JLabel(lastMessage?.message?.take(80) ?: "")
+            val room_name = SerifText("$name ($unreadCount unread / $highlightCount mentions)")
+            val last_message = SerifText(lastMessage?.message?.take(80) ?: "")
 
             button.add(room_name)
             button.add(last_message)
@@ -134,14 +179,14 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
             println("Having to transition, rooms !=")
             transition(new_m, false)
         } else {
-            message_label.text = new_m.message
+            message_label.setText(new_m.message)
             m = new_m
         }
     }
 }
 class ImageFileFilter : FileFilter() {
     override fun accept(f: File): Boolean {
-        if(f.isDirectory()) { return true }
+        if (f.isDirectory()) { return true }
         val fname = f.getName()
         val extension = fname.split('.').last().toLowerCase()
         val supported = arrayOf("gif", "png", "jpeg", "jpg")
@@ -155,7 +200,7 @@ class ImageFileFilter : FileFilter() {
 // adapted from https://stackoverflow.com/questions/30590031/jtextpane-line-wrap-behavior?noredirect=1&lq=1%27
 object WrapEditorKit : StyledEditorKit() {
     val defaultFactory = object : ViewFactory {
-        override public fun create(element: Element): View = when (val kind = element.name) {
+        public override fun create(element: Element): View = when (val kind = element.name) {
             AbstractDocument.ContentElementName -> WrapLabelView(element)
             AbstractDocument.ParagraphElementName -> WrapLabelView(element)
             //AbstractDocument.ParagraphElementName -> ParagraphView(element)
@@ -166,14 +211,14 @@ object WrapEditorKit : StyledEditorKit() {
             else -> LabelView(element)
         }
     }
-    override public fun getViewFactory(): ViewFactory = defaultFactory
+    public override fun getViewFactory(): ViewFactory = defaultFactory
 }
 class WrapLabelView(element: Element) : LabelView(element) {
-    override public fun getMinimumSpan(axis: Int): Float  {
+    public override fun getMinimumSpan(axis: Int): Float {
         when (axis) {
-            View.X_AXIS -> return 0.0f;
-            View.Y_AXIS -> return super.getMinimumSpan(axis);
-            else -> throw IllegalArgumentException("Invalid axis: " + axis);
+            View.X_AXIS -> return 0.0f
+            View.Y_AXIS -> return super.getMinimumSpan(axis)
+            else -> throw IllegalArgumentException("Invalid axis: " + axis)
         }
     }
 }
@@ -242,7 +287,7 @@ class SerifText(private var text: String) : JComponent() {
     }
     fun setText(new_text: String) {
         text = new_text
-        lines = text.lines().flatMap { it.chunked(size.width / max_char_width) }
+        lines = text.lines().flatMap { it.chunked(size.width / (max_char_width+1)) }
         max_line_length = lines.map { it.length }.max() ?: 1
     }
     override fun setSize(d: Dimension) {
@@ -252,8 +297,12 @@ class SerifText(private var text: String) : JComponent() {
     override fun getSize() = size
     override fun getPreferredSize() = Dimension(max_char_width * max_line_length,line_height * (lines.size + 1))
     override fun paintComponent(g: Graphics) {
+        val g2d = g as Graphics2D
+        g2d.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
         lines.forEachIndexed { i, line ->
-            g.drawString(line, 0, (i+1) * line_height)
+            g2d.drawString(line, 0, (i+1) * line_height)
         }
     }
 }
@@ -420,11 +469,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     // slightly modified
     val URL_REGEX = Regex("""(https?|ftp)://[^\s/$.?#].[^\s]*""")
     val mk_sender = { msg: SharedUiMessage ->
-        val sender = JTextArea()
-        sender.setEditable(false)
-        sender.lineWrap = true
-        sender.wrapStyleWord = true
-        val set_sender = { msg: SharedUiMessage -> sender.text = "${msg.sender}:  " }
+        val sender = SerifText("${msg.sender}:  ")
+        val set_sender = { msg: SharedUiMessage -> sender.setText("${msg.sender}:  ") }
         set_sender(msg)
         Pair(sender, set_sender)
     }
@@ -632,21 +678,21 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val text = message_field.text
             message_field.text = ""
             val res =
-            when {
-                replied_event_id == "" && edited_event_id == "" -> m.sendMessage(text)
-                replied_event_id != "" -> {
-                    val eventid = replied_event_id
-                    replied_event_id = ""
-                    println("Replying to $eventid")
-                    m.sendReply(text, eventid)
+                when {
+                    replied_event_id == "" && edited_event_id == "" -> m.sendMessage(text)
+                    replied_event_id != "" -> {
+                        val eventid = replied_event_id
+                        replied_event_id = ""
+                        println("Replying to $eventid")
+                        m.sendReply(text, eventid)
+                    }
+                    else -> {
+                        val eventid = edited_event_id
+                        edited_event_id = ""
+                        println("Editing $eventid")
+                        m.sendEdit(text, eventid)
+                    }
                 }
-                else -> {
-                    val eventid = edited_event_id
-                    edited_event_id = ""
-                    println("Editing $eventid")
-                    m.sendEdit(text, eventid)
-                }
-            }
             transition(res, true)
         }
         val onAttach: (ActionEvent) -> Unit = {
@@ -655,7 +701,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             fc.addChoosableFileFilter(iff)
             fc.setFileFilter(iff)
             val ret = fc.showDialog(panel, "Attach")
-            if(ret == JFileChooser.APPROVE_OPTION) {
+            if (ret == JFileChooser.APPROVE_OPTION) {
                 val file = fc.getSelectedFile()
                 message_field.text = ""
                 transition(m.sendImageMessage(file.toPath().toString()), true)
@@ -666,7 +712,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         send_button.addActionListener(onSend)
         attach_button.addActionListener(onAttach)
         back_button.addActionListener({ recycling_message_list.cleanup(); transition(m.exitRoom(), true) })
-        m.sendReceipt(m.messages.last().id)
+        m.messages.lastOrNull()?.let { m.sendReceipt(it.id) }
     }
     override fun refresh() {
         transition(m.refresh(), true)
@@ -742,6 +788,9 @@ class App {
 
 fun main(args: Array<String>) {
     FlatDarkLaf.install()
-    UIManager.getLookAndFeelDefaults().put("defaultFont", Font("Serif", Font.PLAIN, 16))
+    //val font = Font.createFont(Font.TRUETYPE_FONT, File("/home/nathan/SerifTogether/iosevka/iosevka-fixed-slab-extended.ttf")).deriveFont(16f)
+    val font = Font.createFont(Font.TRUETYPE_FONT, File("/home/nathan/SerifTogether/iosevka_sans/iosevka-fixed-extended.ttf")).deriveFont(16f)
+    UIManager.getLookAndFeelDefaults().put("defaultFont", font)
+    //UIManager.getLookAndFeelDefaults().put("defaultFont", Font("Iosevka", Font.PLAIN, 16))
     javax.swing.SwingUtilities.invokeLater({ App() })
 }

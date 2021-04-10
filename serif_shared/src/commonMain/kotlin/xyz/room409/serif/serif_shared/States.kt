@@ -66,6 +66,8 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
         msession = msession,
         message = "updated...\n"
     )
+    fun createRoom(name: String, room_alias_name: String, topic: String) = msession.createRoom(name, room_alias_name, topic)
+
     fun getRoom(id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): MatrixState {
         return MatrixChatRoom(
             msession,
@@ -126,13 +128,13 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             if (it as? RoomMessageEvent != null) {
                 val msg_content = it.content
                 if (msg_content is TextRMEC) {
-                    if(is_edit_content(msg_content)) {
-                        //This is an edit
+                    if (is_edit_content(msg_content)) {
+                        // This is an edit
                         val replaced_id = msg_content!!.relates_to!!.event_id!!
                         val edit_msg = SharedUiMessagePlain(it.sender, msg_content!!.new_content!!.body,
                             it.event_id, it.origin_server_ts)
 
-                        if(edit_maps.contains(replaced_id)) {
+                        if (edit_maps.contains(replaced_id)) {
                             edit_maps.get(replaced_id)!!.add(edit_msg)
                         } else {
                             edit_maps.put(replaced_id, arrayListOf(edit_msg))
@@ -256,22 +258,22 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         return this
     }
     fun getEventSrc(msg_id: String): String {
-        for(event in msession.getRoomEvents(room_id)) {
+        for (event in msession.getRoomEvents(room_id)) {
             if (event as? RoomMessageEvent != null) {
-                if(event.event_id == msg_id) {
+                if (event.event_id == msg_id) {
                     return event.raw_self.toString()
-                            .replace("\",","\",\n")
-                            .replace(",\"",",\n\"")
-                            .replace("{","{\n")
-                            .replace("}","\n}")
-                            .replace("\" \"","\"\n\"")
+                        .replace("\",", "\",\n")
+                        .replace(",\"", ",\n\"")
+                        .replace("{", "{\n")
+                        .replace("}", "\n}")
+                        .replace("\" \"", "\"\n\"")
                 }
             }
         }
         return "No Source for $msg_id"
     }
     fun sendReceipt(eventID: String) {
-        when (val readReceiptResult = msession.sendReadReceipt(eventID, room_id)){
+        when (val readReceiptResult = msession.sendReadReceipt(eventID, room_id)) {
             is Success -> println("read receipt sent")
             is Error -> println("read receipt failed because ${readReceiptResult.cause}")
         }
