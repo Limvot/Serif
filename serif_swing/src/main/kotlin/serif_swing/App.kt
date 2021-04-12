@@ -8,9 +8,12 @@ import xyz.room409.serif.serif_shared.db.DriverFactory
 import java.awt.*
 import java.awt.image.*
 import java.awt.event.*
+import java.awt.font.TextAttribute
+import java.text.AttributedCharacterIterator
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import java.text.AttributedString
 import javax.sound.sampled.AudioSystem
 import javax.swing.*
 import javax.swing.filechooser.*
@@ -45,12 +48,12 @@ sealed class SwingState() {
 class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () -> Unit, val panel: JPanel, val m: MatrixLogin) : SwingState() {
     var c_left = GridBagConstraints()
     var c_right = GridBagConstraints()
-    var login_message_label = SerifText(m.login_message)
-    var username_field = JTextField(20)
-    var username_label = SerifText("Username: ")
+    var login_message_label = SmoothLabel(m.login_message)
+    var username_field = SmoothTextField(20)
+    var username_label = SmoothLabel("Username: ")
     var password_field = JPasswordField(20)
-    var password_label = SerifText("Password: ")
-    var button = JButton("Login")
+    var password_label = SmoothLabel("Password: ")
+    var button = SmoothButton("Login")
     var logIn: (ActionEvent) -> Unit = { transition(m.login(username_field.text, password_field.text, onSync), true) }
 
     init {
@@ -66,10 +69,10 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         c_right.weightx = 1.0
 
         panel.add(login_message_label, c_right)
-        panel.add(SerifText("Login with previous session?"), c_right)
+        panel.add(SmoothLabel("Login with previous session?"), c_right)
 
         for (session in m.getSessions()) {
-            var button = JButton(session)
+            var button = SmoothButton(session)
             panel.add(button, c_right)
             button.addActionListener({ transition(m.loginFromSession(session, onSync), true) })
         }
@@ -102,7 +105,7 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
         var topPanel = JPanel()
         topPanel.layout = BoxLayout(topPanel, BoxLayout.LINE_AXIS)
         topPanel.add(message_label)
-        var newRoomButton = JButton("New Room")
+        var newRoomButton = SmoothButton("New Room")
         topPanel.add(newRoomButton)
         newRoomButton.addActionListener({
 
@@ -115,21 +118,21 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
             val dpanel = JPanel()
             dpanel.layout = BoxLayout(dpanel, BoxLayout.PAGE_AXIS)
             // name, room_alias_name, topic
-            var roomname_field = JTextField(20)
-            var roomname_label = SerifText("Room Name: ")
-            var alias_field = JTextField(20)
-            var alias_label = SerifText("Alias: ")
-            var topic_field = JTextField(20)
-            var topic_label = SerifText("Topic: ")
+            var roomname_field = SmoothTextField(20)
+            var roomname_label = SmoothLabel("Room Name: ")
+            var alias_field = SmoothTextField(20)
+            var alias_label = SmoothLabel("Alias: ")
+            var topic_field = SmoothTextField(20)
+            var topic_label = SmoothLabel("Topic: ")
 
-            val create_btn = JButton("Create")
+            val create_btn = SmoothButton("Create")
             create_btn.addActionListener({
                 println(m.createRoom(roomname_field.text, alias_field.text, topic_field.text))
                 dialog.setVisible(false)
                 dialog.dispose()
             })
 
-            val close_btn = JButton("Close")
+            val close_btn = SmoothButton("Close")
             close_btn.addActionListener({
                 dialog.setVisible(false)
                 dialog.dispose()
@@ -167,7 +170,7 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
         }
         panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
 
-        var back_button = JButton("(Fake) Logout")
+        var back_button = SmoothButton("(Fake) Logout")
         panel.add(back_button, BorderLayout.PAGE_END)
         back_button.addActionListener({ transition(m.fake_logout(), true) })
     }
@@ -197,72 +200,46 @@ class ImageFileFilter : FileFilter() {
     }
 }
 
-// adapted from https://stackoverflow.com/questions/30590031/jtextpane-line-wrap-behavior?noredirect=1&lq=1%27
-object WrapEditorKit : StyledEditorKit() {
-    val defaultFactory = object : ViewFactory {
-        public override fun create(element: Element): View = when (val kind = element.name) {
-            AbstractDocument.ContentElementName -> WrapLabelView(element)
-            AbstractDocument.ParagraphElementName -> WrapLabelView(element)
-            //AbstractDocument.ParagraphElementName -> ParagraphView(element)
-            AbstractDocument.SectionElementName -> WrapLabelView(element)
-            //AbstractDocument.SectionElementName -> BoxView(element, View.Y_AXIS)
-            StyleConstants.ComponentElementName -> ComponentView(element)
-            StyleConstants.IconElementName -> IconView(element)
-            else -> LabelView(element)
-        }
-    }
-    public override fun getViewFactory(): ViewFactory = defaultFactory
-}
-class WrapLabelView(element: Element) : LabelView(element) {
-    public override fun getMinimumSpan(axis: Int): Float {
-        when (axis) {
-            View.X_AXIS -> return 0.0f
-            View.Y_AXIS -> return super.getMinimumSpan(axis)
-            else -> throw IllegalArgumentException("Invalid axis: " + axis)
-        }
-    }
-}
+val URL_ATTRIBUTE = object : AttributedCharacterIterator.Attribute("URL_HREF") {}
 
-class URLMouseListener(var message: JTextPane) : MouseAdapter() {
+class URLMouseListener(var message: SerifText) : MouseAdapter() {
     override fun mouseClicked(e: MouseEvent) {
-        val pos = message.viewToModel(Point(e.x, e.y))
-        println("you clicked on pos $pos, message length is ${message.text.length} because it is ${message.text}")
-        if (pos >= 0 && pos < message.text.length) {
-            println("That is, character ${message.text[pos]}")
-            val doc = (message.document as? DefaultStyledDocument)
-            if (doc != null) {
-                val el = doc.getCharacterElement(pos)
-                val href = el.attributes.getAttribute(HTML.Attribute.HREF) as String?
-                if (href != null) {
-                    // In the background, so that GUI doesn't freeze
-                    thread(start = true) {
-                        // We have to try using xdg-open first,
-                        // since PinePhone somehow implements the
-                        // Desktop API but has the same problem with the
-                        // GTK_BACKEND var
+        val pos = message.screenToPos(e.x, e.y)
+        val char_iter = message.getText().iterator
+        println("you clicked on pos $pos, message length is ${char_iter.endIndex} because it is ${message.getText()}")
+        if (pos >= 0 && pos < char_iter.endIndex) {
+            val debug_char = char_iter.setIndex(pos)
+            println("you clicked on character $debug_char")
+            val href = char_iter.getAttribute(URL_ATTRIBUTE) as String?
+            if (href != null) {
+                // In the background, so that GUI doesn't freeze
+                thread(start = true) {
+                    // We have to try using xdg-open first,
+                    // since PinePhone somehow implements the
+                    // Desktop API but has the same problem with the
+                    // GTK_BACKEND var
+                    try {
+                        println("Trying to open $href with exec 'xdg-open $href'")
+                        val pb = ProcessBuilder("xdg-open", href)
+                        // Somehow this environment variable gets set for pb
+                        // when it's NOT in System.getenv(). And of course, this
+                        // is the one that makes xdg-open try to launch an X version
+                        // of Firefox, giving the dreaded Firefox is already running
+                        // message if you've got a Wayland version running already.
+                        pb.environment().clear()
+                        pb.environment().putAll(System.getenv())
+                        pb.redirectErrorStream(true)
+                        val process = pb.start()
+                        val reader = BufferedReader(InputStreamReader(process.inputStream))
+                        while (reader.readLine() != null) {}
+                        process.waitFor()
+                        println("done trying to open url")
+                    } catch (e1: Exception) {
                         try {
-                            println("Trying to open $href with exec 'xdg-open $href'")
-                            val pb = ProcessBuilder("xdg-open", href)
-                            // Somehow this environment variable gets set for pb
-                            // when it's NOT in System.getenv(). And of course, this
-                            // is the one that makes xdg-open try to launch an X version
-                            // of Firefox, giving the dreaded Firefox is already running
-                            // message if you've got a Wayland version running already.
-                            pb.environment().clear()
-                            pb.environment().putAll(System.getenv())
-                            pb.redirectErrorStream(true)
-                            val process = pb.start()
-                            val reader = BufferedReader(InputStreamReader(process.inputStream))
-                            while (reader.readLine() != null) {}
-                            process.waitFor()
-                            println("done trying to open url")
-                        } catch (e1: Exception) {
-                            try {
-                                println("Trying to open $href with Desktop")
-                                java.awt.Desktop.getDesktop().browse(java.net.URI(href))
-                            } catch (e2: Exception) {
-                                println("Couldn't get ProcessBuilder('xdg-open $href') or Desktop, problem was $e1 then $e2")
-                            }
+                            println("Trying to open $href with Desktop")
+                            java.awt.Desktop.getDesktop().browse(java.net.URI(href))
+                        } catch (e2: Exception) {
+                            println("Couldn't get ProcessBuilder('xdg-open $href') or Desktop, problem was $e1 then $e2")
                         }
                     }
                 }
@@ -271,25 +248,99 @@ class URLMouseListener(var message: JTextPane) : MouseAdapter() {
     }
 }
 
-class SerifText(private var text: String) : JComponent() {
+class SmoothLabel(text: String): JLabel(text) {
+    override fun paintComponent(g: Graphics) {
+        val g2d = g as Graphics2D
+        g2d.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        super.paintComponent(g)
+    }
+}
+class SmoothButton(text: String): JButton(text) {
+    override fun paintComponent(g: Graphics) {
+        val g2d = g as Graphics2D
+        g2d.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        super.paintComponent(g)
+    }
+}
+class SmoothTextField(size: Int): JTextField(size) {
+    override fun paintComponent(g: Graphics) {
+        val g2d = g as Graphics2D
+        g2d.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        super.paintComponent(g)
+    }
+}
+
+class SerifText(private var text: AttributedString) : JComponent() {
+    constructor(text: String): this(AttributedString(text))
     private val line_height: Int
     private val max_char_width: Int
     private var size: Dimension
-    private var lines: List<String>
+    private var lines: List<Pair<Int,Int>>
     private var max_line_length: Int
     init {
+        if (text.iterator.endIndex != 0) {
+            text.addAttribute(TextAttribute.SIZE, 16.0)
+        }
         val metrics = getFontMetrics(javax.swing.UIManager.getDefaults().getFont("Label.font"))
         line_height = metrics.height
         max_char_width = metrics.charWidth('W')
-        lines = text.lines()
-        max_line_length = lines.map { it.length }.max() ?: 1
+        lines = calculateLines(text, -1)
+        max_line_length = lines.map { it.second - it.first }.max() ?: 1
         size = Dimension(max_char_width * max_line_length, line_height * (lines.size + 1))
     }
-    fun setText(new_text: String) {
-        text = new_text
-        lines = text.lines().flatMap { it.chunked(size.width / (max_char_width+1)) }
-        max_line_length = lines.map { it.length }.max() ?: 1
+    fun calculateLines(text: AttributedString, max_chars_per_line: Int): List<Pair<Int,Int>> {
+        val lines: MutableList<Pair<Int,Int>> = mutableListOf()
+        var aci = text.iterator
+        var begin = aci.index
+        val next_break: () -> Int = { ->
+            val save = aci.index
+            aci.next()
+            while (aci.index != aci.endIndex && aci.current() != ' ' && aci.current() != '\n') {
+                aci.next()
+            }
+            val to_ret = aci.index
+            aci.index = save
+            to_ret
+        }
+        while (aci.index != aci.endIndex) {
+            if (aci.current() == '\n') {
+                lines.add(Pair(begin, aci.index))
+                begin = aci.index + 1
+
+            // If we have a max length, and either we're at it, or we're at a space and our next line-break oppertunity is beyond
+            // the length limit, break
+            } else if (max_chars_per_line != -1 && (   (aci.index - begin == max_chars_per_line)
+                                                    || (aci.current() == ' ' && next_break() - begin >= max_chars_per_line)) ){
+                lines.add(Pair(begin, aci.index + 1))
+                begin = aci.index + 1
+            }
+            aci.next()
+        }
+        if (begin != aci.index) {
+            lines.add(Pair(begin, aci.index))
+        }
+        return lines
     }
+    fun screenToPos(x: Int, y: Int): Int {
+        val line_no = min(y / line_height, lines.size-1)
+        return lines[line_no].first + (x / max_char_width)
+    }
+    fun setText(new_text: String) = setText(AttributedString(new_text))
+    fun setText(new_text: AttributedString) {
+        text = new_text
+        if (text.iterator.endIndex != 0) {
+            text.addAttribute(TextAttribute.SIZE, 16.0)
+        }
+        lines = calculateLines(text, size.width / (max_char_width+1))
+        max_line_length = lines.map { it.second - it.first }.max() ?: 1
+    }
+    fun getText() = text
     override fun setSize(d: Dimension) {
         size = d
     }
@@ -302,7 +353,7 @@ class SerifText(private var text: String) : JComponent() {
             RenderingHints.KEY_TEXT_ANTIALIASING,
             RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
         lines.forEachIndexed { i, line ->
-            g2d.drawString(line, 0, (i+1) * line_height)
+            g2d.drawString(text.getIterator(null, line.first, line.second), 0, (i+1) * line_height)
         }
     }
 }
@@ -468,6 +519,14 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     // From @stephenhay via https://mathiasbynens.be/demo/url-regex
     // slightly modified
     val URL_REGEX = Regex("""(https?|ftp)://[^\s/$.?#].[^\s]*""")
+    val stringToAttributedURLString = { s: String ->
+        val attString = AttributedString(s)
+        for (url_match in URL_REGEX.findAll(s)) {
+            attString.addAttribute(TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON, url_match.range.start, url_match.range.endInclusive+1)
+            attString.addAttribute(URL_ATTRIBUTE, url_match.value, url_match.range.start, url_match.range.endInclusive+1)
+        }
+        attString
+    }
     val mk_sender = { msg: SharedUiMessage ->
         val sender = SerifText("${msg.sender}:  ")
         val set_sender = { msg: SharedUiMessage -> sender.setText("${msg.sender}:  ") }
@@ -503,7 +562,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             src_txt.setText(json_str)
             src_txt.setEditable(false)
 
-            val close_btn = JButton("Close")
+            val close_btn = SmoothButton("Close")
             close_btn.addActionListener({
                 dialog.setVisible(false)
                 dialog.dispose()
@@ -526,7 +585,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         }
         msg_action_popup.add(show_src_option)
 
-        val msg_action_button = JButton("...")
+        val msg_action_button = SmoothButton("...")
         msg_action_button.addActionListener({
             msg_action_popup.show(msg_action_button,0,0)
         })
@@ -574,7 +633,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             "audio" to { msg, repaint_cell ->
                 msg as SharedUiAudioMessage
                 var audio_url = msg.url
-                val play_btn = JButton("Play/Pause $audio_url")
+                val play_btn = SmoothButton("Play/Pause $audio_url")
                 play_btn.addActionListener({
                     AudioPlayer.loadAudio(audio_url)
                     AudioPlayer.play()
@@ -584,43 +643,12 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 Triple(listOf(sender, play_btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); audio_url = (msg as SharedUiAudioMessage).url; })
             },
             "text" to { msg, repaint_cell ->
-                val message = SerifText(msg.message)
+                val message = SerifText(stringToAttributedURLString(msg.message))
+                message.addMouseListener(URLMouseListener(message))
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> message.setText(msg.message); set_sender(msg); set_menu(msg) })
+                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> message.setText(stringToAttributedURLString(msg.message)); set_sender(msg); set_menu(msg) })
             }
-            //"text" to { msg, repaint_cell ->
-            //    val message = JTextPane()
-            //    message.setEditorKit(WrapEditorKit);
-            //    message.setEditable(false)
-            //    message.addMouseListener(URLMouseListener(message))
-
-            //    val simpleAttrs = SimpleAttributeSet()
-            //    val set_text = { msg: SharedUiMessage ->
-            //        message.document.remove(0, message.document.length)
-            //        var current_idx = 0
-            //        for (url_match in URL_REGEX.findAll(msg.message)) {
-            //            if (url_match.range.start > current_idx) {
-            //                message.document.insertString(current_idx, msg.message.slice(current_idx .. url_match.range.start-1), simpleAttrs)
-            //                current_idx = url_match.range.start
-            //            }
-            //            val urlAttrs = SimpleAttributeSet()
-            //            StyleConstants.setUnderline(urlAttrs, true)
-            //            urlAttrs.addAttribute(HTML.Attribute.HREF, url_match.value)
-            //            message.document.insertString(current_idx, url_match.value, urlAttrs)
-            //            current_idx = url_match.range.endInclusive + 1
-            //        }
-            //        if (current_idx < msg.message.length) {
-            //            message.document.insertString(current_idx, msg.message.slice(current_idx .. msg.message.length-1), simpleAttrs)
-            //        }
-            //    }
-
-            //    set_text(msg)
-            //    val (sender, set_sender) = mk_sender(msg)
-            //    val (menu, set_menu) = mk_menu(msg)
-
-            //    Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> set_text(msg); set_sender(msg); set_menu(msg) })
-            //}
         ),
        { began, ended ->
             val drawn_length = ended - began
@@ -636,7 +664,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 })
             } else if (in_lower_buffer && !tracking_current) {
                 javax.swing.SwingUtilities.invokeLater({
-                    transition(m.refresh(desired_window_half, m.messages[ended].id, desired_window_half), true)
+                    transition(m.refresh(desired_window_half, m.messages[min(ended, m.messages.size)].id, desired_window_half), true)
                 })
             } else {
                 //println("Render report $began to $ended - top(in_upper_buffer=$in_upper_buffer && no_request_out=$no_request_out), bottom(in_lower_buffer=$in_lower_buffer && no_request_out=$no_request_out && !tracking_current=!$tracking_current) - no_request_out=(m.window_back_length=${m.window_back_length} + m.window_forward_length=${m.window_forward_length} + 1) <= m.messages.size=${m.messages.size}")
@@ -645,7 +673,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     )
     val c_left = GridBagConstraints()
     val c_right = GridBagConstraints()
-    val message_field = JTextField(20)
+    val message_field = SmoothTextField(20)
     var replied_event_id = ""
     var edited_event_id = ""
     init {
@@ -663,14 +691,14 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
         val message_panel = JPanel()
         message_panel.layout = BorderLayout()
-        var back_button = JButton("Back")
+        var back_button = SmoothButton("Back")
         message_panel.add(back_button, BorderLayout.LINE_START)
         message_panel.add(message_field, BorderLayout.CENTER)
         val msg_panel_actions = JPanel()
         msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
-        var attach_button = JButton("+")
+        var attach_button = SmoothButton("+")
         msg_panel_actions.add(attach_button)
-        var send_button = JButton("Send")
+        var send_button = SmoothButton("Send")
         msg_panel_actions.add(send_button)
         message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
         panel.add(message_panel, BorderLayout.PAGE_END)
