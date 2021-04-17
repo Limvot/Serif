@@ -356,62 +356,6 @@ class SerifText(private var text: AttributedString) : JComponent() {
     }
 }
 
-// Inspired by https://www.algosome.com/articles/java-swing-iphone-drag-component.html
-// Rewritten for our use case. I'm not sure if this class counts as a GPL
-// derived work or not - I didn't copy/paste anything, and the code it self
-// is different (more limited, more optimized, safer, in Kotlin), but it does
-// have similar "bones". If we don't want to go full GPL, perhaps someone other
-// than I should write a new one without referencing this one.
-class DragScrollListener(val scroll_pane: JScrollPane): MouseListener, MouseMotionListener {
-    val scrollingIntensity = 10
-    val dampening = 0.05
-    val animationSpeed = 20
-    var animationTimer: Timer? = null
-    var lastDragTime = 0L
-
-    var dV = 0.0
-    var lastDragY: Int = 0
-
-    override fun mouseEntered(e: MouseEvent) {}
-    override fun mouseExited(e: MouseEvent) {}
-    override fun mousePressed(e: MouseEvent) {
-        if (animationTimer?.isRunning() == true) {
-            animationTimer!!.stop()
-        }
-        dV = 0.0
-        lastDragY = e.getPoint().y
-    }
-    override fun mouseReleased(e: MouseEvent) {
-        if (System.currentTimeMillis() - lastDragTime < 20) {
-            if (dV != 0.0) {
-                animationTimer = Timer(animationSpeed, object : ActionListener {
-                    override fun actionPerformed(e: ActionEvent) {
-                        dV -= dV * dampening;
-                        val scrollBar = scroll_pane.getVerticalScrollBar()
-                        val maxY = scrollBar.getMaximum()
-                        val nValY = min(maxY, max(0, scrollBar.getValue() + (dV * scrollingIntensity).toInt()))
-                        if (dV.absoluteValue < 0.01 || nValY == 0 || nValY == maxY) {
-                            animationTimer?.stop();
-                            return
-                        }
-                        scrollBar.setValue(nValY)
-                    }
-                })
-                animationTimer?.start()
-            }
-        }
-    }
-    override fun mouseClicked(e: MouseEvent) {}
-    override fun mouseDragged(e: MouseEvent) {
-        val diffy = e.getPoint().y - lastDragY;
-        val scrollBar = scroll_pane.getVerticalScrollBar()
-        scrollBar.setValue(scrollBar.getValue() - diffy)
-        dV = dV*0.8 + diffy * -0.2
-        lastDragTime = System.currentTimeMillis()
-    }
-    override fun mouseMoved(e: MouseEvent) {}
-}
-
 class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val make: Map<String, (T,()->Unit) -> Triple<List<Component>,()->Unit,(T,()->Unit) -> Unit>>, val render_report: (Int,Int)-> Unit) : JComponent(), Scrollable {
     data class RecyclableItem<T>(var start: Int, var end: Int, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,()->Unit) -> Unit)
     val recycle_map: MutableMap<String, ArrayDeque<RecyclableItem<T>>> = mutableMapOf()
@@ -745,9 +689,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             scroll_pane,
             BorderLayout.CENTER
         )
-        val dl = DragScrollListener(scroll_pane)
-        recycling_message_list.addMouseListener(dl)
-        recycling_message_list.addMouseMotionListener(dl)
 
         val message_panel = JPanel()
         message_panel.layout = BorderLayout()
