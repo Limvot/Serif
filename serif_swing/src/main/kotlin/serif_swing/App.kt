@@ -20,7 +20,7 @@ import javax.swing.filechooser.*
 import javax.swing.text.*
 import javax.swing.text.html.HTML
 import kotlin.concurrent.thread
-import kotlin.math.min
+import kotlin.math.*
 
 object AudioPlayer {
     var url = ""
@@ -206,10 +206,8 @@ class URLMouseListener(var message: SerifText) : MouseAdapter() {
     override fun mouseClicked(e: MouseEvent) {
         val pos = message.screenToPos(e.x, e.y)
         val char_iter = message.getText().iterator
-        println("you clicked on pos $pos, message length is ${char_iter.endIndex} because it is ${message.getText()}")
         if (pos >= 0 && pos < char_iter.endIndex) {
             val debug_char = char_iter.setIndex(pos)
-            println("you clicked on character $debug_char")
             val href = char_iter.getAttribute(URL_ATTRIBUTE) as String?
             if (href != null) {
                 // In the background, so that GUI doesn't freeze
@@ -358,6 +356,62 @@ class SerifText(private var text: AttributedString) : JComponent() {
     }
 }
 
+// Inspired by https://www.algosome.com/articles/java-swing-iphone-drag-component.html
+// Rewritten for our use case. I'm not sure if this class counts as a GPL
+// derived work or not - I didn't copy/paste anything, and the code it self
+// is different (more limited, more optimized, safer, in Kotlin), but it does
+// have similar "bones". If we don't want to go full GPL, perhaps someone other
+// than I should write a new one without referencing this one.
+class DragScrollListener(val scroll_pane: JScrollPane): MouseListener, MouseMotionListener {
+    val scrollingIntensity = 10
+    val dampening = 0.05
+    val animationSpeed = 20
+    var animationTimer: Timer? = null
+    var lastDragTime = 0L
+
+    var dV = 0.0
+    var lastDragY: Int = 0
+
+    override fun mouseEntered(e: MouseEvent) {}
+    override fun mouseExited(e: MouseEvent) {}
+    override fun mousePressed(e: MouseEvent) {
+        if (animationTimer?.isRunning() == true) {
+            animationTimer!!.stop()
+        }
+        dV = 0.0
+        lastDragY = e.getPoint().y
+    }
+    override fun mouseReleased(e: MouseEvent) {
+        if (System.currentTimeMillis() - lastDragTime < 20) {
+            if (dV != 0.0) {
+                animationTimer = Timer(animationSpeed, object : ActionListener {
+                    override fun actionPerformed(e: ActionEvent) {
+                        dV -= dV * dampening;
+                        val scrollBar = scroll_pane.getVerticalScrollBar()
+                        val maxY = scrollBar.getMaximum()
+                        val nValY = min(maxY, max(0, scrollBar.getValue() + (dV * scrollingIntensity).toInt()))
+                        if (dV.absoluteValue < 0.01 || nValY == 0 || nValY == maxY) {
+                            animationTimer?.stop();
+                            return
+                        }
+                        scrollBar.setValue(nValY)
+                    }
+                })
+                animationTimer?.start()
+            }
+        }
+    }
+    override fun mouseClicked(e: MouseEvent) {}
+    override fun mouseDragged(e: MouseEvent) {
+        val diffy = e.getPoint().y - lastDragY;
+        val scrollBar = scroll_pane.getVerticalScrollBar()
+        scrollBar.setValue(scrollBar.getValue() - diffy)
+        dV = dV*0.8 + diffy * -0.2
+        lastDragTime = System.currentTimeMillis()
+    }
+    override fun mouseMoved(e: MouseEvent) {}
+}
+
 class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val make: Map<String, (T,()->Unit) -> Triple<List<Component>,()->Unit,(T,()->Unit) -> Unit>>, val render_report: (Int,Int)-> Unit) : JComponent(), Scrollable {
     data class RecyclableItem<T>(var start: Int, var end: Int, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,()->Unit) -> Unit)
     val recycle_map: MutableMap<String, ArrayDeque<RecyclableItem<T>>> = mutableMapOf()
@@ -365,7 +419,9 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
     var current_items: List<T> = listOf()
     var our_height = 0
     var began: Int? = null
+    var began_pix: Int? = null
     var ended: Int? = null
+    var ended_pix: Int? = null
     init {
         addMouseListener(object : MouseListener, MouseMotionListener {
             fun dispatchEvent(e: MouseEvent) {
@@ -408,7 +464,8 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         var before_new = 0
         var after_new = 0
         if (ended != null && began != null) {
-            println("ended and began not null on reset!")
+            before_new += began_pix!!
+            after_new -= ended_pix!!
             for (targetIdx in began!!..ended!!) {
                 if (targetIdx >= current_items.size)
                     continue
@@ -421,7 +478,6 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
                     after_new += subs[targetIdx].second.end - subs[targetIdx].second.start
                 }
             }
-            println("Was anything found? $new_idx $before_new $after_new")
         }
 
         our_height = 0
@@ -435,10 +491,9 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
             var height_delta = 0
             val typ = choose(i)
             val our_height_copy = our_height
-            val repaint_lambda = { /*println("repaint request for (0, $our_height_copy, $our_width, $height_delta)");*/ repaint(0, our_height_copy, our_width, height_delta) }
+            val repaint_lambda = {  repaint(0, our_height_copy, our_width, height_delta) }
             val possible_recycleable = recycle_map[typ]?.removeLastOrNull()
             val recycleable = if (possible_recycleable != null) {
-                //println("Recycling a $typ")
                 possible_recycleable.recycle(i, repaint_lambda)
                 possible_recycleable.start = our_height
                 possible_recycleable
@@ -468,7 +523,10 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         current_items = items
 
         if (new_idx != -1) {
-            scrollRectToVisible(Rectangle(0, subs[new_idx].second.start-before_new, our_width, subs[new_idx].second.end+after_new))
+            val new_start = subs[new_idx].second.start
+            val new_length = subs[new_idx].second.end - new_start
+            val rect = Rectangle(0, new_start - before_new, our_width, new_length + after_new)
+            scrollRectToVisible(rect)
         }
 
         invalidate()
@@ -481,7 +539,7 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
     override fun getScrollableTracksViewportHeight() = false
     override fun paintComponent(g: Graphics) {
         val clip_bounds = g.getClipBounds()
-        //println("RecycleList paintComponent for $clip_bounds")
+        val clip_bounds_ey = clip_bounds.y+clip_bounds.height
         val g = g.create()
         var count = 0
         var total = 0
@@ -490,13 +548,14 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         ended = null
         for ((i, typ_recycleable) in subs.withIndex()) {
             val (sy, ey, sub_components, _refresh) = typ_recycleable.second
-            if ( (sy <= (clip_bounds.y+clip_bounds.height))
+            if ( (sy <= clip_bounds_ey)
                &&(ey >= clip_bounds.y) ) {
-                //println("Drawing component from $sy to $ey")
                 if (began == null) {
                     began = i
+                    began_pix = sy - clip_bounds.y
                 }
                 ended = i
+                ended_pix = ey - clip_bounds_ey
                 for (c in sub_components) {
                     c.paint(g)
                     count += 1
@@ -508,7 +567,6 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
             }
             total += sub_components.size
         }
-        //println("painted $sets / ${subs.size}, $count / $total")
         if (began != null && ended != null) {
             render_report(began!!, ended!!)
         }
@@ -664,10 +722,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 })
             } else if (in_lower_buffer && !tracking_current) {
                 javax.swing.SwingUtilities.invokeLater({
-                    transition(m.refresh(desired_window_half, m.messages[min(ended, m.messages.size)].id, desired_window_half), true)
+                    transition(m.refresh(desired_window_half, m.messages[min(ended, m.messages.size-1)].id, desired_window_half), true)
                 })
-            } else {
-                //println("Render report $began to $ended - top(in_upper_buffer=$in_upper_buffer && no_request_out=$no_request_out), bottom(in_lower_buffer=$in_lower_buffer && no_request_out=$no_request_out && !tracking_current=!$tracking_current) - no_request_out=(m.window_back_length=${m.window_back_length} + m.window_forward_length=${m.window_forward_length} + 1) <= m.messages.size=${m.messages.size}")
             }
         }
     )
@@ -680,14 +736,18 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         panel.layout = BorderLayout()
 
         recycling_message_list.reset(last_window_width, m.messages)
+        val scroll_pane = JScrollPane(
+            recycling_message_list,
+            JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+        )
         panel.add(
-            JScrollPane(
-                recycling_message_list,
-                JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-            ),
+            scroll_pane,
             BorderLayout.CENTER
         )
+        val dl = DragScrollListener(scroll_pane)
+        recycling_message_list.addMouseListener(dl)
+        recycling_message_list.addMouseMotionListener(dl)
 
         val message_panel = JPanel()
         message_panel.layout = BorderLayout()
