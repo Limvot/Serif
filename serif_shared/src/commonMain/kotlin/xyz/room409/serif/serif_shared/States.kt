@@ -136,12 +136,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                     val relates_to = msg_content!!.relates_to!!.event_id!!
                     val key = msg_content!!.relates_to!!.key!!
                     val reactions_for_msg = reaction_maps.getOrPut(relates_to, { mutableMapOf() })
-                    val current_set = reactions_for_msg.getOrPut(key, { mutableSetOf() })
-                    if (current_set.contains(it.sender)) {
-                        current_set.remove(it.sender)
-                    } else {
-                        current_set.add(it.sender)
-                    }
+                    val current_set = reactions_for_msg.getOrPut(key, { mutableSetOf() }).add(it.sender)
                 }
             }
         }
