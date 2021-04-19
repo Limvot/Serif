@@ -147,6 +147,19 @@ abstract class RoomMessageEventContent {
     abstract val body: String
     abstract val msgtype: String
 }
+
+@Serializable
+class ReactionRMEC(
+    @SerialName("m.relates_to") val relates_to: RelationBlock
+) : RoomMessageEventContent() {
+    constructor(reaction: String, react_to: String) : this (
+        relates_to = RelationBlock(in_reply_to=null, rel_type="m.annotation", event_id=react_to, key=reaction)
+    )
+    override val body: String
+        get() = "<reaction: ${relates_to.key}>"
+    override val msgtype: String
+        get() = "m.reaction"
+}
 @Serializable
 class TextRMEC(
     override val body: String = "<missing message body, likely redacted>",
@@ -211,13 +224,14 @@ class RelationBlock(
     @SerialName("m.in_reply_to") val in_reply_to: ReplyToRelation? = null,
     val rel_type: String? = null,
     val event_id: String? = null,
+    val key: String? = null,
 )
 
 object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     override fun selectDeserializer(element: JsonElement) =
         element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
             when {
-                type == "m.room.message" -> RoomMessageEventSerializer
+                type == "m.room.message" || type == "m.reaction" -> RoomMessageEventSerializer
                 type == "m.room.name" -> RoomNameStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
                 type.startsWith("m.room") -> RoomEventFallbackSerializer
@@ -232,6 +246,7 @@ object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<Room
             type == "m.text" -> TextRMEC.serializer()
             type == "m.image" -> ImageRMEC.serializer()
             type == "m.audio" -> AudioRMEC.serializer()
+            type == null && element.jsonObject["m.relates_to"]?.jsonObject?.get("rel_type")?.jsonPrimitive?.content == "m.annotation" -> ReactionRMEC.serializer()
             else -> FallbackRMEC.serializer()
         }
     }
