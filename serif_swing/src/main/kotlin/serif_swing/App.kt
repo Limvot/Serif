@@ -6,19 +6,23 @@ import com.formdev.flatlaf.*
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
 import java.awt.*
+import java.awt.image.*
 import java.awt.event.*
+import java.awt.font.TextAttribute
+import java.text.AttributedCharacterIterator
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferByte
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import java.text.AttributedString
 import javax.sound.sampled.AudioSystem
 import javax.swing.*
 import javax.swing.filechooser.*
 import javax.swing.text.*
 import javax.swing.text.html.HTML
 import kotlin.concurrent.thread
-import kotlin.math.min
+import kotlin.math.*
 
 import java.util.Timer
 import kotlin.concurrent.fixedRateTimer
@@ -53,6 +57,7 @@ object AudioPlayer {
 
 class VideoPlayer {
     var url = ""
+    var redraw_cell: ()->Unit = { Unit }
     val image_array = ArrayList<BufferedImage>()
     var playing_task = Timer()
     var idx = 0
@@ -60,7 +65,8 @@ class VideoPlayer {
     var playing = false
 
 
-    fun loadVideo(video_url: String, pic_out: JButton) {
+    fun loadVideo(video_url: String, pic_out: JButton, redraw_cell_in: ()->Unit) {
+        redraw_cell = redraw_cell_in
         if (url != video_url) {
             image_array.clear()
             url = video_url
@@ -142,6 +148,7 @@ class VideoPlayer {
 
     private fun updateImage(pic_out: JButton) {
         pic_out.setIcon(ImageIcon(image_array[idx]))
+        redraw_cell()
         idx++
     }
     fun play(pic_out: JButton) {
@@ -168,12 +175,12 @@ sealed class SwingState() {
 class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () -> Unit, val panel: JPanel, val m: MatrixLogin) : SwingState() {
     var c_left = GridBagConstraints()
     var c_right = GridBagConstraints()
-    var login_message_label = JLabel(m.login_message)
-    var username_field = JTextField(20)
-    var username_label = JLabel("Username: ")
+    var login_message_label = SmoothLabel(m.login_message)
+    var username_field = SmoothTextField(20)
+    var username_label = SmoothLabel("Username: ")
     var password_field = JPasswordField(20)
-    var password_label = JLabel("Password: ")
-    var button = JButton("Login")
+    var password_label = SmoothLabel("Password: ")
+    var button = SmoothButton("Login")
     var logIn: (ActionEvent) -> Unit = { transition(m.login(username_field.text, password_field.text, onSync), true) }
 
     init {
@@ -189,19 +196,19 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         c_right.weightx = 1.0
 
         panel.add(login_message_label, c_right)
-        panel.add(JLabel("Login with previous session?"), c_right)
+        panel.add(SmoothLabel("Login with previous session?"), c_right)
 
         for (session in m.getSessions()) {
-            var button = JButton(session)
+            var button = SmoothButton(session)
             panel.add(button, c_right)
             button.addActionListener({ transition(m.loginFromSession(session, onSync), true) })
         }
 
-        username_label.labelFor = username_field
+        //username_label.labelFor = username_field
         panel.add(username_label, c_left)
         panel.add(username_field, c_right)
 
-        password_label.labelFor = password_field
+        //password_label.labelFor = password_field
         panel.add(password_label, c_left)
         panel.add(password_field, c_right)
 
@@ -218,14 +225,14 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
     }
 }
 class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixRooms) : SwingState() {
-    var message_label = JLabel(m.message)
+    var message_label = SerifText(m.message)
     var inner_scroll_pane = JPanel()
     init {
         panel.layout = BorderLayout()
         var topPanel = JPanel()
         topPanel.layout = BoxLayout(topPanel, BoxLayout.LINE_AXIS)
         topPanel.add(message_label)
-        var newRoomButton = JButton("New Room")
+        var newRoomButton = SmoothButton("New Room")
         topPanel.add(newRoomButton)
         newRoomButton.addActionListener({
 
@@ -238,21 +245,21 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
             val dpanel = JPanel()
             dpanel.layout = BoxLayout(dpanel, BoxLayout.PAGE_AXIS)
             // name, room_alias_name, topic
-            var roomname_field = JTextField(20)
-            var roomname_label = JLabel("Room Name: ")
-            var alias_field = JTextField(20)
-            var alias_label = JLabel("Alias: ")
-            var topic_field = JTextField(20)
-            var topic_label = JLabel("Topic: ")
+            var roomname_field = SmoothTextField(20)
+            var roomname_label = SmoothLabel("Room Name: ")
+            var alias_field = SmoothTextField(20)
+            var alias_label = SmoothLabel("Alias: ")
+            var topic_field = SmoothTextField(20)
+            var topic_label = SmoothLabel("Topic: ")
 
-            val create_btn = JButton("Create")
+            val create_btn = SmoothButton("Create")
             create_btn.addActionListener({
                 println(m.createRoom(roomname_field.text, alias_field.text, topic_field.text))
                 dialog.setVisible(false)
                 dialog.dispose()
             })
 
-            val close_btn = JButton("Close")
+            val close_btn = SmoothButton("Close")
             close_btn.addActionListener({
                 dialog.setVisible(false)
                 dialog.dispose()
@@ -279,18 +286,18 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
             var button = JButton()
             button.layout = BoxLayout(button, BoxLayout.PAGE_AXIS)
 
-            val room_name = JLabel("$name ($unreadCount unread / $highlightCount mentions)")
-            val last_message = JLabel(lastMessage?.message?.take(80) ?: "")
+            val room_name = SerifText("$name ($unreadCount unread / $highlightCount mentions)")
+            val last_message = SerifText(lastMessage?.message?.take(80) ?: "")
 
             button.add(room_name)
             button.add(last_message)
 
-            button.addActionListener({ transition(m.getRoom(id), true) })
+            button.addActionListener({ transition(m.getRoom(id, 20, null, 0), true) })
             inner_scroll_pane.add(button)
         }
         panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
 
-        var back_button = JButton("(Fake) Logout")
+        var back_button = SmoothButton("(Fake) Logout")
         panel.add(back_button, BorderLayout.PAGE_END)
         back_button.addActionListener({ transition(m.fake_logout(), true) })
     }
@@ -302,7 +309,7 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
             println("Having to transition, rooms !=")
             transition(new_m, false)
         } else {
-            message_label.text = new_m.message
+            message_label.setText(new_m.message)
             m = new_m
         }
     }
@@ -320,26 +327,319 @@ class ImageFileFilter : FileFilter() {
     }
 }
 
-// adapted from https://stackoverflow.com/questions/30590031/jtextpane-line-wrap-behavior?noredirect=1&lq=1%27
-object WrapEditorKit : StyledEditorKit() {
-    val defaultFactory = object : ViewFactory {
-        public override fun create(element: Element): View = when (val kind = element.name) {
-            AbstractDocument.ContentElementName -> WrapLabelView(element)
-            AbstractDocument.ParagraphElementName -> ParagraphView(element)
-            AbstractDocument.SectionElementName -> BoxView(element, View.Y_AXIS)
-            StyleConstants.ComponentElementName -> ComponentView(element)
-            StyleConstants.IconElementName -> IconView(element)
-            else -> LabelView(element)
+val URL_ATTRIBUTE = object : AttributedCharacterIterator.Attribute("URL_HREF") {}
+
+class URLMouseListener(var message: SerifText) : MouseAdapter() {
+    override fun mouseClicked(e: MouseEvent) {
+        val pos = message.screenToPos(e.x, e.y)
+        val char_iter = message.getText().iterator
+        if (pos >= 0 && pos < char_iter.endIndex) {
+            val debug_char = char_iter.setIndex(pos)
+            val href = char_iter.getAttribute(URL_ATTRIBUTE) as String?
+            if (href != null) {
+                // In the background, so that GUI doesn't freeze
+                thread(start = true) {
+                    // We have to try using xdg-open first,
+                    // since PinePhone somehow implements the
+                    // Desktop API but has the same problem with the
+                    // GTK_BACKEND var
+                    try {
+                        println("Trying to open $href with exec 'xdg-open $href'")
+                        val pb = ProcessBuilder("xdg-open", href)
+                        // Somehow this environment variable gets set for pb
+                        // when it's NOT in System.getenv(). And of course, this
+                        // is the one that makes xdg-open try to launch an X version
+                        // of Firefox, giving the dreaded Firefox is already running
+                        // message if you've got a Wayland version running already.
+                        pb.environment().clear()
+                        pb.environment().putAll(System.getenv())
+                        pb.redirectErrorStream(true)
+                        val process = pb.start()
+                        val reader = BufferedReader(InputStreamReader(process.inputStream))
+                        while (reader.readLine() != null) {}
+                        process.waitFor()
+                        println("done trying to open url")
+                    } catch (e1: Exception) {
+                        try {
+                            println("Trying to open $href with Desktop")
+                            java.awt.Desktop.getDesktop().browse(java.net.URI(href))
+                        } catch (e2: Exception) {
+                            println("Couldn't get ProcessBuilder('xdg-open $href') or Desktop, problem was $e1 then $e2")
+                        }
+                    }
+                }
+            }
         }
     }
-    public override fun getViewFactory(): ViewFactory = defaultFactory
 }
-class WrapLabelView(element: Element) : LabelView(element) {
-    public override fun getMinimumSpan(axis: Int): Float {
-        when (axis) {
-            View.X_AXIS -> return 0.0f
-            View.Y_AXIS -> return super.getMinimumSpan(axis)
-            else -> throw IllegalArgumentException("Invalid axis: " + axis)
+
+class SmoothLabel(text: String): JLabel(text) {
+    override fun paintComponent(g: Graphics) {
+        val g2d = g as Graphics2D
+        g2d.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        super.paintComponent(g)
+    }
+}
+class SmoothButton(text: String): JButton(text) {
+    override fun paintComponent(g: Graphics) {
+        val g2d = g as Graphics2D
+        g2d.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        super.paintComponent(g)
+    }
+}
+class SmoothTextField(size: Int): JTextField(size) {
+    override fun paintComponent(g: Graphics) {
+        val g2d = g as Graphics2D
+        g2d.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        super.paintComponent(g)
+    }
+}
+
+class SerifText(private var text: AttributedString) : JComponent() {
+    constructor(text: String): this(AttributedString(text))
+    private val line_height: Int
+    private val max_char_width: Int
+    private var size: Dimension
+    private var lines: List<Pair<Int,Int>>
+    private var max_line_length: Int
+    init {
+        if (text.iterator.endIndex != 0) {
+            text.addAttribute(TextAttribute.SIZE, 16.0)
+        }
+        val metrics = getFontMetrics(javax.swing.UIManager.getDefaults().getFont("Label.font"))
+        line_height = metrics.height
+        max_char_width = metrics.charWidth('W')
+        lines = calculateLines(text, -1)
+        max_line_length = lines.map { it.second - it.first }.max() ?: 1
+        size = Dimension(max_char_width * max_line_length, line_height * (lines.size + 1))
+    }
+    fun calculateLines(text: AttributedString, max_chars_per_line: Int): List<Pair<Int,Int>> {
+        val lines: MutableList<Pair<Int,Int>> = mutableListOf()
+        var aci = text.iterator
+        var begin = aci.index
+        val next_break: () -> Int = { ->
+            val save = aci.index
+            aci.next()
+            while (aci.index != aci.endIndex && aci.current() != ' ' && aci.current() != '\n') {
+                aci.next()
+            }
+            val to_ret = aci.index
+            aci.index = save
+            to_ret
+        }
+        while (aci.index != aci.endIndex) {
+            if (aci.current() == '\n') {
+                lines.add(Pair(begin, aci.index))
+                begin = aci.index + 1
+
+            // If we have a max length, and either we're at it, or we're at a space and our next line-break oppertunity is beyond
+            // the length limit, break
+            } else if (max_chars_per_line != -1 && (   (aci.index - begin == max_chars_per_line)
+                                                    || (aci.current() == ' ' && next_break() - begin >= max_chars_per_line)) ){
+                lines.add(Pair(begin, aci.index + 1))
+                begin = aci.index + 1
+            }
+            aci.next()
+        }
+        if (begin != aci.index) {
+            lines.add(Pair(begin, aci.index))
+        }
+        return lines
+    }
+    fun screenToPos(x: Int, y: Int): Int {
+        val line_no = min(y / line_height, lines.size-1)
+        return lines[line_no].first + (x / max_char_width)
+    }
+    fun setText(new_text: String) = setText(AttributedString(new_text))
+    fun setText(new_text: AttributedString) {
+        text = new_text
+        if (text.iterator.endIndex != 0) {
+            text.addAttribute(TextAttribute.SIZE, 16.0)
+        }
+        lines = calculateLines(text, size.width / (max_char_width+1))
+        max_line_length = lines.map { it.second - it.first }.max() ?: 1
+    }
+    fun getText() = text
+    override fun setSize(d: Dimension) {
+        size = d
+    }
+    override fun setSize(width: Int, height: Int) = setSize(Dimension(width, height))
+    override fun getSize() = size
+    override fun getPreferredSize() = Dimension(max_char_width * max_line_length,line_height * (lines.size + 1))
+    override fun paintComponent(g: Graphics) {
+        val g2d = g as Graphics2D
+        g2d.setRenderingHint(
+            RenderingHints.KEY_TEXT_ANTIALIASING,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        lines.forEachIndexed { i, line ->
+            g2d.drawString(text.getIterator(null, line.first, line.second), 0, (i+1) * line_height)
+        }
+    }
+}
+
+class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val make: Map<String, (T,()->Unit) -> Triple<List<Component>,()->Unit,(T,()->Unit) -> Unit>>, val render_report: (Int,Int)-> Unit) : JComponent(), Scrollable {
+    data class RecyclableItem<T>(var start: Int, var end: Int, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,()->Unit) -> Unit)
+    val recycle_map: MutableMap<String, ArrayDeque<RecyclableItem<T>>> = mutableMapOf()
+    val subs: MutableList<Pair<String, RecyclableItem<T>>> = mutableListOf()
+    var current_items: List<T> = listOf()
+    var our_height = 0
+    var began: Int? = null
+    var began_pix: Int? = null
+    var ended: Int? = null
+    var ended_pix: Int? = null
+    init {
+        addMouseListener(object : MouseListener, MouseMotionListener {
+            fun dispatchEvent(e: MouseEvent) {
+                for ((_typ, recycleable) in subs) {
+                    val (sy, ey, sub_components, _deactivate, _recycle) = recycleable
+                    if ( (sy <= e.point.y)
+                       &&(ey >= e.point.y) ) {
+                        var sub_offset = sy
+                        for (c in sub_components) {
+                            if (e.point.y < sub_offset + c.height) {
+                                val new_e = MouseEvent(c, e.id, e.getWhen(), e.modifiers, e.x, e.y-sub_offset, e.xOnScreen, e.yOnScreen, e.clickCount, e.isPopupTrigger(), e.button)
+                                // a hack so that stuff like buttons have a proper parent when the reply/edit menu pops up and uses it
+                                add(c)
+                                c.dispatchEvent(new_e)
+                                remove(c)
+                                return;
+                            } else {
+                                sub_offset += c.height
+                            }
+                        }
+                    }
+                }
+            }
+            override fun mouseClicked(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseEntered(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseExited(e: MouseEvent) = dispatchEvent(e)
+            override fun mousePressed(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseReleased(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseDragged(e: MouseEvent) = dispatchEvent(e)
+            override fun mouseMoved(e: MouseEvent) = dispatchEvent(e)
+        })
+    }
+    fun cleanup() = reset(1000, listOf())
+    fun reset(new_width: Int, items: List<T>) {
+
+        // First, find where the first item in our last drawn range
+        // that matches with an item in our new list falls on screen,
+        // so that we can scroll the new item to that location.
+        var new_idx = -1
+        var before_new = 0
+        var after_new = 0
+        if (ended != null && began != null) {
+            before_new += began_pix!!
+            after_new -= ended_pix!!
+            for (targetIdx in began!!..ended!!) {
+                if (targetIdx >= current_items.size)
+                    continue
+                if (new_idx == -1) {
+                    new_idx = items.indexOf(current_items[targetIdx])
+                    if (new_idx == -1) {
+                        before_new += subs[targetIdx].second.end - subs[targetIdx].second.start
+                    }
+                } else {
+                    after_new += subs[targetIdx].second.end - subs[targetIdx].second.start
+                }
+            }
+        }
+
+        our_height = 0
+        our_width = new_width
+        for ((typ, recycleable) in subs) {
+            recycleable.deactivate()
+            recycle_map.getOrPut(typ, { ArrayDeque() }).add(recycleable)
+        }
+        subs.clear()
+        for (i in items) {
+            var height_delta = 0
+            val typ = choose(i)
+            val our_height_copy = our_height
+            val repaint_lambda = {  repaint(0, our_height_copy, our_width, height_delta) }
+            val possible_recycleable = recycle_map[typ]?.removeLastOrNull()
+            val recycleable = if (possible_recycleable != null) {
+                possible_recycleable.recycle(i, repaint_lambda)
+                possible_recycleable.start = our_height
+                possible_recycleable
+            } else {
+                println("Creating a new $typ")
+                val (sub_components, deactivate, recycle) = make[typ]!!(i, repaint_lambda)
+                RecyclableItem<T>(our_height, -1, sub_components, deactivate, recycle)
+            }
+            for (c in recycleable.sub_components) {
+                c.setSize(our_width, 1000)
+                val d = c.getPreferredSize()
+                val force_width = true
+                if (force_width) {
+                    c.setSize(our_width, d.height)
+                    c.setBounds(0, our_height, our_width, d.height)
+                } else {
+                    c.setSize(d.width, d.height)
+                    c.setBounds(0, our_height, d.width, d.height)
+                }
+                height_delta += c.height
+                // Have to alert our hierarchy that we've changed size
+            }
+            recycleable.end = our_height + height_delta
+            subs.add(Pair(typ, recycleable))
+            our_height += height_delta
+        }
+        current_items = items
+
+        if (new_idx != -1) {
+            val new_start = subs[new_idx].second.start
+            val new_length = subs[new_idx].second.end - new_start
+            val rect = Rectangle(0, new_start - before_new, our_width, new_length + after_new)
+            scrollRectToVisible(rect)
+        }
+
+        invalidate()
+    }
+    override fun getPreferredSize() = Dimension(our_width,our_height)
+    override fun getPreferredScrollableViewportSize() = Dimension(our_width,our_height)
+    override fun getScrollableUnitIncrement(p0: Rectangle, p1: Int, p2: Int) = 10
+    override fun getScrollableBlockIncrement(p0: Rectangle, p1: Int, p2: Int) = 100
+    override fun getScrollableTracksViewportWidth() = true
+    override fun getScrollableTracksViewportHeight() = false
+    override fun paintComponent(g: Graphics) {
+        val clip_bounds = g.getClipBounds()
+        val clip_bounds_ey = clip_bounds.y+clip_bounds.height
+        val g = g.create()
+        var count = 0
+        var total = 0
+        var sets = 0
+        began = null
+        ended = null
+        for ((i, typ_recycleable) in subs.withIndex()) {
+            val (sy, ey, sub_components, _refresh) = typ_recycleable.second
+            if ( (sy <= clip_bounds_ey)
+               &&(ey >= clip_bounds.y) ) {
+                if (began == null) {
+                    began = i
+                    began_pix = sy - clip_bounds.y
+                }
+                ended = i
+                ended_pix = ey - clip_bounds_ey
+                for (c in sub_components) {
+                    c.paint(g)
+                    count += 1
+                    g.translate(0, c.height)
+                }
+                sets += 1
+            } else {
+                g.translate(0, ey-sy)
+            }
+            total += sub_components.size
+        }
+        if (began != null && ended != null) {
+            render_report(began!!, ended!!)
         }
     }
 }
@@ -348,41 +648,249 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     // From @stephenhay via https://mathiasbynens.be/demo/url-regex
     // slightly modified
     val URL_REGEX = Regex("""(https?|ftp)://[^\s/$.?#].[^\s]*""")
-    var inner_scroll_pane = JPanel()
-    var c_left = GridBagConstraints()
-    var c_right = GridBagConstraints()
-    var message_field = JTextField(20)
+    val stringToAttributedURLString = { s: String ->
+        val attString = AttributedString(s)
+        for (url_match in URL_REGEX.findAll(s)) {
+            attString.addAttribute(TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON, url_match.range.start, url_match.range.endInclusive+1)
+            attString.addAttribute(URL_ATTRIBUTE, url_match.value, url_match.range.start, url_match.range.endInclusive+1)
+        }
+        attString
+    }
+    val mk_sender = { msg: SharedUiMessage ->
+        val sender = SerifText("${msg.sender}:  ")
+        val set_sender = { msg: SharedUiMessage -> sender.setText("${msg.sender}:  ") }
+        set_sender(msg)
+        Pair(sender, set_sender)
+    }
+    val mk_menu = { msg_in: SharedUiMessage  ->
+        var msg = msg_in
+        val reply_option = JMenuItem("Reply")
+        reply_option.addActionListener({
+            println("Now writing a reply")
+            replied_event_id = msg.id
+        })
+        val edit_option = JMenuItem("Edit")
+        edit_option.addActionListener({
+            println("Now editing a message")
+            edited_event_id = msg.id
+            message_field.text = msg.message
+        })
+        val show_src_option = JMenuItem("Show Source")
+        show_src_option.addActionListener({
+            val json_str = m.getEventSrc(msg.id)
+
+            val window = SwingUtilities.getWindowAncestor(panel)
+            val dim = window.getSize()
+            val h = dim.height
+            val w = dim.width
+            val dialog = JDialog(window, "Event Source")
+
+            val dpanel = JPanel(BorderLayout())
+            val src_txt = JTextPane()
+            src_txt.setContentType("text/plain")
+            src_txt.setText(json_str)
+            src_txt.setEditable(false)
+
+            val close_btn = SmoothButton("Close")
+            close_btn.addActionListener({
+                dialog.setVisible(false)
+                dialog.dispose()
+            })
+
+            dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
+            dpanel.add(close_btn,BorderLayout.PAGE_END)
+            dialog.add(dpanel)
+
+            dialog.setSize(w,h/2)
+            dialog.setVisible(true)
+            dialog.setResizable(false)
+            dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+        })
+
+        val msg_action_popup = JPopupMenu()
+        msg_action_popup.add(reply_option)
+        if(msg.sender.contains(m.username)) {
+            msg_action_popup.add(edit_option)
+        }
+        msg_action_popup.add(show_src_option)
+
+        val msg_action_button = SmoothButton("...")
+        msg_action_button.addActionListener({
+            msg_action_popup.show(msg_action_button,0,0)
+        })
+        Pair(msg_action_button, { new_msg: SharedUiMessage -> msg = new_msg; })
+    }
+    val recycling_message_list = RecyclingList<SharedUiMessage>(last_window_width,
+        { when (it) {
+                is SharedUiImgMessage -> "img"
+                is SharedUiAudioMessage -> "audio"
+                is SharedUiVideoMessage -> "video"
+                is SharedUiFileMessage -> "file"
+                is SharedUiLocationMessage -> "location"
+                else -> "text"
+        } },
+        mapOf(
+            "img" to { msg: SharedUiMessage, repaint_cell ->
+                msg as SharedUiImgMessage
+                val set_icon_image = { icon: ImageIcon, msg: SharedUiImgMessage, repaint_cell: ()->Unit ->
+                    val img_url = msg.url
+                    val og_image_icon = ImageIcon(img_url)
+                    val og_image = og_image_icon.image
+                    val img_width: Int = og_image.getWidth(null)
+                    val img_height: Int = og_image.getHeight(null)
+                    if (last_window_width != 0 && img_width != 0 && img_height != 0) {
+                        val new_width = min(last_window_width, img_width)
+                        val new_height = min(img_height, (img_height * new_width)/img_width)
+                        icon.setImage(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT))
+                    } else {
+                        icon.setImage(og_image)
+                    }
+                    icon.setImageObserver(object : ImageObserver {
+                        override fun imageUpdate(img: Image, infoFlags: Int, x: Int, y: Int, w: Int, h: Int): Boolean {
+                            repaint_cell()
+                            return ((infoFlags and (ImageObserver.ALLBITS or ImageObserver.ABORT)) == 0)
+                        }
+                    })
+                }
+                val icon = ImageIcon()
+                set_icon_image(icon, msg, repaint_cell)
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, JLabel(icon), menu), { icon.setImageObserver(null) }, { msg, repaint_cell ->
+                    set_icon_image(icon, msg as SharedUiImgMessage, repaint_cell)
+                    set_sender(msg)
+                    set_menu(msg)
+                })
+            },
+            "audio" to { msg, repaint_cell ->
+                msg as SharedUiAudioMessage
+                var audio_url = msg.url
+                val play_btn = SmoothButton("Play/Pause $audio_url")
+                play_btn.addActionListener({
+                    AudioPlayer.loadAudio(audio_url)
+                    AudioPlayer.play()
+                })
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, play_btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); audio_url = (msg as SharedUiAudioMessage).url; })
+            },
+            "video" to { msg, repaint_cell ->
+                val video_btn = JButton()
+                val pic_chan = ImageIcon()
+
+                val vp = VideoPlayer()
+                vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell)
+                video_btn.addActionListener({
+                    vp.play(video_btn)
+                })
+
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, video_btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell); })
+            },
+            "file" to { msg, repaint_cell ->
+                var msg = msg as SharedUiFileMessage
+                var filename = ""
+                val btn = SmoothButton("<file>")
+                val set_down = { msgi: SharedUiMessage ->
+                    msg = msgi as SharedUiFileMessage
+                    filename = if(msg.filename != "") {
+                        msg.filename
+                    } else {
+                        msg.message
+                    }
+                    btn.setText("Download $filename ${msg.mimetype}")
+                }
+                set_down(msg)
+                btn.addActionListener({
+                    val chooser = JFileChooser()
+                    chooser.setSelectedFile(File(filename))
+                    val ret = chooser.showSaveDialog(btn)
+                    if(ret == JFileChooser.APPROVE_OPTION) {
+                        val user_file_path = chooser.getSelectedFile().getAbsolutePath()
+                        try {
+                            m.saveMediaToPath(user_file_path, msg.url)
+                        } catch (e: Exception) {
+                            println("Couldn't save media, $e")
+                        }
+                    }
+                })
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_down(msg); })
+            },
+            "location" to { msg, repaint_cell ->
+                val btn = SmoothButton("Location")
+                var href = ""
+                btn.addActionListener({ openUrl(href) })
+                val set_loc = { msg: SharedUiMessage -> 
+                    btn.setText("Location: ${msg.message}")
+                    val parts = (msg as SharedUiLocationMessage).location.split(",")
+                    val lat = parts[0].replace("geo:","")
+                    val lon = parts[1]
+                    href = "https://maps.google.com/?q=$lat,$lon"
+                }
+                set_loc(msg)
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_loc(msg); })
+            },
+            "text" to { msg, repaint_cell ->
+                val message = SerifText(stringToAttributedURLString(msg.message))
+                message.addMouseListener(URLMouseListener(message))
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> message.setText(stringToAttributedURLString(msg.message)); set_sender(msg); set_menu(msg) })
+            }
+        ),
+       { began, ended ->
+            val drawn_length = ended - began
+            val desired_window_half = drawn_length * 3
+            val buffer_space = drawn_length
+            val in_upper_buffer = began < buffer_space
+            val in_lower_buffer = m.messages.size - ended < buffer_space
+            val tracking_current = m.message_window_base == null
+            val no_request_out = (m.window_back_length + m.window_forward_length + 1) <= m.messages.size
+            if (in_upper_buffer && no_request_out) {
+                javax.swing.SwingUtilities.invokeLater({
+                    transition(m.refresh(desired_window_half, m.messages[began].id, desired_window_half), true)
+                })
+            } else if (in_lower_buffer && !tracking_current) {
+                javax.swing.SwingUtilities.invokeLater({
+                    transition(m.refresh(desired_window_half, m.messages[min(ended, m.messages.size-1)].id, desired_window_half), true)
+                })
+            }
+        }
+    )
+    val c_left = GridBagConstraints()
+    val c_right = GridBagConstraints()
+    val message_field = SmoothTextField(20)
     var replied_event_id = ""
     var edited_event_id = ""
     init {
         panel.layout = BorderLayout()
 
-        val backfill_button = JButton("Backfill")
-        backfill_button.addActionListener({ m.requestBackfill() })
-        panel.add(backfill_button, BorderLayout.PAGE_START)
-
-        val group_layout = GroupLayout(inner_scroll_pane)
-        inner_scroll_pane.layout = group_layout
-        redrawMessages(last_window_width)
+        recycling_message_list.reset(last_window_width, m.messages)
+        val scroll_pane = JScrollPane(
+            recycling_message_list,
+            JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+        )
         panel.add(
-            JScrollPane(
-                inner_scroll_pane,
-                JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-            ),
+            scroll_pane,
             BorderLayout.CENTER
         )
 
         val message_panel = JPanel()
         message_panel.layout = BorderLayout()
-        var back_button = JButton("Back")
+        var back_button = SmoothButton("Back")
         message_panel.add(back_button, BorderLayout.LINE_START)
         message_panel.add(message_field, BorderLayout.CENTER)
         val msg_panel_actions = JPanel()
         msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
-        var attach_button = JButton("+")
+        var attach_button = SmoothButton("+")
         msg_panel_actions.add(attach_button)
-        var send_button = JButton("Send")
+        var send_button = SmoothButton("Send")
         msg_panel_actions.add(send_button)
         message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
         panel.add(message_panel, BorderLayout.PAGE_END)
@@ -423,228 +931,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         message_field.addActionListener(onSend)
         send_button.addActionListener(onSend)
         attach_button.addActionListener(onAttach)
-        back_button.addActionListener({ transition(m.exitRoom(), true) })
+        back_button.addActionListener({ recycling_message_list.cleanup(); transition(m.exitRoom(), true) })
         m.messages.lastOrNull()?.let { m.sendReceipt(it.id) }
-    }
-    fun redrawMessages(draw_width: Int) {
-        inner_scroll_pane.removeAll()
-        val layout = inner_scroll_pane.layout as GroupLayout
-        val parallel_group = layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-        var seq_vert_groups = layout.createSequentialGroup()
-        for (msg in m.messages) {
-            val _sender = msg.sender
-            val sender = JTextArea("$_sender:  ")
-            val show_edit_btn = _sender.contains(m.username)
-            sender.setEditable(false)
-            sender.lineWrap = true
-            sender.wrapStyleWord = true
-
-            val msg_widget =
-                when (msg) {
-                    is SharedUiImgMessage -> {
-                        val img_url = msg.url
-                        val og_image_icon = ImageIcon(img_url)
-                        val og_image = og_image_icon.image
-                        val img_width: Int = og_image.getWidth(null)
-                        val img_height: Int = og_image.getHeight(null)
-                        if (draw_width != 0 && img_width != 0 && img_height != 0) {
-                            val new_width = min(draw_width, img_width)
-                            val new_height = min(img_height, (img_height * new_width) / img_width)
-                            JLabel(ImageIcon(og_image.getScaledInstance(new_width, new_height, Image.SCALE_DEFAULT)))
-                        } else {
-                            JLabel(og_image_icon)
-                        }
-                    }
-                    is SharedUiAudioMessage -> {
-                        val audio_url = msg.url
-                        val play_btn = JButton("Play/Pause $audio_url")
-                        play_btn.addActionListener({
-                            AudioPlayer.loadAudio(audio_url)
-                            AudioPlayer.play()
-                        })
-                        play_btn
-                    }
-                    is SharedUiVideoMessage -> {
-                        val message_panel = JPanel()
-                        message_panel.layout = BoxLayout(message_panel, BoxLayout.PAGE_AXIS)
-                        val video_url = msg.url
-                        val video_btn = JButton()
-                        val pic_chan = ImageIcon()
-
-                        val vp = VideoPlayer()
-                        vp.loadVideo(video_url, video_btn)
-                        video_btn.addActionListener({
-                            vp.play(video_btn)
-                        })
-
-                        message_panel.add(video_btn)
-                        message_panel
-                    }
-                    is SharedUiFileMessage -> {
-                        val file_url = msg.url
-                        val filename = if(msg.filename != "") {
-                            msg.filename
-                        } else {
-                            msg.message
-                        }
-                        val mimetype = msg.mimetype
-                        val btn = JButton()
-                        val message_panel = JPanel()
-                        message_panel.layout = BoxLayout(message_panel, BoxLayout.PAGE_AXIS)
-                        message_panel.add(JLabel("Download $filename"))
-                        message_panel.add(JLabel(mimetype))
-                        btn.add(message_panel)
-                        btn.addActionListener({
-                            val chooser = JFileChooser()
-                            chooser.setSelectedFile(File(filename))
-                            val ret = chooser.showSaveDialog(btn)
-                            if(ret == JFileChooser.APPROVE_OPTION) {
-                                val user_file_path = chooser.getSelectedFile().getAbsolutePath()
-                                try {
-                                    m.saveMediaToPath(user_file_path, file_url)
-                                } catch (e: Exception) {
-                                    println("Couldn't save media, $e")
-                                }
-                            }
-                        })
-                        btn
-                    }
-                    is SharedUiLocationMessage -> {
-                        val loc_str = msg.location
-                        val body = msg.message
-                        val btn = JButton()
-                        val message_panel = JPanel()
-                        message_panel.layout = BoxLayout(message_panel, BoxLayout.PAGE_AXIS)
-                        val l = JLabel("Location")
-                        message_panel.add(l)
-                        body.split("\n").forEach { part ->
-                            message_panel.add(JLabel(part))
-                        }
-                        btn.add(message_panel)
-                        val parts = loc_str.split(",")
-                        val lat = parts[0].replace("geo:","")
-                        val lon = parts[1]
-                        val href = "https://maps.google.com/?q=$lat,$lon"
-                        btn.addActionListener({ openUrl(href) })
-                        btn
-                    }
-                    else -> {
-                        val message = JTextPane()
-                        message.setEditorKit(WrapEditorKit)
-                        message.setEditable(false)
-                        // This is mandatory to make it wrap, for some reason
-                        // It's not in the examples I found online
-                        // My best guess is that because of the layout, it
-                        // won't smash it smaller than preferred size, but it will
-                        // stretch it to fit the larger size?
-                        message.setPreferredSize(Dimension(0, 0))
-
-                        var current_idx = 0
-                        val simpleAttrs = SimpleAttributeSet()
-                        for (url_match in URL_REGEX.findAll(msg.message)) {
-                            if (url_match.range.start > current_idx) {
-                                message.document.insertString(current_idx, msg.message.slice(current_idx..url_match.range.start - 1), simpleAttrs)
-                                current_idx = url_match.range.start
-                            }
-                            val urlAttrs = SimpleAttributeSet()
-                            StyleConstants.setUnderline(urlAttrs, true)
-                            urlAttrs.addAttribute(HTML.Attribute.HREF, url_match.value)
-                            message.document.insertString(current_idx, url_match.value, urlAttrs)
-                            current_idx = url_match.range.endInclusive + 1
-                        }
-                        if (current_idx < msg.message.length) {
-                            message.document.insertString(current_idx, msg.message.slice(current_idx..msg.message.length - 1), simpleAttrs)
-                        }
-
-                        message.addMouseListener(object : MouseAdapter() {
-                            override fun mouseClicked(e: MouseEvent) {
-                                val pos = message.viewToModel(Point(e.x, e.y))
-                                println("you clicked on pos $pos")
-                                if (pos >= 0 && pos < msg.message.length) {
-                                    println("That is, character ${msg.message[pos]}")
-                                    val doc = (message.document as? DefaultStyledDocument)
-                                    if (doc != null) {
-                                        val el = doc.getCharacterElement(pos)
-                                        val href = el.attributes.getAttribute(HTML.Attribute.HREF) as String?
-                                        if (href != null) {
-                                            openUrl(href)
-                                        }
-                                    }
-                                }
-                            }
-                        })
-                        message
-                    }
-                }
-
-            val reply_option = JMenuItem("Reply")
-            reply_option.addActionListener({
-                println("Now writing a reply")
-                replied_event_id = msg.id
-            })
-            val edit_option = JMenuItem("Edit")
-            edit_option.addActionListener({
-                println("Now editing a message")
-                edited_event_id = msg.id
-                message_field.text = msg.message
-            })
-            val show_src_option = JMenuItem("Show Source")
-            show_src_option.addActionListener({
-                val json_str = m.getEventSrc(msg.id)
-
-                val window = SwingUtilities.getWindowAncestor(panel)
-                val dim = window.getSize()
-                val h = dim.height
-                val w = dim.width
-                val dialog = JDialog(window, "Event Source")
-
-                val dpanel = JPanel(BorderLayout())
-                val src_txt = JTextPane()
-                src_txt.setContentType("text/plain")
-                src_txt.setText(json_str)
-                src_txt.setEditable(false)
-
-                val close_btn = JButton("Close")
-                close_btn.addActionListener({
-                    dialog.setVisible(false)
-                    dialog.dispose()
-                })
-
-                dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
-                dpanel.add(close_btn, BorderLayout.PAGE_END)
-                dialog.add(dpanel)
-
-                dialog.setSize(w, h / 2)
-                dialog.setVisible(true)
-                dialog.setResizable(false)
-                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
-            })
-
-            val msg_action_popup = JPopupMenu()
-            msg_action_popup.add(reply_option)
-            if (show_edit_btn) {
-                msg_action_popup.add(edit_option)
-            }
-            msg_action_popup.add(show_src_option)
-
-            val msg_action_button = JButton("...")
-            msg_action_button.addActionListener({
-                msg_action_popup.show(msg_action_button, 0, 0)
-            })
-
-            parallel_group.addComponent(sender)
-            parallel_group.addComponent(msg_widget)
-            parallel_group.addComponent(msg_action_button)
-            seq_vert_groups.addComponent(sender)
-            seq_vert_groups.addGroup(
-                layout.createSequentialGroup()
-                    .addPreferredGap(sender, msg_widget, LayoutStyle.ComponentPlacement.INDENT)
-                    .addComponent(msg_widget)
-                    .addComponent(msg_action_button)
-            )
-        }
-        layout.setHorizontalGroup(parallel_group)
-        layout.setVerticalGroup(seq_vert_groups)
     }
     override fun refresh() {
         transition(m.refresh(), true)
@@ -652,7 +940,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     fun update(new_m: MatrixChatRoom, window_width: Int) {
         if (m.messages != new_m.messages || last_window_width != window_width) {
             m = new_m
-            redrawMessages(window_width)
+            recycling_message_list.reset(window_width, m.messages)
             last_window_width = window_width
         } else {
             m = new_m
@@ -753,6 +1041,9 @@ class App {
 
 fun main(args: Array<String>) {
     FlatDarkLaf.install()
-    UIManager.getLookAndFeelDefaults().put("defaultFont", Font("Serif", Font.PLAIN, 16))
+
+    val fontStream = object {}.javaClass.getResourceAsStream("iosevka-fixed-extended.ttf")
+    val font = Font.createFont(Font.TRUETYPE_FONT, fontStream).deriveFont(16f)
+    UIManager.getLookAndFeelDefaults().put("defaultFont", font)
     javax.swing.SwingUtilities.invokeLater({ App() })
 }

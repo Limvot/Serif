@@ -23,6 +23,7 @@ inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.
 inline fun <reified T> List<Event>.firstStateEventContentOfType(): T? = this.map { ((it as? StateEvent<T>?)?.content) as? T? }.firstOrNull { it != null }
 
 class MatrixSession(val client: HttpClient, val server: String, val user: String, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
+    private var in_flight_backfill_requests: MutableSet<String> = mutableSetOf()
     private var sync_response: SyncResponse? = null
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
@@ -210,6 +211,12 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     }
 
     fun requestBackfill(room_id: String) {
+        synchronized(this) {
+            if (in_flight_backfill_requests.contains(room_id)) {
+                return;
+            }
+            in_flight_backfill_requests.add(room_id)
+        }
         thread(start = true) {
             try {
                 val from = synchronized(this) { sync_response!!.rooms.join[room_id]!!.timeline.prev_batch }
@@ -226,10 +233,14 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                         sync_response!!.rooms.join[room_id]!!.state.events += response.state
                     }
                     sync_response!!.rooms.join[room_id]!!.timeline.prev_batch = response.end
+                    in_flight_backfill_requests.remove(room_id)
                 }
                 onUpdate()
             } catch (e: Exception) {
                 println("This backfill for $room_id failed with an exception $e")
+                synchronized(this) {
+                    in_flight_backfill_requests.remove(room_id)
+                }
             }
         }
     }
