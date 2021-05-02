@@ -50,6 +50,10 @@ data class AudioInfo(val duration: Int? = null, val size: Int, val mimetype: Str
 @Serializable
 data class ImageInfo(val h: Int? = 0, val mimetype: String, val size: Int, val w: Int? = 0)
 @Serializable
+data class VideoInfo(val duration: Int? = 0, val mimetype: String, val size: Int, val h: Int? = 0, val w: Int? = 0)
+@Serializable
+data class FileInfo(val mimetype: String, val size: Int)
+@Serializable
 data class MediaUploadResponse(val content_uri: String)
 @Serializable
 data class EventIdResponse(val event_id: String)
@@ -190,6 +194,27 @@ class AudioRMEC(
     val url: String
 ) : RoomMessageEventContent()
 @Serializable
+class VideoRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+    val info: VideoInfo,
+    val url: String
+) : RoomMessageEventContent()
+@Serializable
+class FileRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+    val info: FileInfo,
+    val filename: String = "",
+    val url: String
+) : RoomMessageEventContent()
+@Serializable
+class LocationRMEC(
+    override val body: String = "<missing message body, likely redacted>",
+    override val msgtype: String = "<missing type, likely redacted>",
+    val geo_uri: String
+) : RoomMessageEventContent()
+@Serializable
 class FallbackRMEC(
     override val body: String = "<missing message body, likely redacted>",
     override val msgtype: String = "<missing type, likely redacted>",
@@ -246,6 +271,9 @@ object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<Room
             type == "m.text" -> TextRMEC.serializer()
             type == "m.image" -> ImageRMEC.serializer()
             type == "m.audio" -> AudioRMEC.serializer()
+            type == "m.video" -> VideoRMEC.serializer()
+            type == "m.file" -> FileRMEC.serializer()
+            type == "m.location" -> LocationRMEC.serializer()
             type == null && element.jsonObject["m.relates_to"]?.jsonObject?.get("rel_type")?.jsonPrimitive?.content == "m.annotation" -> ReactionRMEC.serializer()
             else -> FallbackRMEC.serializer()
         }
