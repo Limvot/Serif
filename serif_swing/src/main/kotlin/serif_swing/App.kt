@@ -58,34 +58,22 @@ object AudioPlayer {
 class VideoPlayer {
     var url = ""
     var redraw_cell: ()->Unit = { Unit }
-    val image_array = ArrayList<BufferedImage>()
+    var grab: FrameGrab? = null
     var playing_task = Timer()
-    var idx = 0
     var framerate = 17L
     var playing = false
-
 
     fun loadVideo(video_url: String, pic_out: JButton, redraw_cell_in: ()->Unit) {
         redraw_cell = redraw_cell_in
         if (url != video_url) {
-            image_array.clear()
             url = video_url
             val file = File(video_url);
-            val grab = FrameGrab.createFrameGrab(NIOUtils.readableChannel(file))
-            val vt: DemuxerTrack = grab.getVideoTrack()
+            grab = FrameGrab.createFrameGrab(NIOUtils.readableChannel(file))
+            val vt: DemuxerTrack = grab!!.getVideoTrack()
             val frame_count = vt.getMeta().getTotalFrames()
             val duration = vt.getMeta().getTotalDuration()
             framerate = (1000.0*duration).toLong() / (frame_count).toLong()
-            while(true) {
-                val picture: Picture? = grab.getNativeFrame()
-                if(picture == null) {
-                    break
-                }
-                val buff_img = toBufferedImage(picture)
-                image_array.add(buff_img)
-            }
-            idx = 0
-            pic_out.setIcon(ImageIcon(image_array[idx]))
+            pic_out.setIcon(ImageIcon(getImg()!!))
         }
     }
     //Adapted from Jcodec https://github.com/jcodec/jcodec/blob/6e1ec651eca92d21b41f9790143a0e6e4d26811e/javase/src/main/java/org/jcodec/javase/scale/AWTUtil.java
@@ -146,10 +134,26 @@ class VideoPlayer {
         }
     }
 
+    private fun getImg(): BufferedImage? {
+        try {
+            val picture: Picture? = grab?.getNativeFrame()
+            if(picture == null) {
+                grab?.seekToFramePrecise(0)
+                return null
+            }
+            return toBufferedImage(picture)
+        } catch (e: NullPointerException) {
+            // jcodec seems to have a bug, and can throw when decoding sometimes
+            return null
+        }
+    }
+
     private fun updateImage(pic_out: JButton) {
-        pic_out.setIcon(ImageIcon(image_array[idx]))
-        redraw_cell()
-        idx++
+        val img = getImg()
+        if (img != null) {
+            pic_out.setIcon(ImageIcon(img))
+            redraw_cell()
+        }
     }
     fun play(pic_out: JButton) {
         if(playing) {
@@ -160,9 +164,6 @@ class VideoPlayer {
             playing = true
             println("Starting video playback")
             playing_task = fixedRateTimer("pic cb", false, 0L, framerate) {
-                if(idx >= image_array.size) {
-                    idx = 0
-                }
                 updateImage(pic_out)
             }
         }
