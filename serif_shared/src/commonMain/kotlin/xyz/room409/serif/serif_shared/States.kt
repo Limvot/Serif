@@ -113,6 +113,33 @@ class SharedUiAudioMessage(
     override val replied_event: String = "",
     val url: String
 ) : SharedUiMessage()
+class SharedUiVideoMessage(
+    override val sender: String,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long,
+    override val replied_event: String = "",
+    val url: String
+) : SharedUiMessage()
+class SharedUiFileMessage(
+    override val sender: String,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long,
+    val filename: String,
+    val mimetype: String,
+    val url: String,
+    override val replied_event: String = "",
+) : SharedUiMessage()
+class SharedUiLocationMessage(
+    override val sender: String,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long,
+    val location: String,
+    override val replied_event: String = "",
+) : SharedUiMessage()
+
 
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, window_back_length_in: Int, message_window_base_in: String?, window_forward_length_in: Int) : MatrixState() {
     val username = msession.user
@@ -200,6 +227,20 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                     }
                     is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
                     is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
+                    is VideoRMEC -> generate_media_msg(msg_content.url, ::SharedUiVideoMessage)
+                    is FileRMEC -> {
+                        SharedUiFileMessage(
+                            it.sender, it.content.body, it.event_id,
+                            it.origin_server_ts, msg_content.filename,
+                            msg_content.info.mimetype, msg_content.url
+                        )
+                    }
+                    is LocationRMEC -> {
+                        SharedUiLocationMessage(
+                            it.sender, it.content.body, it.event_id,
+                            it.origin_server_ts, msg_content.geo_uri
+                        )
+                    }
                     else -> SharedUiMessagePlain(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts)
                 }
             } else { null }
@@ -272,6 +313,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         }
         return "No Source for $msg_id"
     }
+    fun saveMediaToPath(path: String, url: String) = msession.saveMediaAtPathFromUrl(path,url)
     fun sendReceipt(eventID: String) {
         when (val readReceiptResult = msession.sendReadReceipt(eventID, room_id)) {
             is Success -> println("read receipt sent")

@@ -34,6 +34,10 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 
     implementation("com.formdev:flatlaf:1.0")
+
+    //video and audio codec support
+    implementation("org.jcodec:jcodec:0.2.5")
+    implementation("org.jcodec:jcodec-javase:0.2.5")
 }
 
 application {

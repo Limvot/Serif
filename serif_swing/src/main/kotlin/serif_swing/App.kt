@@ -10,6 +10,8 @@ import java.awt.image.*
 import java.awt.event.*
 import java.awt.font.TextAttribute
 import java.text.AttributedCharacterIterator
+import java.awt.image.BufferedImage
+import java.awt.image.DataBufferByte
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -21,6 +23,17 @@ import javax.swing.text.*
 import javax.swing.text.html.HTML
 import kotlin.concurrent.thread
 import kotlin.math.*
+
+import java.util.Timer
+import kotlin.concurrent.fixedRateTimer
+import org.jcodec.common.io.NIOUtils
+import org.jcodec.api.FrameGrab
+import org.jcodec.common.model.Picture
+import org.jcodec.common.model.ColorSpace
+import org.jcodec.common.DemuxerTrack
+import org.jcodec.scale.ColorUtil
+import org.jcodec.scale.RgbToBgr
+import org.jcodec.scale.Transform
 
 object AudioPlayer {
     var url = ""
@@ -39,6 +52,120 @@ object AudioPlayer {
         }
         clip.setFramePosition(0)
         clip.start()
+    }
+}
+
+class VideoPlayer {
+    var url = ""
+    var redraw_cell: ()->Unit = { Unit }
+    val image_array = ArrayList<BufferedImage>()
+    var playing_task = Timer()
+    var idx = 0
+    var framerate = 17L
+    var playing = false
+
+
+    fun loadVideo(video_url: String, pic_out: JButton, redraw_cell_in: ()->Unit) {
+        redraw_cell = redraw_cell_in
+        if (url != video_url) {
+            image_array.clear()
+            url = video_url
+            val file = File(video_url);
+            val grab = FrameGrab.createFrameGrab(NIOUtils.readableChannel(file))
+            val vt: DemuxerTrack = grab.getVideoTrack()
+            val frame_count = vt.getMeta().getTotalFrames()
+            val duration = vt.getMeta().getTotalDuration()
+            framerate = (1000.0*duration).toLong() / (frame_count).toLong()
+            while(true) {
+                val picture: Picture? = grab.getNativeFrame()
+                if(picture == null) {
+                    break
+                }
+                val buff_img = toBufferedImage(picture)
+                image_array.add(buff_img)
+            }
+            idx = 0
+            pic_out.setIcon(ImageIcon(image_array[idx]))
+        }
+    }
+    //Adapted from Jcodec https://github.com/jcodec/jcodec/blob/6e1ec651eca92d21b41f9790143a0e6e4d26811e/javase/src/main/java/org/jcodec/javase/scale/AWTUtil.java
+    private fun toBufferedImage(_src: Picture): BufferedImage {
+        var src = _src
+		if (src.getColor() != ColorSpace.BGR) {
+			val bgr = Picture.createCropped(src.getWidth(), src.getHeight(), ColorSpace.BGR, src.getCrop())
+			if (src.getColor() == ColorSpace.RGB) {
+				RgbToBgr().transform(src, bgr)
+			} else {
+				val transform = ColorUtil.getTransform(src.getColor(), ColorSpace.RGB)
+				transform.transform(src, bgr)
+				RgbToBgr().transform(bgr, bgr)
+			}
+			src = bgr
+		}
+
+        var dst = BufferedImage(src.getCroppedWidth(), src.getCroppedHeight(),
+                BufferedImage.TYPE_3BYTE_BGR)
+
+        if (src.getCrop() == null)
+            toBufferedImage(src, dst);
+        else
+            toBufferedImageCropped(src, dst);
+
+        return dst
+    }
+    //Adapted from Jcodec https://github.com/jcodec/jcodec/blob/6e1ec651eca92d21b41f9790143a0e6e4d26811e/javase/src/main/java/org/jcodec/javase/scale/AWTUtil.java
+    private fun toBufferedImageCropped(src: Picture, dst: BufferedImage) {
+        val data = (dst.getRaster().getDataBuffer() as DataBufferByte).getData();
+        val srcData = src.getPlaneData(0);
+        val dstStride = dst.getWidth() * 3;
+        val srcStride = src.getWidth() * 3;
+        var srcOff = 0
+        var dstOff = 0
+        for (line in  0..dst.getHeight()-1) {
+            var _is = srcOff
+            var id = dstOff
+            while (id < (dstOff + dstStride)) {
+                // Unshifting, since JCodec stores [0..255] -> [-128, 127]
+                data[id] = (srcData[_is] + 128).toByte()
+                data[id + 1] = (srcData[_is + 1] + 128).toByte()
+                data[id + 2] = (srcData[_is + 2] + 128).toByte()
+                id += 3
+                _is += 3
+            }
+            srcOff += srcStride;
+            dstOff += dstStride;
+        }
+    }
+    //Adapted from Jcodec https://github.com/jcodec/jcodec/blob/6e1ec651eca92d21b41f9790143a0e6e4d26811e/javase/src/main/java/org/jcodec/javase/scale/AWTUtil.java
+    private fun toBufferedImage(src: Picture, dst: BufferedImage) {
+        val _data = (dst.getRaster().getDataBuffer() as DataBufferByte).getData();
+        val srcData = src.getPlaneData(0);
+        for (i in 0.._data.size-1) {
+            // Unshifting, since JCodec stores [0..255] -> [-128, 127]
+            _data[i] = (srcData[i] + 128).toByte()
+        }
+    }
+
+    private fun updateImage(pic_out: JButton) {
+        pic_out.setIcon(ImageIcon(image_array[idx]))
+        redraw_cell()
+        idx++
+    }
+    fun play(pic_out: JButton) {
+        if(playing) {
+            playing = false
+            playing_task.cancel()
+            println("Stopping video playback")
+        } else {
+            playing = true
+            println("Starting video playback")
+            playing_task = fixedRateTimer("pic cb", false, 0L, framerate) {
+                if(idx >= image_array.size) {
+                    idx = 0
+                }
+                updateImage(pic_out)
+            }
+        }
     }
 }
 
@@ -597,6 +724,9 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         { when (it) {
                 is SharedUiImgMessage -> "img"
                 is SharedUiAudioMessage -> "audio"
+                is SharedUiVideoMessage -> "video"
+                is SharedUiFileMessage -> "file"
+                is SharedUiLocationMessage -> "location"
                 else -> "text"
         } },
         mapOf(
@@ -643,6 +773,67 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
                 Triple(listOf(sender, play_btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); audio_url = (msg as SharedUiAudioMessage).url; })
+            },
+            "video" to { msg, repaint_cell ->
+                val video_btn = JButton()
+                val pic_chan = ImageIcon()
+
+                val vp = VideoPlayer()
+                vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell)
+                video_btn.addActionListener({
+                    vp.play(video_btn)
+                })
+
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, video_btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell); })
+            },
+            "file" to { msg, repaint_cell ->
+                var msg = msg as SharedUiFileMessage
+                var filename = ""
+                val btn = SmoothButton("<file>")
+                val set_down = { msgi: SharedUiMessage ->
+                    msg = msgi as SharedUiFileMessage
+                    filename = if(msg.filename != "") {
+                        msg.filename
+                    } else {
+                        msg.message
+                    }
+                    btn.setText("Download $filename ${msg.mimetype}")
+                }
+                set_down(msg)
+                btn.addActionListener({
+                    val chooser = JFileChooser()
+                    chooser.setSelectedFile(File(filename))
+                    val ret = chooser.showSaveDialog(btn)
+                    if(ret == JFileChooser.APPROVE_OPTION) {
+                        val user_file_path = chooser.getSelectedFile().getAbsolutePath()
+                        try {
+                            m.saveMediaToPath(user_file_path, msg.url)
+                        } catch (e: Exception) {
+                            println("Couldn't save media, $e")
+                        }
+                    }
+                })
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_down(msg); })
+            },
+            "location" to { msg, repaint_cell ->
+                val btn = SmoothButton("Location")
+                var href = ""
+                btn.addActionListener({ openUrl(href) })
+                val set_loc = { msg: SharedUiMessage -> 
+                    btn.setText("Location: ${msg.message}")
+                    val parts = (msg as SharedUiLocationMessage).location.split(",")
+                    val lat = parts[0].replace("geo:","")
+                    val lon = parts[1]
+                    href = "https://maps.google.com/?q=$lat,$lon"
+                }
+                set_loc(msg)
+                val (sender, set_sender) = mk_sender(msg)
+                val (menu, set_menu) = mk_menu(msg)
+                Triple(listOf(sender, btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_loc(msg); })
             },
             "text" to { msg, repaint_cell ->
                 val message = SerifText(stringToAttributedURLString(msg.message))
@@ -753,6 +944,39 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             last_window_width = window_width
         } else {
             m = new_m
+        }
+    }
+    private fun openUrl(href: String) {
+        // In the background, so that GUI doesn't freeze
+        thread(start = true) {
+            // We have to try using xdg-open first,
+            // since PinePhone somehow implements the
+            // Desktop API but has the same problem with the
+            // GTK_BACKEND var
+            try {
+                println("Trying to open $href with exec 'xdg-open $href'")
+                val pb = ProcessBuilder("xdg-open", href)
+                // Somehow this environment variable gets set for pb
+                // when it's NOT in System.getenv(). And of course, this
+                // is the one that makes xdg-open try to launch an X version
+                // of Firefox, giving the dreaded Firefox is already running
+                // message if you've got a Wayland version running already.
+                pb.environment().clear()
+                pb.environment().putAll(System.getenv())
+                pb.redirectErrorStream(true)
+                val process = pb.start()
+                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                while (reader.readLine() != null) {}
+                process.waitFor()
+                println("done trying to open url")
+            } catch (e1: Exception) {
+                try {
+                    println("Trying to open $href with Desktop")
+                    java.awt.Desktop.getDesktop().browse(java.net.URI(href))
+                } catch (e2: Exception) {
+                    println("Couldn't get ProcessBuilder('xdg-open $href') or Desktop, problem was $e1 then $e2")
+                }
+            }
         }
     }
 }
