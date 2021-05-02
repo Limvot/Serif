@@ -89,9 +89,12 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     fun sendMessageImpl(message_content: RoomMessageEventContent, room_id: String): Outcome<String> {
 
         try {
+            val event_type = if (message_content is ReactionRMEC) {
+                "m.reaction"
+            } else { "m.room.message" }
             val result = runBlocking {
                 val message_confirmation =
-                    client.put<EventIdResponse>("$server/_matrix/client/r0/rooms/$room_id/send/m.room.message/$transactionId?access_token=$access_token") {
+                    client.put<EventIdResponse>("$server/_matrix/client/r0/rooms/$room_id/send/$event_type/$transactionId?access_token=$access_token") {
                         contentType(ContentType.Application.Json)
                         body = message_content
                     }
@@ -113,6 +116,10 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             Pair(msg, null)
         }
         val body = TextRMEC(msg, relation)
+        return sendMessageImpl(body, room_id)
+    }
+    fun sendReaction(msg: String, room_id: String, reacted_id: String): Outcome<String> {
+        val body = ReactionRMEC(msg, reacted_id)
         return sendMessageImpl(body, room_id)
     }
     fun sendEdit(msg: String, room_id: String, edited_id: String): Outcome<String> {

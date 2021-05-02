@@ -657,8 +657,15 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         attString
     }
     val mk_sender = { msg: SharedUiMessage ->
-        val sender = SerifText("${msg.sender}:  ")
-        val set_sender = { msg: SharedUiMessage -> sender.setText("${msg.sender}:  ") }
+        val render_text = { msg: SharedUiMessage ->
+            if (msg.reactions.size > 0) {
+                "${msg.sender}: ${msg.reactions} "
+            } else {
+                "${msg.sender}: "
+            }
+        }
+        val sender = SerifText(render_text(msg))
+        val set_sender = { msg: SharedUiMessage -> sender.setText(render_text(msg)) }
         set_sender(msg)
         Pair(sender, set_sender)
     }
@@ -668,6 +675,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         reply_option.addActionListener({
             println("Now writing a reply")
             replied_event_id = msg.id
+        })
+        val react_option = JMenuItem("React")
+        react_option.addActionListener({
+            println("Now writing a reaction")
+            reacted_event_id = msg.id
         })
         val edit_option = JMenuItem("Edit")
         edit_option.addActionListener({
@@ -709,6 +721,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
         val msg_action_popup = JPopupMenu()
         msg_action_popup.add(reply_option)
+        msg_action_popup.add(react_option)
         if(msg.sender.contains(m.username)) {
             msg_action_popup.add(edit_option)
         }
@@ -866,6 +879,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val c_right = GridBagConstraints()
     val message_field = SmoothTextField(20)
     var replied_event_id = ""
+    var reacted_event_id = ""
     var edited_event_id = ""
     init {
         panel.layout = BorderLayout()
@@ -899,12 +913,18 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             message_field.text = ""
             val res =
                 when {
-                    replied_event_id == "" && edited_event_id == "" -> m.sendMessage(text)
+                    replied_event_id == "" && edited_event_id == "" && reacted_event_id == "" -> m.sendMessage(text)
                     replied_event_id != "" -> {
                         val eventid = replied_event_id
                         replied_event_id = ""
                         println("Replying to $eventid")
                         m.sendReply(text, eventid)
+                    }
+                    reacted_event_id != "" -> {
+                        val eventid = reacted_event_id
+                        reacted_event_id = ""
+                        println("Reacting to $eventid")
+                        m.sendReaction(text, eventid)
                     }
                     else -> {
                         val eventid = edited_event_id
