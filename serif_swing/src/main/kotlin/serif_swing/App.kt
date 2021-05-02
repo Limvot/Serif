@@ -76,6 +76,41 @@ class VideoPlayer {
             pic_out.setIcon(ImageIcon(getImg()!!))
         }
     }
+    private fun getImg(): BufferedImage? {
+        try {
+            val picture: Picture? = grab?.getNativeFrame()
+            if(picture == null) {
+                grab?.seekToFramePrecise(0)
+                return null
+            }
+            return toBufferedImage(picture)
+        } catch (e: NullPointerException) {
+            // jcodec seems to have a bug, and can throw when decoding sometimes
+            return null
+        }
+    }
+    fun play(pic_out: JButton) {
+        if(playing) {
+            playing = false
+            playing_task.cancel()
+            println("Stopping video playback")
+        } else {
+            playing = true
+            println("Starting video playback")
+            playing_task = fixedRateTimer("pic cb", false, 0L, framerate) {
+                val img = getImg()
+                if (img != null) {
+                    pic_out.setIcon(ImageIcon(img))
+                    redraw_cell()
+                }
+            }
+        }
+    }
+    fun clear() {
+        playing = false
+        playing_task.cancel()
+        grab = null
+    }
     //Adapted from Jcodec https://github.com/jcodec/jcodec/blob/6e1ec651eca92d21b41f9790143a0e6e4d26811e/javase/src/main/java/org/jcodec/javase/scale/AWTUtil.java
     private fun toBufferedImage(_src: Picture): BufferedImage {
         var src = _src
@@ -131,41 +166,6 @@ class VideoPlayer {
         for (i in 0.._data.size-1) {
             // Unshifting, since JCodec stores [0..255] -> [-128, 127]
             _data[i] = (srcData[i] + 128).toByte()
-        }
-    }
-
-    private fun getImg(): BufferedImage? {
-        try {
-            val picture: Picture? = grab?.getNativeFrame()
-            if(picture == null) {
-                grab?.seekToFramePrecise(0)
-                return null
-            }
-            return toBufferedImage(picture)
-        } catch (e: NullPointerException) {
-            // jcodec seems to have a bug, and can throw when decoding sometimes
-            return null
-        }
-    }
-
-    private fun updateImage(pic_out: JButton) {
-        val img = getImg()
-        if (img != null) {
-            pic_out.setIcon(ImageIcon(img))
-            redraw_cell()
-        }
-    }
-    fun play(pic_out: JButton) {
-        if(playing) {
-            playing = false
-            playing_task.cancel()
-            println("Stopping video playback")
-        } else {
-            playing = true
-            println("Starting video playback")
-            playing_task = fixedRateTimer("pic cb", false, 0L, framerate) {
-                updateImage(pic_out)
-            }
         }
     }
 }
@@ -800,7 +800,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, video_btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell); })
+                Triple(listOf(sender, video_btn, menu), { vp.clear() }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell); })
             },
             "file" to { msg, repaint_cell ->
                 var msg = msg as SharedUiFileMessage
