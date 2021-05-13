@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS SavedSessions (
  userId TEXT NOT NULL PRIMARY KEY,
  authTok TEXT NOT NULL,
+ nextBatch TEXT,
  transactionId INTEGER NOT NULL
 );
 
@@ -8,13 +9,22 @@ deleteAllSessions:
 DELETE FROM SavedSessions;
 
 insertSession:
-INSERT INTO SavedSessions(userId, authTok, transactionId)
-VALUES(?,?,?);
+INSERT INTO SavedSessions(userId, authTok, nextBatch, transactionId)
+VALUES(?,?,NULL,?);
 
-updateSession:
+updateSessionTransactionId:
 UPDATE SavedSessions
 SET transactionId = ?
 WHERE authTok = ?;
+
+updateSessionNextBatch:
+UPDATE SavedSessions
+SET nextBatch = ?
+WHERE authTok = ?;
+
+getSessionNextBatch:
+SELECT nextBatch FROM SavedSessions
+WHERE (authTok = ?);
 
 
 selectAllSessions:
@@ -44,3 +54,61 @@ WHERE mxcUrl = ?;
 
 deleteAllCache:
 DELETE FROM MediaCache;
+
+
+
+CREATE TABLE IF NOT EXISTS RoomState (
+ roomId TEXT NOT NULL,
+ type TEXT NOT NULL,
+ stateKey TEXT NOT NULL,
+ data TEXT NOT NULL,
+ PRIMARY KEY (roomId, type, stateKey)
+);
+
+insertStateEvent:
+INSERT INTO RoomState(roomId, type, stateKey, data)
+VALUES(?,?,?,?);
+
+updateStateEvent:
+UPDATE RoomState
+SET data = ?
+WHERE (roomId = ? AND type = ? AND stateKey = ?);
+
+getStateEvent:
+SELECT data FROM RoomState
+WHERE (roomId = ? AND type = ? AND stateKey = ?);
+
+getStateEvents:
+SELECT data FROM RoomState
+WHERE (roomId = ?);
+
+getRooms:
+SELECT DISTINCT roomId FROM RoomState;
+
+
+CREATE TABLE IF NOT EXISTS RoomEvents (
+ seqId INTEGER PRIMARY KEY NOT NULL,
+ roomId TEXT NOT NULL,
+ eventId TEXT NOT NULL,
+ data TEXT NOT NULL,
+ prevBatch TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS RoomEventIndex ON RoomEvents (roomId, eventId);
+
+minId:
+SELECT MIN(seqId) FROM RoomEvents;
+
+addRoomEvent:
+INSERT INTO RoomEvents(seqId, roomId, eventId, data, prevBatch)
+VALUES(?,?,?,?,?);
+
+getRoomEvents:
+SELECT data FROM RoomEvents
+WHERE (roomId = ?)
+ORDER BY seqId ASC;
+
+getPrevBatch:
+SELECT prevBatch FROM RoomEvents
+WHERE (roomId = ? AND prevBatch IS NOT NULL)
+ORDER BY seqId ASC
+LIMIT 1;

@@ -30,7 +30,8 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         val timeout_ms: Long = 10000
         var fail_times = 0
         while (sync_should_run) {
-            val next_batch = synchronized(this) { sync_response?.next_batch }
+            val next_batch = Database.getSessionNextBatch(access_token)
+            println("next_batch is $next_batch")
             val url = if (next_batch != null) {
                 "$server/_matrix/client/r0/sync?since=$next_batch&timeout=$timeout_ms&access_token=$access_token"
             } else {
@@ -59,14 +60,16 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     // for room name changes too. Also, it's not working when there's not a room name -
     // the way I'm reading the doc heroes should be non-null... maybe it's not decoding right?
 
-    fun <T> mapRooms(f: (String, Room) -> T): List<T> = synchronized(this) {
-        sync_response?.rooms?.join?.entries?.map { (id, room,) -> f(id, room) }?.toList() ?: listOf()
-    }
+    //fun <T> mapRooms(f: (String, Room) -> T): List<T> = synchronized(this) {
+    //    sync_response?.rooms?.join?.entries?.map { (id, room,) -> f(id, room) }?.toList() ?: listOf()
+    //}
+    fun <T> mapRooms(f: (String) -> T): List<T> = Database.getRooms().map { f(it) }
     fun <T> mapRoom(id: String, f: (Room) -> T): T? = synchronized(this) {
         sync_response?.rooms?.join?.get(id)?.let { f(it) }
     }
 
-    fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
+    //fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
+    fun getRoomEvents(id: String) = Database.getRoomEvents(id)
 
     fun createRoom(name:String, room_alias_name: String, topic: String): Outcome<String> {
         try {
@@ -76,7 +79,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                     contentType(ContentType.Application.Json)
                     body = CreateRoom(name, room_alias_name, topic)
                 }
-                Database.updateSession(access_token, transactionId)
+                Database.updateSessionTransactionId(access_token, transactionId)
                 creation_confirmation
             }
             return Success("Our create create room event id is: $result")
@@ -99,7 +102,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                         body = message_content
                     }
                 transactionId++
-                Database.updateSession(access_token, transactionId)
+                Database.updateSessionTransactionId(access_token, transactionId)
                 message_confirmation.event_id
             }
 
@@ -226,25 +229,47 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
         thread(start = true) {
             try {
-                val from = synchronized(this) { sync_response!!.rooms.join[room_id]!!.timeline.prev_batch }
+                //val from = synchronized(this) { sync_response!!.rooms.join[room_id]!!.timeline.prev_batch }
+                val from = Database.getPrevBatch(room_id)!!
+                println("Backfilling from |${from}|")
                 val url = "$server/_matrix/client/r0/rooms/$room_id/messages?access_token=$access_token&from=$from&dir=b"
                 val response = runBlocking { client.get<BackfillResponse>(url) }
-                synchronized(this) {
-                    // This also needs to be changed to something that supports discontinuous
-                    // sections of timeline with different prev_patch, etc
-                    if (response.chunk != null) {
-                        sync_response!!.rooms.join[room_id]!!.state.events += response.chunk.filter { it is StateEvent<*> }
-                        sync_response!!.rooms.join[room_id]!!.timeline.events = response.chunk.asReversed() + sync_response!!.rooms.join[room_id]!!.timeline.events
+                println("|${from}| - done getting response")
+                if (response.chunk != null) {
+                    val events = response.chunk.map { it as? RoomEvent }.filterNotNull()
+                    val min = Database.minId()
+                    println("Backfilling with min $min")
+                    events.forEachIndexed { index, event ->
+                        try {
+                            val new_end = if (index == events.size -1) { response.end } else { null }
+                            println("adding event at ${min-(index+1)} with $new_end")
+                            Database.addRoomEvent(min-(index+1), room_id, event, new_end)
+                        } catch (e: Exception) {
+                            println("while trying to insert (from backfill) at index ${min-(index+1)} ${event} got exception $e")
+
+                        }
                     }
-                    if (response.state != null) {
-                        sync_response!!.rooms.join[room_id]!!.state.events += response.state
-                    }
-                    sync_response!!.rooms.join[room_id]!!.timeline.prev_batch = response.end
-                    in_flight_backfill_requests.remove(room_id)
                 }
+                println("|${from}| - done parsing and adding to database")
+                //synchronized(this) {
+                //    // This also needs to be changed to something that supports discontinuous
+                //    // sections of timeline with different prev_patch, etc
+                //    if (response.chunk != null) {
+                //        sync_response!!.rooms.join[room_id]!!.state.events += response.chunk.filter { it is StateEvent<*> }
+                //        sync_response!!.rooms.join[room_id]!!.timeline.events = response.chunk.asReversed() + sync_response!!.rooms.join[room_id]!!.timeline.events
+                //    }
+                //    if (response.state != null) {
+                //        sync_response!!.rooms.join[room_id]!!.state.events += response.state
+                //    }
+                //    sync_response!!.rooms.join[room_id]!!.timeline.prev_batch = response.end
+                //    in_flight_backfill_requests.remove(room_id)
+                //}
+                in_flight_backfill_requests.remove(room_id)
                 onUpdate()
+                println("|${from}| - done onUpdate")
             } catch (e: Exception) {
                 println("This backfill for $room_id failed with an exception $e")
+                e.printStackTrace()
                 synchronized(this) {
                     in_flight_backfill_requests.remove(room_id)
                 }
@@ -254,33 +279,54 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
     fun closeSession() {
         // Update Database with latest transactionId
-        Database.updateSession(this.access_token, this.transactionId)
+        Database.updateSessionTransactionId(this.access_token, this.transactionId)
         // TO ACT LIKE A LOGOUT, CLOSING THE CLIENT
         client.close()
         sync_should_run = false
     }
     fun mergeInSync(new_sync_response: SyncResponse) {
-        synchronized(this) {
-            if (sync_response == null) {
-                sync_response = new_sync_response
-            } else {
-                for ((room_id, room) in new_sync_response.rooms.join) {
-                    if (sync_response!!.rooms.join.containsKey(room_id)) {
-                        // A little bit hacky, we just add all our new state events here, prepending
-                        // the new ones
-                        sync_response!!.rooms.join[room_id]!!.state.events = room.state.events + sync_response!!.rooms.join[room_id]!!.state.events
-                        sync_response!!.rooms.join[room_id]!!.state.events = room.timeline.events.filter { it is StateEvent<*> }.asReversed() + sync_response!!.rooms.join[room_id]!!.state.events
-                        // This also needs to be changed to something that supports discontinuous
-                        // sections of timeline with different prev_patch, etc
-                        sync_response!!.rooms.join[room_id]!!.timeline.events += room.timeline.events
-                        sync_response!!.rooms.join[room_id]!!.unread_notifications = room.unread_notifications
-                    } else {
-                        sync_response!!.rooms.join[room_id] = room
-                    }
+        for ((room_id, room) in new_sync_response.rooms.join) {
+            for (event in room.state.events + room.timeline.events) {
+                (event as? StateEvent<*>)?.let { println("got state event $it"); Database.setStateEvent(room_id, it) }
+            }
+            val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
+            events.forEachIndexed { index, event ->
+                try {
+                    Database.addRoomEvent(null, room_id, event, if (index == 0) { room.timeline.prev_batch } else { null })
+                } catch (e: Exception) {
+                    println("while trying to insert (from backfill) ${event} got exception $e")
+
                 }
-                sync_response!!.next_batch = new_sync_response.next_batch
             }
         }
+        Database.updateSessionNextBatch(access_token, new_sync_response.next_batch)
+        //synchronized(this) {
+        //    if (sync_response == null) {
+        //        sync_response = new_sync_response
+        //    } else {
+        //        for ((room_id, room) in new_sync_response.rooms.join) {
+        //            if (sync_response!!.rooms.join.containsKey(room_id)) {
+        //                // A little bit hacky, we just add all our new state events here, prepending
+        //                // the new ones
+        //                sync_response!!.rooms.join[room_id]!!.state.events = room.state.events + sync_response!!.rooms.join[room_id]!!.state.events
+        //                sync_response!!.rooms.join[room_id]!!.state.events = room.timeline.events.filter { it is StateEvent<*> }.asReversed() + sync_response!!.rooms.join[room_id]!!.state.events
+        //                // This also needs to be changed to something that supports discontinuous
+        //                // sections of timeline with different prev_patch, etc
+        //                sync_response!!.rooms.join[room_id]!!.timeline.events += room.timeline.events
+        //                sync_response!!.rooms.join[room_id]!!.unread_notifications = room.unread_notifications
+        //            } else {
+        //                sync_response!!.rooms.join[room_id] = room
+        //            }
+        //        }
+        //    }
+        //}
+    }
+}
+
+
+object JsonFormatHolder {
+    public val jsonFormat = kotlinx.serialization.json.Json {
+        ignoreUnknownKeys = true
     }
 }
 
@@ -288,11 +334,7 @@ class MatrixClient {
     fun login(username: String, password: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
         val client = HttpClient() {
             install(JsonFeature) {
-                serializer = KotlinxSerializer(
-                    kotlinx.serialization.json.Json {
-                        ignoreUnknownKeys = true
-                    }
-                )
+                serializer = KotlinxSerializer(JsonFormatHolder.jsonFormat)
             }
         }
         val server = "https://synapse.room409.xyz"

@@ -50,16 +50,21 @@ fun determineRoomName(room: Room, id: String): String {
         ?: "<no room name - $id>"
 }
 class MatrixRooms(private val msession: MatrixSession, val message: String) : MatrixState() {
-    val rooms: List<SharedUiRoom> = msession.mapRooms { id, room ->
+    //val rooms: List<SharedUiRoom> = msession.mapRooms { id, state_events ->
+    val rooms: List<SharedUiRoom> = msession.mapRooms { id ->
         SharedUiRoom(
             id,
-            determineRoomName(room, id),
-            room.unread_notifications?.notification_count ?: 0,
-            room.unread_notifications?.highlight_count ?: 0,
-            room.timeline.events.findLast { it as? RoomMessageEvent != null }?.let {
-                val it = it as RoomMessageEvent
-                SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, mapOf())
-            }
+            id,
+            0,
+            0,
+            null
+            //determineRoomName(room, id),
+            //room.unread_notifications?.notification_count ?: 0,
+            //room.unread_notifications?.highlight_count ?: 0,
+            //room.timeline.events.findLast { it as? RoomMessageEvent != null }?.let {
+            //    val it = it as RoomMessageEvent
+            //    SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, mapOf())
+            //}
         )
     }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
     override fun refresh(): MatrixState = MatrixRooms(
@@ -354,7 +359,8 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     fun refresh(new_window_back_length: Int, new_message_window_base: String?, new_window_forward_length: Int): MatrixState = MatrixChatRoom(
         msession,
         room_id,
-        msession.mapRoom(room_id, { determineRoomName(it, room_id) }) ?: "<room gone?>",
+        room_id,
+        //msession.mapRoom(room_id, { determineRoomName(it, room_id) }) ?: "<room gone?>",
         new_window_back_length,
         new_message_window_base,
         new_window_forward_length,
