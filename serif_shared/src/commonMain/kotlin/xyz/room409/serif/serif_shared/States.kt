@@ -43,28 +43,15 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
     }
 }
 data class SharedUiRoom(val id: String, val name: String, val unreadCount: Int, val highlightCount: Int, val lastMessage: SharedUiMessage?)
-fun determineRoomName(room: Room, id: String): String {
-    return room.state.events.firstStateEventContentOfType<RoomNameContent>()?.name
-        ?: room.state.events.firstStateEventContentOfType<RoomCanonicalAliasContent>()?.alias
-        ?: room.summary.heroes?.joinToString(", ")
-        ?: "<no room name - $id>"
-}
 class MatrixRooms(private val msession: MatrixSession, val message: String) : MatrixState() {
     //val rooms: List<SharedUiRoom> = msession.mapRooms { id, state_events ->
-    val rooms: List<SharedUiRoom> = msession.mapRooms { id ->
+    val rooms: List<SharedUiRoom> = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event ->
         SharedUiRoom(
             id,
-            id,
-            0,
-            0,
-            null
-            //determineRoomName(room, id),
-            //room.unread_notifications?.notification_count ?: 0,
-            //room.unread_notifications?.highlight_count ?: 0,
-            //room.timeline.events.findLast { it as? RoomMessageEvent != null }?.let {
-            //    val it = it as RoomMessageEvent
-            //    SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, mapOf())
-            //}
+            name,
+            unread_notif,
+            unread_highlight,
+            last_event?.let { SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, mapOf()) }
         )
     }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
     override fun refresh(): MatrixState = MatrixRooms(

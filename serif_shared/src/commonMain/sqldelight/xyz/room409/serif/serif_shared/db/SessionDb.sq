@@ -57,6 +57,33 @@ DELETE FROM MediaCache;
 
 
 
+CREATE TABLE IF NOT EXISTS RoomSummary (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    unread_notif_count INTEGER NOT NULL,
+    unread_highlight_count INTEGER NOT NULL,
+    last_event TEXT
+);
+
+getRooms:
+SELECT * FROM RoomSummary;
+
+getRoom:
+SELECT * FROM RoomSummary
+WHERE (id = ? )
+LIMIT 1;
+
+insertRoomSummary:
+INSERT INTO RoomSummary(id, name, unread_notif_count, unread_highlight_count, last_event)
+VALUES(?,?,?,?,?);
+
+updateRoomSummary:
+UPDATE RoomSummary
+SET name = ?, unread_notif_count = ?, unread_highlight_count = ?, last_event = ?
+WHERE(id = ?);
+
+
+
 CREATE TABLE IF NOT EXISTS RoomState (
  roomId TEXT NOT NULL,
  type TEXT NOT NULL,
@@ -82,8 +109,6 @@ getStateEvents:
 SELECT data FROM RoomState
 WHERE (roomId = ?);
 
-getRooms:
-SELECT DISTINCT roomId FROM RoomState;
 
 
 CREATE TABLE IF NOT EXISTS RoomEvents (

@@ -72,6 +72,33 @@ object Database {
         return local
     }
 
+    fun <T> mapRooms(f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = (this.db?.sessionDbQueries?.getRooms()?.executeAsList() ?: listOf()).map { r ->
+        f(r.id, r.name, r.unread_notif_count.toInt(), r.unread_highlight_count.toInt(), r.last_event?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) as? RoomMessageEvent })
+    }
+
+    fun setRoomSummary(id: String, def_name: String?, maybe_name: String?, unread_notif_count: Int?, unread_highlight_count: Int?, last_event: RoomMessageEvent?) {
+        val old = this.db?.sessionDbQueries?.getRoom(id)?.executeAsOneOrNull()
+        if (old != null) {
+            this.db?.sessionDbQueries?.updateRoomSummary(
+                def_name ?: old.name,
+                unread_notif_count?.toLong() ?: old?.unread_notif_count ?: 0,
+                unread_highlight_count?.toLong() ?: old?.unread_highlight_count ?: 0,
+                last_event?.raw_self?.toString() ?: old?.last_event,
+                id
+            )
+        } else {
+            this.db?.sessionDbQueries?.insertRoomSummary(
+                id,
+                def_name ?: maybe_name ?: id,
+                unread_notif_count?.toLong() ?: 0,
+                unread_highlight_count?.toLong() ?: 0,
+                last_event?.raw_self?.toString()
+            )
+        }
+    }
+
+
+
     fun setStateEvent(roomId: String, event: StateEvent<*>) {
         if (getStateEvent(roomId, event.type, event.state_key) != null) {
             this.db?.sessionDbQueries?.updateStateEvent(event.raw_self.toString(), roomId, event.type, event.state_key)
@@ -83,8 +110,6 @@ object Database {
         this.db?.sessionDbQueries?.getStateEvent(roomId, type, stateKey)?.executeAsOneOrNull()
     fun getStateEvents(roomId: String): List<Event> =
         this.db?.sessionDbQueries?.getStateEvents(roomId)?.executeAsList()?.map { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) } ?: listOf()
-    fun getRooms(): List<String> =
-        this.db?.sessionDbQueries?.getRooms()?.executeAsList() ?: listOf()
 
     fun getPrevBatch(roomId: String): String =
         this.db!!.sessionDbQueries!!.getPrevBatch(roomId).executeAsOne().prevBatch!!

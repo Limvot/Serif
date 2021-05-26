@@ -53,22 +53,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    // rooms is a pair of room_id and room display name
-    // Display name is calculated by first checking for a room name event in the state events,
-    // then for a canonical alias in the state events, then a list of hero users in the room summary,
-    // and then the error message. Technically we should also be looking at timeline events
-    // for room name changes too. Also, it's not working when there's not a room name -
-    // the way I'm reading the doc heroes should be non-null... maybe it's not decoding right?
-
-    //fun <T> mapRooms(f: (String, Room) -> T): List<T> = synchronized(this) {
-    //    sync_response?.rooms?.join?.entries?.map { (id, room,) -> f(id, room) }?.toList() ?: listOf()
-    //}
-    fun <T> mapRooms(f: (String) -> T): List<T> = Database.getRooms().map { f(it) }
-    fun <T> mapRoom(id: String, f: (Room) -> T): T? = synchronized(this) {
-        sync_response?.rooms?.join?.get(id)?.let { f(it) }
-    }
-
-    //fun getRoomEvents(id: String) = synchronized(this) { sync_response!!.rooms.join[id]!!.timeline.events }
+    fun <T> mapRooms(f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = Database.mapRooms(f)
     fun getRoomEvents(id: String) = Database.getRoomEvents(id)
 
     fun createRoom(name:String, room_alias_name: String, topic: String): Outcome<String> {
@@ -284,6 +269,12 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         client.close()
         sync_should_run = false
     }
+    fun determineRoomName(room: Room, id: String): String {
+        return room.state.events.firstStateEventContentOfType<RoomNameContent>()?.name
+            ?: room.state.events.firstStateEventContentOfType<RoomCanonicalAliasContent>()?.alias
+            ?: room.summary.heroes?.joinToString(", ")
+            ?: "<no room name - $id>"
+    }
     fun mergeInSync(new_sync_response: SyncResponse) {
         for ((room_id, room) in new_sync_response.rooms.join) {
             for (event in room.state.events + room.timeline.events) {
@@ -298,6 +289,14 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
                 }
             }
+            Database.setRoomSummary(
+                room_id,
+                null,
+                determineRoomName(room, room_id),
+                room.unread_notifications?.notification_count,
+                room.unread_notifications?.highlight_count,
+                room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent
+            )
         }
         Database.updateSessionNextBatch(access_token, new_sync_response.next_batch)
         //synchronized(this) {
