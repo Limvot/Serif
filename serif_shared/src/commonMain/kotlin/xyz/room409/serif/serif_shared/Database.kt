@@ -116,9 +116,19 @@ object Database {
 
     fun minId(): Long = this.db?.sessionDbQueries?.minId()?.executeAsOneOrNull()?.MIN ?: 0
 
-    fun addRoomEvent(seqId: Long?, roomId: String, event: RoomEvent, prevBatch: String?) {
-        this.db?.sessionDbQueries?.addRoomEvent(seqId, roomId, event.event_id, event.raw_self.toString(), prevBatch)
+    fun addRoomEvent(seqId: Long?, roomId: String, event: RoomEvent, related_event: String?, prevBatch: String?) {
+        this.db?.sessionDbQueries?.addRoomEvent(seqId, roomId, event.event_id, event.raw_self.toString(), related_event, prevBatch)
     }
-    fun getRoomEvents(roomId: String): List<Event> =
-        this.db?.sessionDbQueries?.getRoomEvents(roomId)?.executeAsList()?.map { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) } ?: listOf()
+    fun getRoomEventAndIdx(roomId: String, eventId: String): Pair<Event, Long>? =
+        this.db?.sessionDbQueries?.getRoomEventAndIdx(roomId, eventId)?.executeAsOneOrNull()?.let {
+            Pair(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data), it.seqId)
+        }
+    fun getRoomEventsBackwardsFromPoint(roomId: String, point: Long, number: Long): List<Pair<Event,Long>> =
+        this.db?.sessionDbQueries?.getRoomEventsBackwardsFromPointReversed(roomId, point, number)?.executeAsList()?.map { Pair(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data), it.seqId) }?.reversed() ?: listOf()
+    fun getRoomEventsForwardsFromPoint(roomId: String, point: Long, number: Long): List<Pair<Event,Long>> =
+        this.db?.sessionDbQueries?.getRoomEventsForwardsFromPoint(roomId, point, number)?.executeAsList()?.map { Pair(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data), it.seqId) } ?: listOf()
+    fun getMostRecentRoomEventAndIdx(roomId: String): Pair<Event,Long>? =
+        this.db?.sessionDbQueries?.getMostRecentRoomEvent(roomId)?.executeAsOneOrNull()?.let { Pair(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data), it.seqId) }
+    fun getRelatedEvents(roomId: String, eventIds: List<String>): List<Pair<Event,Long>> =
+        this.db?.sessionDbQueries?.getRelatedEvents(roomId, eventIds)?.executeAsList()?.map { Pair(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data), it.seqId) } ?: listOf()
 }

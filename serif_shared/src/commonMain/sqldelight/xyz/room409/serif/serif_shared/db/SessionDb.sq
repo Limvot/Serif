@@ -116,21 +116,45 @@ CREATE TABLE IF NOT EXISTS RoomEvents (
  roomId TEXT NOT NULL,
  eventId TEXT NOT NULL,
  data TEXT NOT NULL,
+ relatedEvent TEXT,
  prevBatch TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS RoomEventIndex ON RoomEvents (roomId, eventId);
+CREATE UNIQUE INDEX IF NOT EXISTS RelatedEventIndex ON RoomEvents (relatedEvent);
 
 minId:
 SELECT MIN(seqId) FROM RoomEvents;
 
 addRoomEvent:
-INSERT INTO RoomEvents(seqId, roomId, eventId, data, prevBatch)
-VALUES(?,?,?,?,?);
+INSERT INTO RoomEvents(seqId, roomId, eventId, data, relatedEvent, prevBatch)
+VALUES(?,?,?,?,?,?);
 
-getRoomEvents:
-SELECT data FROM RoomEvents
+getRoomEventAndIdx:
+SELECT data,seqId FROM RoomEvents
+WHERE (roomId = ? AND eventId = ?)
+LIMIT 1;
+
+getRoomEventsBackwardsFromPointReversed:
+SELECT data,seqId FROM RoomEvents
+WHERE (roomId = ?) AND (seqId < ?)
+ORDER BY seqId DESC
+LIMIT ?;
+
+getRoomEventsForwardsFromPoint:
+SELECT data,seqId FROM RoomEvents
+WHERE (roomId = ?) AND (seqId > ?)
+ORDER BY seqId ASC
+LIMIT ?;
+
+getMostRecentRoomEvent:
+SELECT data,seqId FROM RoomEvents
 WHERE (roomId = ?)
-ORDER BY seqId ASC;
+ORDER BY seqId DESC
+LIMIT 1;
+
+getRelatedEvents:
+SELECT data,seqId FROM RoomEvents
+WHERE (roomId = ?) AND (relatedEvent IN ?);
 
 getPrevBatch:
 SELECT prevBatch FROM RoomEvents

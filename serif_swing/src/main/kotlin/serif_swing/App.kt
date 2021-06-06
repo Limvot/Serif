@@ -865,6 +865,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val in_lower_buffer = m.messages.size - ended < buffer_space
             val tracking_current = m.message_window_base == null
             val no_request_out = (m.window_back_length + m.window_forward_length + 1) <= m.messages.size
+            println("in_upper_buffer $in_upper_buffer ($began < $buffer_space) && no_request_out $no_request_out (${m.window_back_length} + ${m.window_forward_length} + 1) <= ${m.messages.size}")
             if (in_upper_buffer && no_request_out) {
                 javax.swing.SwingUtilities.invokeLater({
                     transition(m.refresh(desired_window_half, m.messages[began].id, desired_window_half), true)

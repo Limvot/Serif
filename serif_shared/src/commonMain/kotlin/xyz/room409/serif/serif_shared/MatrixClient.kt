@@ -14,6 +14,25 @@ sealed class Outcome<out T : Any>
 data class Success<out T : Any>(val value: T) : Outcome<T>()
 data class Error(val message: String, val cause: Exception? = null) : Outcome<Nothing>()
 
+fun is_edit_content(msg_content: TextRMEC): Boolean = ((msg_content.new_content != null) && (msg_content.relates_to?.event_id != null))
+fun isStandaloneEvent(e: Event): Boolean {
+    if (e as? RoomMessageEvent != null) {
+        return !(e.content is ReactionRMEC || (e.content is TextRMEC && is_edit_content(e.content)))
+    } else {
+        return false
+    }
+}
+fun getRelatedEvent(e: Event): String? {
+    if (e as? RoomMessageEvent != null) {
+        if (e.content is ReactionRMEC) {
+            return e.content!!.relates_to!!.event_id!!
+        } else if (e.content is TextRMEC && is_edit_content(e.content)) {
+            return e.content!!.relates_to!!.event_id!!
+        }
+    }
+    return null
+}
+
 // Returns the first Event of class T, or null
 inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.firstOrNull { it != null }
 // Returns the content of type T from the first Event of type StateEvent<T>
@@ -27,7 +46,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     private var sync_response: SyncResponse? = null
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
-        val timeout_ms: Long = 10000
+        val timeout_ms: Long = 20000
         var fail_times = 0
         while (sync_should_run) {
             val next_batch = Database.getSessionNextBatch(access_token)
@@ -54,8 +73,58 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     }
 
     fun <T> mapRooms(f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = Database.mapRooms(f)
-    fun getRoomEvents(id: String) = Database.getRoomEvents(id)
+    fun getReleventRoomEventsForWindow(room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): Pair<List<Event>, Boolean> {
+        val overrideCurrent = message_window_base == null
+        val base_and_seqId = message_window_base?.let { Database.getRoomEventAndIdx(room_id, it) } ?: Database.getMostRecentRoomEventAndIdx(room_id)
+        // completely empty room!!
+        if (base_and_seqId == null) {
+            return Pair(listOf(), true)
+        }
+        println("Got base_and_seqId $base_and_seqId from asking for $message_window_base in $room_id")
+        var base_seqId = base_and_seqId.second.toLong()
 
+        val window_back_length = window_back_length + if (isStandaloneEvent(base_and_seqId.first)) { 0 } else { 1 }
+        var back_base_seqId = base_and_seqId.second.toLong()
+        var back_events: List<Pair<Event,Long>> = listOf()
+        while (back_events.size < window_back_length) {
+            println("back_events.size (filtered) (${back_events.size}) < window_back_length($window_back_length), so getting ${window_back_length.toLong() - back_events.size} new events")
+            val new_events = Database.getRoomEventsBackwardsFromPoint(room_id, back_base_seqId, window_back_length.toLong() - back_events.size)
+            back_events = new_events.filter { isStandaloneEvent(it.first) } + back_events
+            println("\tgot ${new_events.size} events")
+            if (new_events.size == 0) {
+                println("\tnew_events.size == 0, breaking")
+                break;
+            }
+            back_base_seqId = new_events.first()!!.second
+        }
+        println("Done getting back, have ${back_events.size} (filtered) back events (from request for $window_back_length back events)")
+
+        var fore_base_seqId = base_and_seqId.second.toLong()
+        var fore_events: List<Pair<Event,Long>> = listOf()
+        while (fore_events.size < window_forward_length) {
+            println("fore_standalone_events(${fore_events.size}) < window_fore_length($window_forward_length), so getting ${window_forward_length.toLong() - fore_events.size} new events")
+            val new_events = Database.getRoomEventsForwardsFromPoint(room_id, fore_base_seqId, window_forward_length.toLong() - fore_events.size)
+            fore_events = fore_events.filter { isStandaloneEvent(it.first) } + new_events
+            println("\tgot ${new_events.size} (filtered) events")
+            if (new_events.size == 0) {
+                println("\tnew_events.size == 0, breaking")
+                break
+            }
+            fore_base_seqId = new_events.last()!!.second
+        }
+        println("Done getting fore, have ${fore_events.size} (filtered) forewards events (from request for $window_forward_length foreard events)")
+
+        if (back_events.size < window_back_length) {
+            println("back_events.size (${back_events.size}) < window_back_length ($window_back_length), requesting backfill")
+            requestBackfill(room_id)
+        }
+        val prelim_total_events = back_events + listOf(base_and_seqId) + fore_events
+        val relatedEvents = Database.getRelatedEvents(room_id, prelim_total_events.map { (it.first as RoomEvent).event_id })
+        val total_events = (back_events + listOf(base_and_seqId) + fore_events + relatedEvents).sortedBy { it.second } .map { it.first }
+        println("to double check, we have ${total_events.size} total events, with ${total_events.count { isStandaloneEvent(it) }} standalone, and ${relatedEvents.size} pulled using getRelatedEvents")
+        return Pair(total_events, overrideCurrent || fore_events.size < window_forward_length)
+    }
+    fun getRoomEvent(room_id: String, event_id: String): Event? = Database.getRoomEventAndIdx(room_id, event_id)?.first
     fun createRoom(name:String, room_alias_name: String, topic: String): Outcome<String> {
         try {
             val result = runBlocking {
@@ -214,48 +283,39 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
         thread(start = true) {
             try {
-                //val from = synchronized(this) { sync_response!!.rooms.join[room_id]!!.timeline.prev_batch }
                 val from = Database.getPrevBatch(room_id)!!
                 println("Backfilling from |${from}|")
                 val url = "$server/_matrix/client/r0/rooms/$room_id/messages?access_token=$access_token&from=$from&dir=b"
                 val response = runBlocking { client.get<BackfillResponse>(url) }
                 println("|${from}| - done getting response")
-                if (response.chunk != null) {
-                    val events = response.chunk.map { it as? RoomEvent }.filterNotNull()
-                    val min = Database.minId()
-                    println("Backfilling with min $min")
-                    events.forEachIndexed { index, event ->
-                        try {
-                            val new_end = if (index == events.size -1) { response.end } else { null }
-                            println("adding event at ${min-(index+1)} with $new_end")
-                            Database.addRoomEvent(min-(index+1), room_id, event, new_end)
-                        } catch (e: Exception) {
-                            println("while trying to insert (from backfill) at index ${min-(index+1)} ${event} got exception $e")
-
+                // A bit too heavy handed, but syncronized so that backfill requests
+                // don't stomp on each other's minId
+                synchronized(this) {
+                    if (response.chunk != null) {
+                        val events = response.chunk.map { it as? RoomEvent }.filterNotNull()
+                        val min = Database.minId()
+                        println("Inserting into backfill with min $min")
+                        // TODO: Should also consider how to insert the old state
+                        // chunk.
+                        events.forEachIndexed { index, event ->
+                            try {
+                                val new_end = if (index == events.size -1) { response.end } else { null }
+                                println("adding event at ${min-(index+1)} with $new_end")
+                                Database.addRoomEvent(min-(index+1), room_id, event, getRelatedEvent(event), new_end)
+                            } catch (e: Exception) {
+                                println("while trying to insert (from backfill) at index ${min-(index+1)} ${event} got exception $e")
+                            }
                         }
                     }
+                    println("|${from}| - done parsing and adding to database")
+                    in_flight_backfill_requests.remove(room_id)
                 }
-                println("|${from}| - done parsing and adding to database")
-                //synchronized(this) {
-                //    // This also needs to be changed to something that supports discontinuous
-                //    // sections of timeline with different prev_patch, etc
-                //    if (response.chunk != null) {
-                //        sync_response!!.rooms.join[room_id]!!.state.events += response.chunk.filter { it is StateEvent<*> }
-                //        sync_response!!.rooms.join[room_id]!!.timeline.events = response.chunk.asReversed() + sync_response!!.rooms.join[room_id]!!.timeline.events
-                //    }
-                //    if (response.state != null) {
-                //        sync_response!!.rooms.join[room_id]!!.state.events += response.state
-                //    }
-                //    sync_response!!.rooms.join[room_id]!!.timeline.prev_batch = response.end
-                //    in_flight_backfill_requests.remove(room_id)
-                //}
-                in_flight_backfill_requests.remove(room_id)
                 onUpdate()
                 println("|${from}| - done onUpdate")
             } catch (e: Exception) {
-                println("This backfill for $room_id failed with an exception $e")
-                e.printStackTrace()
                 synchronized(this) {
+                    println("This backfill for $room_id failed with an exception $e")
+                    e.printStackTrace()
                     in_flight_backfill_requests.remove(room_id)
                 }
             }
@@ -283,9 +343,9 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
             events.forEachIndexed { index, event ->
                 try {
-                    Database.addRoomEvent(null, room_id, event, if (index == 0) { room.timeline.prev_batch } else { null })
+                    Database.addRoomEvent(null, room_id, event, getRelatedEvent(event), if (index == 0) { room.timeline.prev_batch } else { null })
                 } catch (e: Exception) {
-                    println("while trying to insert (from backfill) ${event} got exception $e")
+                    println("while trying to insert (from mergeInSync) ${event} got exception $e")
 
                 }
             }
@@ -299,26 +359,6 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             )
         }
         Database.updateSessionNextBatch(access_token, new_sync_response.next_batch)
-        //synchronized(this) {
-        //    if (sync_response == null) {
-        //        sync_response = new_sync_response
-        //    } else {
-        //        for ((room_id, room) in new_sync_response.rooms.join) {
-        //            if (sync_response!!.rooms.join.containsKey(room_id)) {
-        //                // A little bit hacky, we just add all our new state events here, prepending
-        //                // the new ones
-        //                sync_response!!.rooms.join[room_id]!!.state.events = room.state.events + sync_response!!.rooms.join[room_id]!!.state.events
-        //                sync_response!!.rooms.join[room_id]!!.state.events = room.timeline.events.filter { it is StateEvent<*> }.asReversed() + sync_response!!.rooms.join[room_id]!!.state.events
-        //                // This also needs to be changed to something that supports discontinuous
-        //                // sections of timeline with different prev_patch, etc
-        //                sync_response!!.rooms.join[room_id]!!.timeline.events += room.timeline.events
-        //                sync_response!!.rooms.join[room_id]!!.unread_notifications = room.unread_notifications
-        //            } else {
-        //                sync_response!!.rooms.join[room_id] = room
-        //            }
-        //        }
-        //    }
-        //}
     }
 }
 
