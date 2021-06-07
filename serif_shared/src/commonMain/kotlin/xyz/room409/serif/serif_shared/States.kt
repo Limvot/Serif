@@ -272,7 +272,6 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                 SharedUiMessagePlain("impossible", "impossible", "impossible", 0, mapOf())
             }
         }.filterNotNull()
-        println("Made messages for new chatroom, is ${messages.size} (from ${event_range.size} returned from request for $window_back_length $message_window_base_in $window_forward_length_in")
     }
     val window_forward_length: Int = if (message_window_base != null) { window_forward_length_in } else { 0 }
     fun sendMessage(msg: String): MatrixState {
@@ -335,8 +334,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     fun refresh(new_window_back_length: Int, new_message_window_base: String?, new_window_forward_length: Int): MatrixState = MatrixChatRoom(
         msession,
         room_id,
-        room_id,
-        //msession.mapRoom(room_id, { determineRoomName(it, room_id) }) ?: "<room gone?>",
+        msession.getRoomName(room_id) ?: room_id,
         new_window_back_length,
         new_message_window_base,
         new_window_forward_length,

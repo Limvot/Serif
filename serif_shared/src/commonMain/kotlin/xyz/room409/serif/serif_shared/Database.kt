@@ -30,7 +30,6 @@ object Database {
         this.db?.sessionDbQueries?.updateSessionNextBatch(nextBatch, access_token)
     }
     fun getSessionNextBatch(access_token: String): String? =
-
         this.db?.sessionDbQueries?.getSessionNextBatch(access_token)?.executeAsOneOrNull()?.nextBatch
 
     fun getStoredSessions(): List<Triple<String, String, Long>> {
@@ -76,11 +75,12 @@ object Database {
         f(r.id, r.name, r.unread_notif_count.toInt(), r.unread_highlight_count.toInt(), r.last_event?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) as? RoomMessageEvent })
     }
 
-    fun setRoomSummary(id: String, def_name: String?, maybe_name: String?, unread_notif_count: Int?, unread_highlight_count: Int?, last_event: RoomMessageEvent?) {
+    // setter that doesn't overwrite if passed null, if doesn't exist using default
+    fun setRoomSummary(id: String, name: String?, unread_notif_count: Int?, unread_highlight_count: Int?, last_event: RoomMessageEvent?) {
         val old = this.db?.sessionDbQueries?.getRoom(id)?.executeAsOneOrNull()
         if (old != null) {
             this.db?.sessionDbQueries?.updateRoomSummary(
-                def_name ?: old.name,
+                name ?: old.name,
                 unread_notif_count?.toLong() ?: old?.unread_notif_count ?: 0,
                 unread_highlight_count?.toLong() ?: old?.unread_highlight_count ?: 0,
                 last_event?.raw_self?.toString() ?: old?.last_event,
@@ -89,15 +89,14 @@ object Database {
         } else {
             this.db?.sessionDbQueries?.insertRoomSummary(
                 id,
-                def_name ?: maybe_name ?: id,
+                name ?: id,
                 unread_notif_count?.toLong() ?: 0,
                 unread_highlight_count?.toLong() ?: 0,
                 last_event?.raw_self?.toString()
             )
         }
     }
-
-
+    fun getRoomName(id: String) = this.db?.sessionDbQueries?.getRoom(id)?.executeAsOneOrNull()?.name
 
     fun setStateEvent(roomId: String, event: StateEvent<*>) {
         if (getStateEvent(roomId, event.type, event.state_key) != null) {
@@ -106,8 +105,8 @@ object Database {
             this.db?.sessionDbQueries?.insertStateEvent(roomId, event.type, event.state_key, event.raw_self.toString())
         }
     }
-    fun getStateEvent(roomId: String, type: String, stateKey: String): String? =
-        this.db?.sessionDbQueries?.getStateEvent(roomId, type, stateKey)?.executeAsOneOrNull()
+    fun getStateEvent(roomId: String, type: String, stateKey: String): Event? =
+        this.db?.sessionDbQueries?.getStateEvent(roomId, type, stateKey)?.executeAsOneOrNull()?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) }
     fun getStateEvents(roomId: String): List<Event> =
         this.db?.sessionDbQueries?.getStateEvents(roomId)?.executeAsList()?.map { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) } ?: listOf()
 
