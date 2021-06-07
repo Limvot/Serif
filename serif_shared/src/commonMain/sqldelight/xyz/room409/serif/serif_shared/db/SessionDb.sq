@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS RoomEvents (
  prevBatch TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS RoomEventIndex ON RoomEvents (roomId, eventId);
-CREATE UNIQUE INDEX IF NOT EXISTS RelatedEventIndex ON RoomEvents (relatedEvent);
+CREATE INDEX IF NOT EXISTS RelatedEventIndex ON RoomEvents (relatedEvent);
 
 minId:
 SELECT MIN(seqId) FROM RoomEvents;

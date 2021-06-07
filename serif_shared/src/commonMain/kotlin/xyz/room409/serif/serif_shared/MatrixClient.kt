@@ -104,7 +104,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         while (fore_events.size < window_forward_length) {
             println("fore_standalone_events(${fore_events.size}) < window_fore_length($window_forward_length), so getting ${window_forward_length.toLong() - fore_events.size} new events")
             val new_events = Database.getRoomEventsForwardsFromPoint(room_id, fore_base_seqId, window_forward_length.toLong() - fore_events.size)
-            fore_events = fore_events.filter { isStandaloneEvent(it.first) } + new_events
+            fore_events = fore_events + new_events.filter { isStandaloneEvent(it.first) }
             println("\tgot ${new_events.size} (filtered) events")
             if (new_events.size == 0) {
                 println("\tnew_events.size == 0, breaking")
@@ -118,9 +118,9 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             println("back_events.size (${back_events.size}) < window_back_length ($window_back_length), requesting backfill")
             requestBackfill(room_id)
         }
-        val prelim_total_events = back_events + listOf(base_and_seqId) + fore_events
+        val prelim_total_events = back_events + listOf(base_and_seqId).filter { isStandaloneEvent(it.first) } + fore_events
         val relatedEvents = Database.getRelatedEvents(room_id, prelim_total_events.map { (it.first as RoomEvent).event_id })
-        val total_events = (back_events + listOf(base_and_seqId) + fore_events + relatedEvents).sortedBy { it.second } .map { it.first }
+        val total_events = (prelim_total_events + relatedEvents).sortedBy { it.second } .map { it.first }
         println("to double check, we have ${total_events.size} total events, with ${total_events.count { isStandaloneEvent(it) }} standalone, and ${relatedEvents.size} pulled using getRelatedEvents")
         return Pair(total_events, overrideCurrent || fore_events.size < window_forward_length)
     }

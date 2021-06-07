@@ -255,12 +255,23 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                         )
                     }
                     is ReactionRMEC -> null
-                    else -> SharedUiMessagePlain(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
+                    else -> SharedUiMessagePlain(it.sender, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
                 }
-            } else { println("unhandled event $it"); null }
+            } else if (it as? RoomEvent != null) {
+                // This won't actually happen currently,
+                // as all non RoomMessageEvents will be filtered out by the
+                // isStandaloneEvent filter when pulling from the database.
+                // In general, keeping the two up to date will require
+                // some effort.
+                // TODO: something else? Either always show, or always hide?
+                println("unhandled room event $it")
+                SharedUiMessagePlain(it.sender, "UNHANDLED ROOM EVENT!!! $it", it.event_id, it.origin_server_ts, mapOf())
+            } else {
+                println("IMPOSSIBLE unhandled non room event $it")
+                throw Exception("IMPOSSIBLE unhandled non room event $it")
+                SharedUiMessagePlain("impossible", "impossible", "impossible", 0, mapOf())
+            }
         }.filterNotNull()
-        //messages = sl_messages.let { it.drop(max(0, it.size-(1+window_back_length+window_forward_length_in))) }
-        //println("Made messages for new chatroom, is ${messages.size} (sl${sl_messages.size}) long from ${event_range.size} returned from request for $window_back_length $message_window_base_in $window_forward_length_in")
         println("Made messages for new chatroom, is ${messages.size} (from ${event_range.size} returned from request for $window_back_length $message_window_base_in $window_forward_length_in")
     }
     val window_forward_length: Int = if (message_window_base != null) { window_forward_length_in } else { 0 }
