@@ -14,6 +14,59 @@ sealed class Outcome<out T : Any>
 data class Success<out T : Any>(val value: T) : Outcome<T>()
 data class Error(val message: String, val cause: Exception? = null) : Outcome<Nothing>()
 
+fun idBetween(a: String, b: String, increment: Boolean): String {
+    if (a.length < b.length) {
+        return idBetween(a + "a".repeat(b.length - a.length), b, increment)
+    } else if (a.length > b.length) {
+        return idBetween(a, b + "a".repeat(a.length - b.length), increment)
+    } else if (increment) {
+        // lets try to increment a
+        var carry = true
+        val a_incr = String(a.reversed().map { c ->
+            if (carry) {
+                if (c < 'z') {
+                    carry = false
+                    c + 1
+                } else {
+                    'b'
+                }
+            } else {
+                c
+            }
+        }.reversed().toCharArray())
+        // If this increment didn't work, we've got to extend the space
+        if (a_incr >= b) {
+            return idBetween(a + "a".repeat(a.length), b + "a".repeat(b.length), increment)
+        } else {
+            return a_incr
+        }
+    } else {
+        // lets try to decrement b
+        var carry = true
+        var not_first = false
+        val b_decr = String(b.reversed().map { c ->
+            if (carry) {
+                if (c > 'b' || (not_first && c > 'a')) {
+                    carry = false
+                    not_first = true
+                    c - 1
+                } else {
+                    not_first = true
+                    'z'
+                }
+            } else {
+                c
+            }
+        }.reversed().toCharArray())
+        // If this decrement didn't work, we've got to extend the space
+        if (b_decr > b || b_decr <= a) {
+            return idBetween(a + "a".repeat(a.length), b + "a".repeat(b.length), increment)
+        } else {
+            return b_decr
+        }
+    }
+}
+
 fun is_edit_content(msg_content: TextRMEC): Boolean = ((msg_content.new_content != null) && (msg_content.relates_to?.event_id != null))
 fun isStandaloneEvent(e: Event): Boolean {
     if (e as? RoomMessageEvent != null) {
@@ -42,7 +95,7 @@ inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.
 inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as? StateEvent<T>?)?.content) as? T?
 
 class MatrixSession(val client: HttpClient, val server: String, val user: String, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
-    private var in_flight_backfill_requests: MutableSet<String> = mutableSetOf()
+    private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
     private var sync_response: SyncResponse? = null
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
@@ -76,12 +129,15 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         // if message_window_base is null, than no matter what
         // we are following live.
         val overrideCurrent = message_window_base == null
-        val base_and_seqId = message_window_base?.let { Database.getRoomEventAndIdx(room_id, it) } ?: Database.getMostRecentRoomEventAndIdx(room_id)
+        val base_and_seqId_and_prevBatch = message_window_base?.let { Database.getRoomEventAndIdx(room_id, it) } ?: Database.getMostRecentRoomEventAndIdx(room_id)
         // completely empty room!!
-        if (base_and_seqId == null) {
+        if (base_and_seqId_and_prevBatch == null) {
             return Pair(listOf(), true)
         }
-        var base_seqId = base_and_seqId.second.toLong()
+        if (base_and_seqId_and_prevBatch.third != null) {
+            requestBackfill(room_id, base_and_seqId_and_prevBatch.first.event_id, base_and_seqId_and_prevBatch.third!!)
+        }
+        var base_seqId = base_and_seqId_and_prevBatch.second
 
         // For both forward and backward events, we keep
         // getting events in that direction from the database
@@ -97,36 +153,32 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         // an extra standaloneEvent to make our quota
         // (the UI expects exactly window_back_length+1+window_forward_length
         // displayable events)
-        val window_back_length = window_back_length + if (isStandaloneEvent(base_and_seqId.first)) { 0 } else { 1 }
-        var back_base_seqId = base_and_seqId.second.toLong()
-        var back_events: List<Pair<Event,Long>> = listOf()
+        val window_back_length = window_back_length + if (isStandaloneEvent(base_and_seqId_and_prevBatch.first)) { 0 } else { 1 }
+        var back_base_seqId = base_and_seqId_and_prevBatch.second
+        var back_events: List<Triple<RoomEvent,String,String?>> = listOf()
         while (back_events.size < window_back_length) {
             val new_events = Database.getRoomEventsBackwardsFromPoint(room_id, back_base_seqId, window_back_length.toLong() - back_events.size)
-            back_events = new_events.filter { isStandaloneEvent(it.first) } + back_events
+            back_events = new_events.filter { if (it.third != null) { requestBackfill(room_id, it.first.event_id, it.third!!); }; isStandaloneEvent(it.first) } + back_events
             if (new_events.size == 0) {
                 break;
             }
             back_base_seqId = new_events.first()!!.second
         }
 
-        var fore_base_seqId = base_and_seqId.second.toLong()
-        var fore_events: List<Pair<Event,Long>> = listOf()
+        var fore_base_seqId = base_and_seqId_and_prevBatch.second
+        var fore_events: List<Triple<RoomEvent,String,String?>> = listOf()
         while (fore_events.size < window_forward_length) {
             val new_events = Database.getRoomEventsForwardsFromPoint(room_id, fore_base_seqId, window_forward_length.toLong() - fore_events.size)
-            fore_events = fore_events + new_events.filter { isStandaloneEvent(it.first) }
+            fore_events = fore_events + new_events.filter { if (it.third != null) { requestBackfill(room_id, it.first.event_id, it.third!!); }; isStandaloneEvent(it.first) }
             if (new_events.size == 0) {
                 break
             }
             fore_base_seqId = new_events.last()!!.second
         }
 
-        if (back_events.size < window_back_length) {
-            println("back_events.size (${back_events.size}) < window_back_length ($window_back_length), requesting backfill")
-            requestBackfill(room_id)
-        }
-        val prelim_total_events = back_events + listOf(base_and_seqId).filter { isStandaloneEvent(it.first) } + fore_events
-        val relatedEvents = Database.getRelatedEvents(room_id, prelim_total_events.map { (it.first as RoomEvent).event_id })
-        val total_events = (prelim_total_events + relatedEvents).sortedBy { it.second } .map { it.first }
+        val prelim_total_events = back_events + listOf(base_and_seqId_and_prevBatch).filter { isStandaloneEvent(it.first) } + fore_events
+        val relatedEvents = Database.getRelatedEvents(room_id, prelim_total_events.map { it.first.event_id })
+        val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }
         // in addition to overrrideCurrent, the other condition for following live
         // is that we have less events forward than requested, so our window overlaps
         // live.
@@ -283,17 +335,16 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun requestBackfill(room_id: String) {
+    fun requestBackfill(room_id: String, event_id: String, from: String) {
         synchronized(this) {
-            if (in_flight_backfill_requests.contains(room_id)) {
+            if (in_flight_backfill_requests.contains(Triple(room_id, event_id, from))) {
                 return;
             }
-            in_flight_backfill_requests.add(room_id)
+            in_flight_backfill_requests.add(Triple(room_id, event_id, from))
         }
         thread(start = true) {
             try {
-                val from = Database.getPrevBatch(room_id)!!
-                println("Backfilling from |${from}|")
+                println("Backfilling $room_id from |${from}| based on event $event_id")
                 val url = "$server/_matrix/client/r0/rooms/$room_id/messages?access_token=$access_token&from=$from&dir=b"
                 val response = runBlocking { client.get<BackfillResponse>(url) }
                 println("|${from}| - done getting response")
@@ -302,26 +353,34 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 synchronized(this) {
                     if (response.chunk != null) {
                         val events = response.chunk.map { it as? RoomEvent }.filterNotNull()
-                        val min = Database.minId()
-                        println("Inserting into backfill with min $min")
+                        val maxId = Database.getRoomEventAndIdx(room_id, event_id)!!.second
+                        val minId = Database.maxIdLessThan(maxId)
+                        println("Inserting into backfill with min $minId and max $maxId")
                         // TODO: Should also consider how to insert the old state
                         // chunk.
-                        events.forEachIndexed { index, event ->
+                        var insertId = idBetween(minId, maxId, false)
+                        events.forEachIndexed tobreak@{ index, event ->
                             try {
                                 // Similar to prev_batch later on, we record what is basically
                                 // prev_batch if we're the "first" (reversed, so last) event
                                 // so we can keep backfilling later by getting the non-null
                                 // prev_batch with lowest seqId for this room
                                 val new_end = if (index == events.size -1) { response.end } else { null }
-                                println("adding event at ${min-(index+1)} with $new_end")
-                                Database.addRoomEvent(min-(index+1), room_id, event, getRelatedEvent(event), new_end)
+                                println("looking to add event from backfill at $insertId with $new_end")
+                                if (Database.getRoomEventAndIdx(room_id, event.event_id) != null) {
+                                    println("Already exists! We must have caught up, breaking out")
+                                    return@tobreak
+                                }
+                                Database.addRoomEvent(insertId, room_id, event, getRelatedEvent(event), new_end)
+                                insertId = idBetween(minId, insertId, false)
                             } catch (e: Exception) {
-                                println("while trying to insert (from backfill) at index ${min-(index+1)} ${event} got exception $e")
+                                println("while trying to insert (from backfill) at index $insertId ${event} got exception $e")
                             }
                         }
                     }
                     println("|${from}| - done parsing and adding to database")
-                    in_flight_backfill_requests.remove(room_id)
+                    in_flight_backfill_requests.remove(Triple(room_id, event_id, from))
+                    Database.updatePrevBatch(room_id, event_id, null)
                 }
                 onUpdate()
                 println("|${from}| - done onUpdate")
@@ -353,15 +412,21 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 (event as? StateEvent<*>)?.let { Database.setStateEvent(room_id, it) }
             }
             val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
-            events.forEachIndexed { index, event ->
-                try {
-                    // Note that if this is the first event of this chunk, we record prev_batch for it
-                    // so we can later backfill by picking the non-null prev_batch with smallest seqId
-                    // for this room.
-                    Database.addRoomEvent(null, room_id, event, getRelatedEvent(event), if (index == 0) { room.timeline.prev_batch } else { null })
-                } catch (e: Exception) {
-                    println("while trying to insert (from mergeInSync) ${event} got exception $e")
+            synchronized(this) {
+                val max = Database.maxId()
+                var insertId = idBetween(max, "z", true)
+                events.forEachIndexed { index, event ->
+                    try {
+                        // Note that if this is the first event of this chunk, we record prev_batch for it
+                        // so we can later backfill by picking the non-null prev_batch with smallest seqId
+                        // for this room.
+                        println("adding event from sync at $insertId")
+                        Database.addRoomEvent(insertId, room_id, event, getRelatedEvent(event), if (index == 0 && room.timeline.limited) { room.timeline.prev_batch } else { null })
+                        insertId = idBetween(insertId, "z", true)
+                    } catch (e: Exception) {
+                        println("while trying to insert (from mergeInSync) ${event} got exception $e")
 
+                    }
                 }
             }
             Database.setRoomSummary(

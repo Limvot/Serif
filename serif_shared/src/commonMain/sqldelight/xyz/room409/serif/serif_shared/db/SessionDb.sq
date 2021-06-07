@@ -112,7 +112,7 @@ WHERE (roomId = ?);
 
 
 CREATE TABLE IF NOT EXISTS RoomEvents (
- seqId INTEGER PRIMARY KEY NOT NULL,
+ seqId TEXT PRIMARY KEY NOT NULL,
  roomId TEXT NOT NULL,
  eventId TEXT NOT NULL,
  data TEXT NOT NULL,
@@ -125,29 +125,41 @@ CREATE INDEX IF NOT EXISTS RelatedEventIndex ON RoomEvents (relatedEvent);
 minId:
 SELECT MIN(seqId) FROM RoomEvents;
 
+maxId:
+SELECT MAX(seqId) FROM RoomEvents;
+
+maxIdLessThan:
+SELECT MAX(seqId) FROM RoomEvents
+WHERE (seqId < ?);
+
 addRoomEvent:
 INSERT INTO RoomEvents(seqId, roomId, eventId, data, relatedEvent, prevBatch)
 VALUES(?,?,?,?,?,?);
 
+updatePrevBatch:
+UPDATE RoomEvents
+SET prevBatch = ?
+WHERE (roomId = ? AND eventId = ?);
+
 getRoomEventAndIdx:
-SELECT data,seqId FROM RoomEvents
+SELECT data,seqId,prevBatch FROM RoomEvents
 WHERE (roomId = ? AND eventId = ?)
 LIMIT 1;
 
 getRoomEventsBackwardsFromPointReversed:
-SELECT data,seqId FROM RoomEvents
+SELECT data,seqId,prevBatch FROM RoomEvents
 WHERE (roomId = ?) AND (seqId < ?)
 ORDER BY seqId DESC
 LIMIT ?;
 
 getRoomEventsForwardsFromPoint:
-SELECT data,seqId FROM RoomEvents
+SELECT data,seqId,prevBatch FROM RoomEvents
 WHERE (roomId = ?) AND (seqId > ?)
 ORDER BY seqId ASC
 LIMIT ?;
 
 getMostRecentRoomEvent:
-SELECT data,seqId FROM RoomEvents
+SELECT data,seqId,prevBatch FROM RoomEvents
 WHERE (roomId = ?)
 ORDER BY seqId DESC
 LIMIT 1;
@@ -155,9 +167,3 @@ LIMIT 1;
 getRelatedEvents:
 SELECT data,seqId FROM RoomEvents
 WHERE (roomId = ?) AND (relatedEvent IN ?);
-
-getPrevBatch:
-SELECT prevBatch FROM RoomEvents
-WHERE (roomId = ? AND prevBatch IS NOT NULL)
-ORDER BY seqId ASC
-LIMIT 1;
