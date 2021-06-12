@@ -1,5 +1,7 @@
 package xyz.room409.serif.serif_shared
 import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.features.*
 import io.ktor.client.features.json.*
 import io.ktor.client.features.json.serializer.KotlinxSerializer
 import io.ktor.client.request.*
@@ -86,23 +88,20 @@ fun getRelatedEvent(e: Event): String? {
     return null
 }
 
-// Returns the first Event of class T, or null
-inline fun <reified T> List<Event>.firstOfType(): T? = this.map { (it as? T?) }.firstOrNull { it != null }
-// Returns the content of type T from the first Event of type StateEvent<T>
-// This can't just be a call to firstofType<StateEvent<T>> because the safe cast operator only works one level, and you'd
+// This can't just be a call to something like firstofType<StateEvent<T>> because the safe cast operator only works one level, and you'd
 // still get ClassCastExceptions when it returns an Event that is indeed of type StateEvent<?> but not instantiated with
 // the right T. Java generics are bad, yall, and Kotlin in trying to be nice sometimes makes things much worse.
 inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as? StateEvent<T>?)?.content) as? T?
 
-class MatrixSession(val client: HttpClient, val server: String, val user: String, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
+class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
-    private var sync_response: SyncResponse? = null
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
-        val timeout_ms: Long = 20000
-        var fail_times = 0
+        // 30 seconds is Matrix recommended, afaik
+        // was mentioned in matrix-dev a bit ago
+        val timeout_ms: Long = 30000
         while (sync_should_run) {
-            val next_batch = Database.getSessionNextBatch(access_token)
+            val next_batch = Database.getSessionNextBatch(session_id)
             val url = if (next_batch != null) {
                 "$server/_matrix/client/r0/sync?since=$next_batch&timeout=$timeout_ms&access_token=$access_token"
             } else {
@@ -111,25 +110,22 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             }
             try {
                 mergeInSync(runBlocking { client.get<SyncResponse>(url) })
-                fail_times = 0
                 onUpdate()
             } catch (e: Exception) {
-                // Exponential backoff on failure
-                val backoff_ms = timeout_ms shl fail_times
+                val backoff_ms = timeout_ms
                 e.printStackTrace()
                 println("This sync failed with an exception $e, waiting ${backoff_ms / 1000} seconds before trying again")
-                fail_times += 1
                 Thread.sleep(backoff_ms)
             }
         }
     }
 
-    fun <T> mapRooms(f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = Database.mapRooms(f)
+    fun <T> mapRooms(f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = Database.mapRooms(session_id, f)
     fun getReleventRoomEventsForWindow(room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): Pair<List<Event>, Boolean> {
         // if message_window_base is null, than no matter what
         // we are following live.
         val overrideCurrent = message_window_base == null
-        val base_and_seqId_and_prevBatch = message_window_base?.let { Database.getRoomEventAndIdx(room_id, it) } ?: Database.getMostRecentRoomEventAndIdx(room_id)
+        val base_and_seqId_and_prevBatch = message_window_base?.let { Database.getRoomEventAndIdx(session_id, room_id, it) } ?: Database.getMostRecentRoomEventAndIdx(session_id, room_id)
         // completely empty room!!
         if (base_and_seqId_and_prevBatch == null) {
             return Pair(listOf(), true)
@@ -157,7 +153,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         var back_base_seqId = base_and_seqId_and_prevBatch.second
         var back_events: List<Triple<RoomEvent,String,String?>> = listOf()
         while (back_events.size < window_back_length) {
-            val new_events = Database.getRoomEventsBackwardsFromPoint(room_id, back_base_seqId, window_back_length.toLong() - back_events.size)
+            val new_events = Database.getRoomEventsBackwardsFromPoint(session_id, room_id, back_base_seqId, window_back_length.toLong() - back_events.size)
             back_events = new_events.filter { if (it.third != null) { requestBackfill(room_id, it.first.event_id, it.third!!); }; isStandaloneEvent(it.first) } + back_events
             if (new_events.size == 0) {
                 break;
@@ -168,7 +164,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         var fore_base_seqId = base_and_seqId_and_prevBatch.second
         var fore_events: List<Triple<RoomEvent,String,String?>> = listOf()
         while (fore_events.size < window_forward_length) {
-            val new_events = Database.getRoomEventsForwardsFromPoint(room_id, fore_base_seqId, window_forward_length.toLong() - fore_events.size)
+            val new_events = Database.getRoomEventsForwardsFromPoint(session_id, room_id, fore_base_seqId, window_forward_length.toLong() - fore_events.size)
             fore_events = fore_events + new_events.filter { if (it.third != null) { requestBackfill(room_id, it.first.event_id, it.third!!); }; isStandaloneEvent(it.first) }
             if (new_events.size == 0) {
                 break
@@ -177,15 +173,15 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
 
         val prelim_total_events = back_events + listOf(base_and_seqId_and_prevBatch).filter { isStandaloneEvent(it.first) } + fore_events
-        val relatedEvents = Database.getRelatedEvents(room_id, prelim_total_events.map { it.first.event_id })
+        val relatedEvents = Database.getRelatedEvents(session_id, room_id, prelim_total_events.map { it.first.event_id })
         val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }
         // in addition to overrrideCurrent, the other condition for following live
         // is that we have less events forward than requested, so our window overlaps
         // live.
         return Pair(total_events, overrideCurrent || fore_events.size < window_forward_length)
     }
-    fun getRoomEvent(room_id: String, event_id: String): Event? = Database.getRoomEventAndIdx(room_id, event_id)?.first
-    fun getRoomName(id: String) = Database.getRoomName(id)
+    fun getRoomEvent(room_id: String, event_id: String): Event? = Database.getRoomEventAndIdx(session_id, room_id, event_id)?.first
+    fun getRoomName(id: String) = Database.getRoomName(session_id, id)
     fun createRoom(name:String, room_alias_name: String, topic: String): Outcome<String> {
         try {
             val result = runBlocking {
@@ -194,7 +190,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                     contentType(ContentType.Application.Json)
                     body = CreateRoom(name, room_alias_name, topic)
                 }
-                Database.updateSessionTransactionId(access_token, transactionId)
+                Database.updateSessionTransactionId(session_id, transactionId)
                 creation_confirmation
             }
             return Success("Our create create room event id is: $result")
@@ -217,7 +213,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                         body = message_content
                     }
                 transactionId++
-                Database.updateSessionTransactionId(access_token, transactionId)
+                Database.updateSessionTransactionId(session_id, transactionId)
                 message_confirmation.event_id
             }
 
@@ -353,7 +349,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 synchronized(this) {
                     if (response.chunk != null) {
                         val events = response.chunk.map { it as? RoomEvent }.filterNotNull()
-                        val maxId = Database.getRoomEventAndIdx(room_id, event_id)!!.second
+                        val maxId = Database.getRoomEventAndIdx(session_id, room_id, event_id)!!.second
                         val minId = Database.maxIdLessThan(maxId)
                         println("Inserting into backfill with min $minId and max $maxId")
                         // TODO: Should also consider how to insert the old state
@@ -367,11 +363,11 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                                 // prev_batch with lowest seqId for this room
                                 val new_end = if (index == events.size -1) { response.end } else { null }
                                 println("looking to add event from backfill at $insertId with $new_end")
-                                if (Database.getRoomEventAndIdx(room_id, event.event_id) != null) {
+                                if (Database.getRoomEventAndIdx(session_id, room_id, event.event_id) != null) {
                                     println("Already exists! We must have caught up, breaking out")
                                     return@tobreak
                                 }
-                                Database.addRoomEvent(insertId, room_id, event, getRelatedEvent(event), new_end)
+                                Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event), new_end)
                                 insertId = idBetween(minId, insertId, false)
                             } catch (e: Exception) {
                                 println("while trying to insert (from backfill) at index $insertId ${event} got exception $e")
@@ -380,7 +376,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                     }
                     println("|${from}| - done parsing and adding to database")
                     in_flight_backfill_requests.remove(Triple(room_id, event_id, from))
-                    Database.updatePrevBatch(room_id, event_id, null)
+                    Database.updatePrevBatch(session_id, room_id, event_id, null)
                 }
                 onUpdate()
                 println("|${from}| - done onUpdate")
@@ -396,20 +392,20 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
     fun closeSession() {
         // Update Database with latest transactionId
-        Database.updateSessionTransactionId(this.access_token, this.transactionId)
+        Database.updateSessionTransactionId(session_id, transactionId)
         // TO ACT LIKE A LOGOUT, CLOSING THE CLIENT
         client.close()
         sync_should_run = false
     }
     fun determineRoomName(id: String): String {
-        return Database.getStateEvent(id, "m.room.name", "")?.castToStateEventWithContentOfType<RoomNameContent>()?.name
-            ?: Database.getStateEvent(id, "m.room.canonical_alias", "")?.castToStateEventWithContentOfType<RoomCanonicalAliasContent>()?.alias
+        return Database.getStateEvent(session_id, id, "m.room.name", "")?.castToStateEventWithContentOfType<RoomNameContent>()?.name
+            ?: Database.getStateEvent(session_id, id, "m.room.canonical_alias", "")?.castToStateEventWithContentOfType<RoomCanonicalAliasContent>()?.alias
             ?: "<no room name - $id>"
     }
     fun mergeInSync(new_sync_response: SyncResponse) {
         for ((room_id, room) in new_sync_response.rooms.join) {
             for (event in room.state.events + room.timeline.events) {
-                (event as? StateEvent<*>)?.let { Database.setStateEvent(room_id, it) }
+                (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }
             }
             val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
             synchronized(this) {
@@ -421,7 +417,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                         // so we can later backfill by picking the non-null prev_batch with smallest seqId
                         // for this room.
                         println("adding event from sync at $insertId")
-                        Database.addRoomEvent(insertId, room_id, event, getRelatedEvent(event), if (index == 0 && room.timeline.limited) { room.timeline.prev_batch } else { null })
+                        Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event), if (index == 0 && room.timeline.limited) { room.timeline.prev_batch } else { null })
                         insertId = idBetween(insertId, "z", true)
                     } catch (e: Exception) {
                         println("while trying to insert (from mergeInSync) ${event} got exception $e")
@@ -430,6 +426,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 }
             }
             Database.setRoomSummary(
+                session_id,
                 room_id,
                 determineRoomName(room_id),
                 room.unread_notifications?.notification_count,
@@ -437,7 +434,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent
             )
         }
-        Database.updateSessionNextBatch(access_token, new_sync_response.next_batch)
+        Database.updateSessionNextBatch(session_id, new_sync_response.next_batch)
     }
 }
 
@@ -449,12 +446,19 @@ object JsonFormatHolder {
 }
 
 class MatrixClient {
-    fun login(username: String, password: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
-        val client = HttpClient() {
-            install(JsonFeature) {
-                serializer = KotlinxSerializer(JsonFormatHolder.jsonFormat)
-            }
+    // 35 seconds, to comfortably handle the 30 second sync
+    // timeout we send to the server (recommended Matrix default)
+    fun makeClient() = HttpClient(CIO.create { requestTimeout = 35000 }) {
+        install(JsonFeature) {
+            serializer = KotlinxSerializer(
+                kotlinx.serialization.json.Json {
+                    ignoreUnknownKeys = true
+                }
+            )
         }
+    }
+    fun login(username: String, password: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
+        val client = makeClient()
         val server = "https://synapse.room409.xyz"
         try {
             val loginResponse = runBlocking {
@@ -468,29 +472,23 @@ class MatrixClient {
             println("Saving session to db")
             val new_transactionId: Long = 0
             Database.saveSession(loginResponse.user_id, loginResponse.access_token, new_transactionId)
+            val session_id = Database.getUserSession(loginResponse.user_id).second.first
 
-            return Success(MatrixSession(client, server, loginResponse.user_id, loginResponse.access_token, new_transactionId, onUpdate))
+            return Success(MatrixSession(client, server, loginResponse.user_id, session_id, loginResponse.access_token, new_transactionId, onUpdate))
         } catch (e: Exception) {
             return Error("Login failed", e)
         }
     }
     fun loginFromSavedSession(username: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
-        val client = HttpClient() {
-            install(JsonFeature) {
-                serializer = KotlinxSerializer(
-                    kotlinx.serialization.json.Json {
-                        ignoreUnknownKeys = true
-                    }
-                )
-            }
-        }
+        val client = makeClient()
         val server = "https://synapse.room409.xyz"
         // Load from DB
         println("loading specific session from db")
-        val sessions = Database.getUserSession(username)
-        val tok = sessions.second
-        val transactionId = sessions.third
-        return Success(MatrixSession(client, server, username, tok, transactionId, onUpdate))
+        val session = Database.getUserSession(username)
+        val session_id = session.second.first
+        val tok = session.second.second
+        val transactionId = session.third
+        return Success(MatrixSession(client, server, username, session_id, tok, transactionId, onUpdate))
     }
 
     fun getStoredSessions(): List<String> {
