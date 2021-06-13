@@ -128,6 +128,7 @@ class StateEvent<T>(
 }
 
 @Serializable class RoomNameContent(val name: String)
+@Serializable class FallbackContent()
 
 @Serializable
 class RoomCanonicalAliasContent(val alias: String? = null, val alt_aliases: List<String>? = null)
@@ -259,6 +260,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
                 type == "m.room.message" || type == "m.reaction" -> RoomMessageEventSerializer
                 type == "m.room.name" -> RoomNameStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
+                element.jsonObject["state_key"] != null -> StateEventFallbackSerializer
                 type.startsWith("m.room") -> RoomEventFallbackSerializer
                 else -> EventFallbackSerializer
             }
@@ -285,6 +287,7 @@ object RoomEventFallbackSerializer : GenericJsonEventSerializer<RoomEventFallbac
 object RoomMessageEventSerializer : GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
 object RoomNameStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomNameContent>>(StateEvent.serializer(RoomNameContent.serializer()))
 object RoomCanonicalAliasStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
+object StateEventFallbackSerializer : GenericJsonEventSerializer<StateEvent<FallbackContent>>(StateEvent.serializer(FallbackContent.serializer()))
 
 open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) : JsonTransformingSerializer<T>(clazz) {
     override fun transformDeserialize(element: JsonElement): JsonElement = buildJsonObject {
