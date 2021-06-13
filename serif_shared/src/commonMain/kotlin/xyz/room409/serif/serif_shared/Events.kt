@@ -72,7 +72,7 @@ data class Room(
     var unread_notifications: UnreadNotifications? = null
 )
 
-@Serializable data class Timeline(var events: List<Event>, var prev_batch: String)
+@Serializable data class Timeline(var events: List<Event>, var limited: Boolean = false, var prev_batch: String)
 
 @Serializable data class State(var events: List<Event>)
 

@@ -657,6 +657,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         }
         attString
     }
+    val room_name = SmoothLabel("")
+    fun setRoomName(name: String) {
+        room_name.setText("Room Name: $name")
+    }
     val mk_sender = { msg: SharedUiMessage ->
         val render_text = { msg: SharedUiMessage ->
             if (msg.reactions.size > 0) {
@@ -865,6 +869,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val in_lower_buffer = m.messages.size - ended < buffer_space
             val tracking_current = m.message_window_base == null
             val no_request_out = (m.window_back_length + m.window_forward_length + 1) <= m.messages.size
+            //println("in_upper_buffer $in_upper_buffer ($began < $buffer_space) && no_request_out $no_request_out (${m.window_back_length} + ${m.window_forward_length} + 1) <= ${m.messages.size}")
             if (in_upper_buffer && no_request_out) {
                 javax.swing.SwingUtilities.invokeLater({
                     transition(m.refresh(desired_window_half, m.messages[began].id, desired_window_half), true)
@@ -884,6 +889,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var edited_event_id = ""
     init {
         panel.layout = BorderLayout()
+        setRoomName(m.name)
+        panel.add(
+            room_name,
+            BorderLayout.PAGE_START
+        )
 
         recycling_message_list.reset(last_window_width, m.messages)
         val scroll_pane = JScrollPane(
@@ -966,6 +976,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         } else {
             m = new_m
         }
+        setRoomName(m.name)
     }
     private fun openUrl(href: String) {
         // In the background, so that GUI doesn't freeze

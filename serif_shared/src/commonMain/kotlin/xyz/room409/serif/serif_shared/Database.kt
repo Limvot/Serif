@@ -1,8 +1,13 @@
 package xyz.room409.serif.serif_shared
+
 import xyz.room409.serif.serif_shared.db.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
 import xyz.room409.serif.serif_shared.db.SessionDb
+
 import java.io.File
+
+import kotlinx.serialization.*
+import kotlinx.serialization.json.*
 
 object Database {
     // See platform specific code in serif_shared for the
@@ -17,22 +22,28 @@ object Database {
         this.db?.sessionDbQueries?.insertSession(username, access_token, transactionId)
     }
 
-    fun updateSession(access_token: String, transactionId: Long) {
-        this.db?.sessionDbQueries?.updateSession(transactionId, access_token)
+    fun updateSessionTransactionId(session_id: Long, transactionId: Long) {
+        this.db?.sessionDbQueries?.updateSessionTransactionId(transactionId, session_id)
     }
+
+    fun updateSessionNextBatch(session_id: Long, nextBatch: String) {
+        this.db?.sessionDbQueries?.updateSessionNextBatch(nextBatch, session_id)
+    }
+    fun getSessionNextBatch(session_id: Long): String? =
+        this.db?.sessionDbQueries?.getSessionNextBatch(session_id)?.executeAsOneOrNull()?.nextBatch
 
     fun getStoredSessions(): List<Triple<String, String, Long>> {
         val saved_sessions = this.db?.sessionDbQueries?.selectAllSessions(
-            { user: String, auth_tok: String, transactionId: Long ->
+            { id: Long, user: String, auth_tok: String, nextBatch: String?, transactionId: Long ->
                 Triple(user, auth_tok, transactionId)
             })?.executeAsList() ?: listOf()
         return saved_sessions
     }
 
-    fun getUserSession(user: String): Triple<String, String, Long> {
-        val saved_session = this.db?.sessionDbQueries?.selectUserSession(user) { user: String, auth_tok: String, transactionId: Long ->
-            Triple(user, auth_tok, transactionId)
-        }?.executeAsOne() ?: Triple("", "", 0L)
+    fun getUserSession(user: String): Triple<String, Pair<Long, String>, Long> {
+        val saved_session = this.db?.sessionDbQueries?.selectUserSession(user) { id: Long, user: String, auth_tok: String, nextBatch: String?, transactionId: Long ->
+            Triple(user, Pair(id, auth_tok), transactionId)
+        }?.executeAsOne() ?: Triple("", Pair(0L,""), 0L)
         return saved_session
     }
 
@@ -59,4 +70,69 @@ object Database {
         }
         return local
     }
+
+    fun <T> mapRooms(session_id: Long, f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = (this.db?.sessionDbQueries?.getRooms(session_id)?.executeAsList() ?: listOf()).map { r ->
+        f(r.id, r.name, r.unread_notif_count.toInt(), r.unread_highlight_count.toInt(), r.last_event?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) as? RoomMessageEvent })
+    }
+
+    // setter that doesn't overwrite if passed null, if doesn't exist using default
+    fun setRoomSummary(session_id: Long, id: String, name: String?, unread_notif_count: Int?, unread_highlight_count: Int?, last_event: RoomMessageEvent?) {
+        val old = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()
+        if (old != null) {
+            this.db?.sessionDbQueries?.updateRoomSummary(
+                name ?: old.name,
+                unread_notif_count?.toLong() ?: old?.unread_notif_count ?: 0,
+                unread_highlight_count?.toLong() ?: old?.unread_highlight_count ?: 0,
+                last_event?.raw_self?.toString() ?: old?.last_event,
+                session_id,
+                id
+            )
+        } else {
+            this.db?.sessionDbQueries?.insertRoomSummary(
+                session_id,
+                id,
+                name ?: id,
+                unread_notif_count?.toLong() ?: 0,
+                unread_highlight_count?.toLong() ?: 0,
+                last_event?.raw_self?.toString()
+            )
+        }
+    }
+    fun getRoomName(session_id: Long, id: String) = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()?.name
+
+    fun setStateEvent(session_id: Long, roomId: String, event: StateEvent<*>) {
+        if (getStateEvent(session_id, roomId, event.type, event.state_key) != null) {
+            this.db?.sessionDbQueries?.updateStateEvent(event.raw_self.toString(), session_id, roomId, event.type, event.state_key)
+        } else {
+            this.db?.sessionDbQueries?.insertStateEvent(session_id, roomId, event.type, event.state_key, event.raw_self.toString())
+        }
+    }
+    fun getStateEvent(session_id: Long, roomId: String, type: String, stateKey: String): Event? =
+        this.db?.sessionDbQueries?.getStateEvent(session_id, roomId, type, stateKey)?.executeAsOneOrNull()?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) }
+    fun getStateEvents(session_id: Long, roomId: String): List<Event> =
+        this.db?.sessionDbQueries?.getStateEvents(session_id, roomId)?.executeAsList()?.map { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) } ?: listOf()
+
+    fun updatePrevBatch(session_id: Long, roomId: String, eventId: String, prevBatch: String?) {
+        this.db!!.sessionDbQueries!!.updatePrevBatch(prevBatch, session_id, roomId, eventId)
+    }
+
+    fun minId(): String = this.db?.sessionDbQueries?.minId()?.executeAsOneOrNull()?.MIN ?: "z"
+    fun maxId(): String = this.db?.sessionDbQueries?.maxId()?.executeAsOneOrNull()?.MAX ?: "a"
+    fun maxIdLessThan(seqId: String): String = this.db?.sessionDbQueries?.maxIdLessThan(seqId)?.executeAsOneOrNull()?.MAX ?: "a"
+
+    fun addRoomEvent(seqId: String, sessionId: Long, roomId: String, event: RoomEvent, related_event: String?, prevBatch: String?) {
+        this.db?.sessionDbQueries?.addRoomEvent(seqId, sessionId, roomId, event.event_id, event.raw_self.toString(), related_event, prevBatch)
+    }
+    fun getRoomEventAndIdx(session_id: Long, roomId: String, eventId: String): Triple<RoomEvent, String, String?>? =
+        this.db?.sessionDbQueries?.getRoomEventAndIdx(session_id, roomId, eventId)?.executeAsOneOrNull()?.let {
+            Triple(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data) as RoomEvent, it.seqId, it.prevBatch)
+        }
+    fun getRoomEventsBackwardsFromPoint(session_id: Long, roomId: String, point: String, number: Long): List<Triple<RoomEvent,String,String?>> =
+        this.db?.sessionDbQueries?.getRoomEventsBackwardsFromPointReversed(session_id, roomId, point, number)?.executeAsList()?.map { Triple(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data) as RoomEvent, it.seqId, it.prevBatch) }?.reversed() ?: listOf()
+    fun getRoomEventsForwardsFromPoint(session_id: Long, roomId: String, point: String, number: Long): List<Triple<RoomEvent,String,String?>> =
+        this.db?.sessionDbQueries?.getRoomEventsForwardsFromPoint(session_id, roomId, point, number)?.executeAsList()?.map { Triple(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data) as RoomEvent, it.seqId, it.prevBatch) } ?: listOf()
+    fun getMostRecentRoomEventAndIdx(session_id: Long, roomId: String): Triple<RoomEvent,String,String?>? =
+        this.db?.sessionDbQueries?.getMostRecentRoomEvent(session_id, roomId)?.executeAsOneOrNull()?.let { Triple(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data) as RoomEvent, it.seqId, it.prevBatch) }
+    fun getRelatedEvents(session_id: Long, roomId: String, eventIds: List<String>): List<Pair<RoomEvent,String>> =
+        this.db?.sessionDbQueries?.getRelatedEvents(session_id, roomId, eventIds)?.executeAsList()?.map { Pair(JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data) as RoomEvent, it.seqId) } ?: listOf()
 }

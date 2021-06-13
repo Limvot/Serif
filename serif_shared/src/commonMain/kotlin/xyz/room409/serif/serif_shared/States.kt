@@ -1,5 +1,6 @@
 package xyz.room409.serif.serif_shared
 import kotlin.collections.*
+import kotlin.math.*
 
 sealed class MatrixState {
     val version: String
@@ -43,23 +44,14 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
     }
 }
 data class SharedUiRoom(val id: String, val name: String, val unreadCount: Int, val highlightCount: Int, val lastMessage: SharedUiMessage?)
-fun determineRoomName(room: Room, id: String): String {
-    return room.state.events.firstStateEventContentOfType<RoomNameContent>()?.name
-        ?: room.state.events.firstStateEventContentOfType<RoomCanonicalAliasContent>()?.alias
-        ?: room.summary.heroes?.joinToString(", ")
-        ?: "<no room name - $id>"
-}
 class MatrixRooms(private val msession: MatrixSession, val message: String) : MatrixState() {
-    val rooms: List<SharedUiRoom> = msession.mapRooms { id, room ->
+    val rooms: List<SharedUiRoom> = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event ->
         SharedUiRoom(
             id,
-            determineRoomName(room, id),
-            room.unread_notifications?.notification_count ?: 0,
-            room.unread_notifications?.highlight_count ?: 0,
-            room.timeline.events.findLast { it as? RoomMessageEvent != null }?.let {
-                val it = it as RoomMessageEvent
-                SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, mapOf())
-            }
+            name,
+            unread_notif,
+            unread_highlight,
+            last_event?.let { SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, mapOf()) }
         )
     }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
     override fun refresh(): MatrixState = MatrixRooms(
@@ -148,32 +140,31 @@ class SharedUiLocationMessage(
 ) : SharedUiMessage()
 
 
-class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, window_back_length_in: Int, message_window_base_in: String?, window_forward_length_in: Int) : MatrixState() {
+class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, val window_back_length: Int, message_window_base_in: String?, window_forward_length_in: Int) : MatrixState() {
     val username = msession.user
 
-    private val is_edit_content = { msg_content: TextRMEC ->
-        ((msg_content.new_content != null) && (msg_content.relates_to?.event_id != null))
-    }
     val messages: List<SharedUiMessage>
     val message_window_base: String?
     init {
         val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
         val reaction_maps: MutableMap<String, MutableMap<String, MutableSet<String>>> = mutableMapOf()
-        msession.getRoomEvents(room_id).forEach {
+
+        val (event_range, tracking_live) = msession.getReleventRoomEventsForWindow(room_id, window_back_length, message_window_base_in, window_forward_length_in)
+        if (tracking_live) {
+            message_window_base = null
+        } else {
+            message_window_base = message_window_base_in
+        }
+
+        event_range.forEach {
             if (it as? RoomMessageEvent != null) {
                 val msg_content = it.content
                 if (msg_content is ReactionRMEC) {
                     val relates_to = msg_content!!.relates_to!!.event_id!!
                     val key = msg_content!!.relates_to!!.key!!
                     val reactions_for_msg = reaction_maps.getOrPut(relates_to, { mutableMapOf() })
-                    val current_set = reactions_for_msg.getOrPut(key, { mutableSetOf() }).add(it.sender)
-                }
-            }
-        }
-        msession.getRoomEvents(room_id).forEach {
-            if (it as? RoomMessageEvent != null) {
-                val msg_content = it.content
-                if (msg_content is TextRMEC) {
+                    reactions_for_msg.getOrPut(key, { mutableSetOf() }).add(it.sender)
+                } else if (msg_content is TextRMEC) {
                     if (is_edit_content(msg_content)) {
                         // This is an edit
                         val replaced_id = msg_content!!.relates_to!!.event_id!!
@@ -191,7 +182,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             }
         }
         val edits: Map<String,ArrayList<SharedUiMessage>> = edit_maps.toMap()
-        messages = msession.getRoomEvents(room_id).map {
+        messages = event_range.map {
             if (it as? RoomMessageEvent != null) {
                 val reactions = reaction_maps.get(it.event_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
                 val msg_content = it.content
@@ -264,34 +255,24 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                         )
                     }
                     is ReactionRMEC -> null
-                    else -> SharedUiMessagePlain(it.sender, "UNHANDLED EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
+                    else -> SharedUiMessagePlain(it.sender, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
                 }
-            } else { println("unhandled event $it"); null }
-        }.filterNotNull().let { all_messages ->
-            val base_idx = if (message_window_base_in == null) {
-                all_messages.size - 1
+            } else if (it as? RoomEvent != null) {
+                // This won't actually happen currently,
+                // as all non RoomMessageEvents will be filtered out by the
+                // isStandaloneEvent filter when pulling from the database.
+                // In general, keeping the two up to date will require
+                // some effort.
+                // TODO: something else? Either always show, or always hide?
+                println("unhandled room event $it")
+                SharedUiMessagePlain(it.sender, "UNHANDLED ROOM EVENT!!! $it", it.event_id, it.origin_server_ts, mapOf())
             } else {
-                all_messages.indexOfFirst({ it.id == message_window_base_in })
+                println("IMPOSSIBLE unhandled non room event $it")
+                throw Exception("IMPOSSIBLE unhandled non room event $it")
+                SharedUiMessagePlain("impossible", "impossible", "impossible", 0, mapOf())
             }
-            val desired_first_index = base_idx - window_back_length_in
-            val first_index = if (desired_first_index < 0) {
-                println("Backfilling from States becuase $desired_first_index is < 0")
-                msession.requestBackfill(room_id)
-                0
-            } else {
-                desired_first_index
-            }
-            // we don't have a forward-fill yet, and indeed can't get ourselves into that position (yet)
-            val last_index = kotlin.math.min(all_messages.size - 1, base_idx + window_forward_length_in)
-            if (last_index == all_messages.size - 1) {
-                message_window_base = null
-            } else {
-                message_window_base = message_window_base_in
-            }
-            all_messages.slice(first_index .. last_index)
-        }
+        }.filterNotNull()
     }
-    val window_back_length: Int = window_back_length_in
     val window_forward_length: Int = if (message_window_base != null) { window_forward_length_in } else { 0 }
     fun sendMessage(msg: String): MatrixState {
         when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
@@ -329,16 +310,15 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         return this
     }
     fun getEventSrc(msg_id: String): String {
-        for (event in msession.getRoomEvents(room_id)) {
-            if (event as? RoomMessageEvent != null) {
-                if (event.event_id == msg_id) {
-                    return event.raw_self.toString()
-                        .replace("\",", "\",\n")
-                        .replace(",\"", ",\n\"")
-                        .replace("{", "{\n")
-                        .replace("}", "\n}")
-                        .replace("\" \"", "\"\n\"")
-                }
+        val event = msession.getRoomEvent(room_id, msg_id)
+        if (event as? RoomMessageEvent != null) {
+            if (event.event_id == msg_id) {
+                return event.raw_self.toString()
+                    .replace("\",", "\",\n")
+                    .replace(",\"", ",\n\"")
+                    .replace("{", "{\n")
+                    .replace("}", "\n}")
+                    .replace("\" \"", "\"\n\"")
             }
         }
         return "No Source for $msg_id"
@@ -354,7 +334,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     fun refresh(new_window_back_length: Int, new_message_window_base: String?, new_window_forward_length: Int): MatrixState = MatrixChatRoom(
         msession,
         room_id,
-        msession.mapRoom(room_id, { determineRoomName(it, room_id) }) ?: "<room gone?>",
+        msession.getRoomName(room_id) ?: room_id,
         new_window_back_length,
         new_message_window_base,
         new_window_forward_length,
