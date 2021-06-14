@@ -112,7 +112,7 @@ WHERE (sessionId = ? AND roomId = ? AND type = ? AND stateKey = ?);
 
 getStateEvents:
 SELECT data FROM RoomState
-WHERE (sessionId = ? AND roomId = ?);
+WHERE (sessionId = ? AND roomId = ? AND type = ?);
 
 
 

@@ -98,7 +98,9 @@ object Database {
             )
         }
     }
-    fun getRoomName(session_id: Long, id: String) = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()?.name
+    fun getRoomSummary(session_id: Long, id: String) = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()?.let {
+        Triple(it.name,Pair(it.unread_notif_count.toInt(), it.unread_highlight_count.toInt()),it.last_event?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) as? RoomMessageEvent })
+    }
 
     fun setStateEvent(session_id: Long, roomId: String, event: StateEvent<*>) {
         if (getStateEvent(session_id, roomId, event.type, event.state_key) != null) {
@@ -109,8 +111,8 @@ object Database {
     }
     fun getStateEvent(session_id: Long, roomId: String, type: String, stateKey: String): Event? =
         this.db?.sessionDbQueries?.getStateEvent(session_id, roomId, type, stateKey)?.executeAsOneOrNull()?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) }
-    fun getStateEvents(session_id: Long, roomId: String): List<Event> =
-        this.db?.sessionDbQueries?.getStateEvents(session_id, roomId)?.executeAsList()?.map { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) } ?: listOf()
+    fun getStateEvents(session_id: Long, roomId: String, type: String): List<Event> =
+        this.db?.sessionDbQueries?.getStateEvents(session_id, roomId, type)?.executeAsList()?.map { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) } ?: listOf()
 
     fun updatePrevBatch(session_id: Long, roomId: String, eventId: String, prevBatch: String?) {
         this.db!!.sessionDbQueries!!.updatePrevBatch(prevBatch, session_id, roomId, eventId)

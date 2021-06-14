@@ -225,6 +225,7 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         transition(m.refresh(), true)
     }
 }
+/*
 class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixRooms) : SwingState() {
     var message_label = SerifText(m.message)
     var inner_scroll_pane = JPanel()
@@ -315,6 +316,7 @@ class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPan
         }
     }
 }
+*/
 class ImageFileFilter : FileFilter() {
     override fun accept(f: File): Boolean {
         if (f.isDirectory()) { return true }
@@ -658,8 +660,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         attString
     }
     val room_name = SmoothLabel("")
-    fun setRoomName(name: String) {
-        room_name.setText("Room Name: $name")
+    fun setRoomName(path: List<String>, name: String) {
+        room_name.setText("Path: ${path}, Room Name: $name")
     }
     val mk_sender = { msg: SharedUiMessage ->
         val render_text = { msg: SharedUiMessage ->
@@ -740,6 +742,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     }
     val recycling_message_list = RecyclingList<SharedUiMessage>(last_window_width,
         { when (it) {
+                is SharedUiRoom -> "room"
                 is SharedUiImgMessage -> "img"
                 is SharedUiAudioMessage -> "audio"
                 is SharedUiVideoMessage -> "video"
@@ -748,6 +751,24 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 else -> "text"
         } },
         mapOf(
+            "room" to { msg: SharedUiMessage, repaint_cell ->
+                var transition_room_id: String = ""
+                val room_btn1 = SmoothButton("")
+                val room_btn2 = SmoothButton("")
+                val set_click = { msgi: SharedUiRoom ->
+                    transition_room_id = msgi.id
+                    room_btn1.setText("${msgi.message} (${msgi.unreadCount} unread / ${msgi.highlightCount} mentions)")
+                    room_btn2.setText("${msgi.lastMessage?.message?.take(80) ?: ""}")
+                }
+                set_click(msg as SharedUiRoom)
+                room_btn1.addActionListener({
+                    transition(m.getRoom(transition_room_id), false)
+                })
+                room_btn2.addActionListener({
+                    transition(m.getRoom(transition_room_id), false)
+                })
+                Triple(listOf(room_btn1,room_btn2, JLabel(" ")), { Unit }, { msg, repaint_cell -> set_click(msg as SharedUiRoom) })
+            },
             "img" to { msg: SharedUiMessage, repaint_cell ->
                 msg as SharedUiImgMessage
                 val set_icon_image = { icon: ImageIcon, msg: SharedUiImgMessage, repaint_cell: ()->Unit ->
@@ -889,7 +910,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var edited_event_id = ""
     init {
         panel.layout = BorderLayout()
-        setRoomName(m.name)
+        setRoomName(m.room_ids, m.name)
         panel.add(
             room_name,
             BorderLayout.PAGE_START
@@ -976,7 +997,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         } else {
             m = new_m
         }
-        setRoomName(m.name)
+        setRoomName(m.room_ids, m.name)
     }
     private fun openUrl(href: String) {
         // In the background, so that GUI doesn't freeze
@@ -1046,7 +1067,7 @@ class App {
         if (partial) {
             when {
                 new_state is MatrixChatRoom && s is SwingChatRoom -> { s.update(new_state, frame.width); return; }
-                new_state is MatrixRooms && s is SwingRooms -> { s.update(new_state); return; }
+                //new_state is MatrixRooms && s is SwingRooms -> { s.update(new_state); return; }
             }
         }
         sstate = constructStateView(new_state)
@@ -1061,7 +1082,7 @@ class App {
                 { javax.swing.SwingUtilities.invokeLater({ refresh_all() }) },
                 panel, mstate
             )
-            is MatrixRooms -> SwingRooms(::transition, panel, mstate)
+            //is MatrixRooms -> SwingRooms(::transition, panel, mstate)
             is MatrixChatRoom -> SwingChatRoom(::transition, panel, mstate, frame.width)
         }
         frame.add(panel)

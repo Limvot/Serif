@@ -124,9 +124,13 @@ class StateEvent<T>(
     /*val prev_content: EventContent?*/
     val content: T,
 ) : RoomEvent() {
-    override fun toString() = "RoomNameEvent(" + raw_self.toString() + ")"
+    override fun toString() = "StateEvent(" + raw_self.toString() + " (content: $content))"
 }
 
+@Serializable class SpaceChildContent(
+    val via: List<String>? = null,
+    val order: String? = null
+)
 @Serializable class RoomNameContent(val name: String)
 @Serializable class FallbackContent()
 
@@ -260,6 +264,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
                 type == "m.room.message" || type == "m.reaction" -> RoomMessageEventSerializer
                 type == "m.room.name" -> RoomNameStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
+                type == "m.space.child" -> SpaceChildStateEventSerializer
                 element.jsonObject["state_key"] != null -> StateEventFallbackSerializer
                 type.startsWith("m.room") -> RoomEventFallbackSerializer
                 else -> EventFallbackSerializer
@@ -287,6 +292,7 @@ object RoomEventFallbackSerializer : GenericJsonEventSerializer<RoomEventFallbac
 object RoomMessageEventSerializer : GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
 object RoomNameStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomNameContent>>(StateEvent.serializer(RoomNameContent.serializer()))
 object RoomCanonicalAliasStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
+object SpaceChildStateEventSerializer : GenericJsonEventSerializer<StateEvent<SpaceChildContent>>(StateEvent.serializer(SpaceChildContent.serializer()))
 object StateEventFallbackSerializer : GenericJsonEventSerializer<StateEvent<FallbackContent>>(StateEvent.serializer(FallbackContent.serializer()))
 
 open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) : JsonTransformingSerializer<T>(clazz) {

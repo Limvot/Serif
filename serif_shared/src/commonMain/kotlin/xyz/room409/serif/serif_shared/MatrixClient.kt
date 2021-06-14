@@ -74,7 +74,7 @@ fun isStandaloneEvent(e: Event): Boolean {
     if (e as? RoomMessageEvent != null) {
         return !(e.content is ReactionRMEC || (e.content is TextRMEC && is_edit_content(e.content)))
     } else {
-        return false
+        return e.castToStateEventWithContentOfType<SpaceChildContent>() != null
     }
 }
 fun getRelatedEvent(e: Event): String? {
@@ -174,6 +174,8 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
         val prelim_total_events = back_events + listOf(base_and_seqId_and_prevBatch).filter { isStandaloneEvent(it.first) } + fore_events
         val relatedEvents = Database.getRelatedEvents(session_id, room_id, prelim_total_events.map { it.first.event_id })
+        //val spaceChildren = Database.getStateEvents(session_id, room_id, "m.space.child")
+        //val total_events = spaceChildren + (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }
         val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }
         // in addition to overrrideCurrent, the other condition for following live
         // is that we have less events forward than requested, so our window overlaps
@@ -181,7 +183,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         return Pair(total_events, overrideCurrent || fore_events.size < window_forward_length)
     }
     fun getRoomEvent(room_id: String, event_id: String): Event? = Database.getRoomEventAndIdx(session_id, room_id, event_id)?.first
-    fun getRoomName(id: String) = Database.getRoomName(session_id, id)
+    fun getRoomSummary(id: String) = Database.getRoomSummary(session_id, id)
     fun createRoom(name:String, room_alias_name: String, topic: String): Outcome<String> {
         try {
             val result = runBlocking {
