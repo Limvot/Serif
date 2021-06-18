@@ -145,7 +145,10 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
 
     val messages: List<SharedUiMessage>
     val message_window_base: String?
+    val pinned: List<String>
     init {
+        pinned = msession.getPinnedEvents(room_id)
+
         val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
         val reaction_maps: MutableMap<String, MutableMap<String, MutableSet<String>>> = mutableMapOf()
 
@@ -308,6 +311,26 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }
         return this
+    }
+    fun togglePinnedEvent(event_id: String) {
+        if(pinned.contains(event_id)) {
+            sendUnpinnedEvent(event_id)
+        } else {
+            sendPinnedEvent(event_id)
+        }
+        return
+    }
+    fun sendPinnedEvent(event_id: String) {
+        when (val pin_res = msession.sendPinnedEvent(event_id, room_id)) {
+            is Success -> println("Message $event_id pinned")
+            is Error -> println("Failed to pin $event_id because ${pin_res.cause}")
+        }
+    }
+    fun sendUnpinnedEvent(event_id: String) {
+        when (val pin_res = msession.sendUnpinnedEvent(event_id, room_id)) {
+            is Success -> println("Message $event_id unpinned")
+            is Error -> println("Failed to unpin $event_id because ${pin_res.cause}")
+        }
     }
     fun getEventSrc(msg_id: String): String {
         val event = msession.getRoomEvent(room_id, msg_id)

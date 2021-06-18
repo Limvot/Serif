@@ -692,6 +692,12 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             edited_event_id = msg.id
             message_field.text = msg.message
         })
+        val pin_str = if(m.pinned.contains(msg.id)) { "Unpin" } else { "Pin" }
+        val pin_option = JMenuItem(pin_str)
+        pin_option.addActionListener({
+            println("${pin_str}ning message")
+            m.togglePinnedEvent(msg.id)
+        })
         val show_src_option = JMenuItem("Show Source")
         show_src_option.addActionListener({
             val json_str = m.getEventSrc(msg.id)
@@ -730,6 +736,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         if(msg.sender.contains(m.username)) {
             msg_action_popup.add(edit_option)
         }
+        msg_action_popup.add(pin_option)
         msg_action_popup.add(show_src_option)
 
         val msg_action_button = SmoothButton("...")
@@ -890,8 +897,21 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     init {
         panel.layout = BorderLayout()
         setRoomName(m.name)
+        val room_header_panel = JPanel()
+        room_header_panel.layout = BorderLayout()
+        room_header_panel.add(room_name, BorderLayout.LINE_START)
+        val pinned_events_btn = SmoothButton("Pinned Events")
+        val pinned_action_popup = JPopupMenu()
+        m.pinned.forEach {
+            val pinned_id = it
+            val pinned_option = JMenuItem("$it")
+            pinned_option.addActionListener({ println("Now jumping to pinned event $pinned_id") })
+            pinned_action_popup.add(pinned_option)
+        }
+        room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)
+        pinned_events_btn.addActionListener({ pinned_action_popup.show(pinned_events_btn,0,0) })
         panel.add(
-            room_name,
+            room_header_panel,
             BorderLayout.PAGE_START
         )
 
