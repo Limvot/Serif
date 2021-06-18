@@ -17,6 +17,8 @@ object Database {
     fun initDb(driverFactory: DriverFactory) {
         this.db = SessionDb(driverFactory.createDriver())
     }
+    fun transaction(f: () -> Unit) = this.db?.sessionDbQueries?.transaction{ f() }
+    fun <T> transactionWithResult(f: () -> T) = this.db?.sessionDbQueries?.transaction{ f() }
 
     fun saveSession(username: String, access_token: String, transactionId: Long) {
         this.db?.sessionDbQueries?.insertSession(username, access_token, transactionId)
