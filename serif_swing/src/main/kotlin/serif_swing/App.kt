@@ -902,10 +902,9 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         room_header_panel.add(room_name, BorderLayout.LINE_START)
         val pinned_events_btn = SmoothButton("Pinned Events")
         val pinned_action_popup = JPopupMenu()
-        m.pinned.forEach {
-            val pinned_id = it
-            val pinned_option = JMenuItem("$it")
-            pinned_option.addActionListener({ println("Now jumping to pinned event $pinned_id") })
+        val pinned_event_previews = m.getPinnedEventPreviews()
+        pinned_event_previews.forEach {
+            val pinned_option = JMenuItem(it)
             pinned_action_popup.add(pinned_option)
         }
         room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)

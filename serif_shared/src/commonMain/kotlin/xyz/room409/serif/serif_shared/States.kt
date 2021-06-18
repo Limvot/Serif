@@ -332,6 +332,16 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             is Error -> println("Failed to unpin $event_id because ${pin_res.cause}")
         }
     }
+    fun getPinnedEventPreviews(): List<String> {
+        return pinned.map {
+            val event = msession.getRoomEvent(room_id, it)
+            if(event as? RoomMessageEvent != null) {
+                "${event.sender}: ${event.content.body}".take(80)
+            } else {
+                null
+            }
+        }.filterNotNull()
+    }
     fun getEventSrc(msg_id: String): String {
         val event = msession.getRoomEvent(room_id, msg_id)
         if (event as? RoomMessageEvent != null) {
