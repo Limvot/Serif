@@ -348,29 +348,31 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 // don't stomp on each other's minId
                 synchronized(this) {
                     if (response.chunk != null) {
-                        val events = response.chunk.map { it as? RoomEvent }.filterNotNull()
-                        val maxId = Database.getRoomEventAndIdx(session_id, room_id, event_id)!!.second
-                        val minId = Database.maxIdLessThan(maxId)
-                        println("Inserting into backfill with min $minId and max $maxId")
-                        // TODO: Should also consider how to insert the old state
-                        // chunk.
-                        var insertId = idBetween(minId, maxId, false)
-                        events.forEachIndexed tobreak@{ index, event ->
-                            try {
-                                // Similar to prev_batch later on, we record what is basically
-                                // prev_batch if we're the "first" (reversed, so last) event
-                                // so we can keep backfilling later by getting the non-null
-                                // prev_batch with lowest seqId for this room
-                                val new_end = if (index == events.size -1) { response.end } else { null }
-                                println("looking to add event from backfill at $insertId with $new_end")
-                                if (Database.getRoomEventAndIdx(session_id, room_id, event.event_id) != null) {
-                                    println("Already exists! We must have caught up, breaking out")
-                                    return@tobreak
+                        Database.transaction {
+                            val events = response.chunk.map { it as? RoomEvent }.filterNotNull()
+                            val maxId = Database.getRoomEventAndIdx(session_id, room_id, event_id)!!.second
+                            val minId = Database.maxIdLessThan(maxId)
+                            println("Inserting into backfill with min $minId and max $maxId")
+                            // TODO: Should also consider how to insert the old state
+                            // chunk.
+                            var insertId = idBetween(minId, maxId, false)
+                            events.forEachIndexed tobreak@{ index, event ->
+                                try {
+                                    // Similar to prev_batch later on, we record what is basically
+                                    // prev_batch if we're the "first" (reversed, so last) event
+                                    // so we can keep backfilling later by getting the non-null
+                                    // prev_batch with lowest seqId for this room
+                                    val new_end = if (index == events.size -1) { response.end } else { null }
+                                    println("looking to add event from backfill at $insertId with $new_end")
+                                    if (Database.getRoomEventAndIdx(session_id, room_id, event.event_id) != null) {
+                                        println("Already exists! We must have caught up, breaking out")
+                                        return@tobreak
+                                    }
+                                    Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event), new_end)
+                                    insertId = idBetween(minId, insertId, false)
+                                } catch (e: Exception) {
+                                    println("while trying to insert (from backfill) at index $insertId ${event} got exception $e")
                                 }
-                                Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event), new_end)
-                                insertId = idBetween(minId, insertId, false)
-                            } catch (e: Exception) {
-                                println("while trying to insert (from backfill) at index $insertId ${event} got exception $e")
                             }
                         }
                     }
@@ -403,38 +405,40 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             ?: "<no room name - $id>"
     }
     fun mergeInSync(new_sync_response: SyncResponse) {
-        for ((room_id, room) in new_sync_response.rooms.join) {
-            for (event in room.state.events + room.timeline.events) {
-                (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }
-            }
-            val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
-            synchronized(this) {
-                val max = Database.maxId()
-                var insertId = idBetween(max, "z", true)
-                events.forEachIndexed { index, event ->
-                    try {
-                        // Note that if this is the first event of this chunk, we record prev_batch for it
-                        // so we can later backfill by picking the non-null prev_batch with smallest seqId
-                        // for this room.
-                        println("adding event from sync at $insertId")
-                        Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event), if (index == 0 && room.timeline.limited) { room.timeline.prev_batch } else { null })
-                        insertId = idBetween(insertId, "z", true)
-                    } catch (e: Exception) {
-                        println("while trying to insert (from mergeInSync) ${event} got exception $e")
+        Database.transaction {
+            for ((room_id, room) in new_sync_response.rooms.join) {
+                for (event in room.state.events + room.timeline.events) {
+                    (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }
+                }
+                val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
+                synchronized(this) {
+                    val max = Database.maxId()
+                    var insertId = idBetween(max, "z", true)
+                    events.forEachIndexed { index, event ->
+                        try {
+                            // Note that if this is the first event of this chunk, we record prev_batch for it
+                            // so we can later backfill by picking the non-null prev_batch with smallest seqId
+                            // for this room.
+                            println("adding event from sync at $insertId")
+                            Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event), if (index == 0 && room.timeline.limited) { room.timeline.prev_batch } else { null })
+                            insertId = idBetween(insertId, "z", true)
+                        } catch (e: Exception) {
+                            println("while trying to insert (from mergeInSync) ${event} got exception $e")
 
+                        }
                     }
                 }
+                Database.setRoomSummary(
+                    session_id,
+                    room_id,
+                    determineRoomName(room_id),
+                    room.unread_notifications?.notification_count,
+                    room.unread_notifications?.highlight_count,
+                    room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent
+                )
             }
-            Database.setRoomSummary(
-                session_id,
-                room_id,
-                determineRoomName(room_id),
-                room.unread_notifications?.notification_count,
-                room.unread_notifications?.highlight_count,
-                room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent
-            )
+            Database.updateSessionNextBatch(session_id, new_sync_response.next_batch)
         }
-        Database.updateSessionNextBatch(session_id, new_sync_response.next_batch)
     }
 }
 
