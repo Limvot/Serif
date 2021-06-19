@@ -270,16 +270,14 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
     fun sendPinnedEvent(eventId: String, room_id: String): Outcome<String> {
-        println("msession, sending pinned event")
         val current = getPinnedEvents(room_id)
-        val events = if(current.contains(eventId)) { current } else { current.plus(eventId) }
-        return sendPinnedStateEventImpl(events, room_id)
+        if(!current.contains(eventId)) { return sendPinnedStateEventImpl(current.plus(eventId), room_id) }
+        return Error("Pinning Already Pinned event")
     }
     fun sendUnpinnedEvent(eventId: String, room_id: String): Outcome<String> {
-        println("msession, sending unpinned event")
         val current = getPinnedEvents(room_id)
-        val events = if(current.contains(eventId)) { current.minus(eventId) } else { current }
-        return sendPinnedStateEventImpl(events, room_id)
+        if(current.contains(eventId)) { return sendPinnedStateEventImpl(current.minus(eventId), room_id) }
+        return Error("Unpinning unpinned event")
     }
 
     fun sendImageMessage(url: String, room_id: String): Outcome<String> {

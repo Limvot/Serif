@@ -661,6 +661,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     fun setRoomName(name: String) {
         room_name.setText("Room Name: $name")
     }
+    fun updatePinOptionText(event_id: String, menu_item: JMenuItem) {
+        val pin_str = if(m.pinned.contains(event_id)) { "Unpin" } else { "Pin" }
+        menu_item.setText(pin_str)
+    }
     val mk_sender = { msg: SharedUiMessage ->
         val render_text = { msg: SharedUiMessage ->
             if (msg.reactions.size > 0) {
@@ -692,10 +696,9 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             edited_event_id = msg.id
             message_field.text = msg.message
         })
-        val pin_str = if(m.pinned.contains(msg.id)) { "Unpin" } else { "Pin" }
-        val pin_option = JMenuItem(pin_str)
+        val pin_option = JMenuItem()
+        updatePinOptionText(msg.id,pin_option)
         pin_option.addActionListener({
-            println("${pin_str}ning message")
             m.togglePinnedEvent(msg.id)
         })
         val show_src_option = JMenuItem("Show Source")
@@ -743,7 +746,9 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         msg_action_button.addActionListener({
             msg_action_popup.show(msg_action_button,0,0)
         })
-        Pair(msg_action_button, { new_msg: SharedUiMessage -> msg = new_msg; })
+        Pair(msg_action_button,
+            { new_msg: SharedUiMessage -> msg = new_msg;
+              updatePinOptionText(msg.id,pin_option); })
     }
     val recycling_message_list = RecyclingList<SharedUiMessage>(last_window_width,
         { when (it) {
@@ -891,6 +896,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val c_left = GridBagConstraints()
     val c_right = GridBagConstraints()
     val message_field = SmoothTextField(20)
+    val pinned_events_btn = SmoothButton("Pinned Events")
+    val pinned_action_popup = JPopupMenu()
     var replied_event_id = ""
     var reacted_event_id = ""
     var edited_event_id = ""
@@ -900,15 +907,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         val room_header_panel = JPanel()
         room_header_panel.layout = BorderLayout()
         room_header_panel.add(room_name, BorderLayout.LINE_START)
-        val pinned_events_btn = SmoothButton("Pinned Events")
-        val pinned_action_popup = JPopupMenu()
-        val pinned_event_previews = m.getPinnedEventPreviews()
-        pinned_event_previews.forEach {
-            val pinned_option = JMenuItem(it)
-            pinned_action_popup.add(pinned_option)
-        }
         room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)
+        generatePinned(pinned_action_popup)
         pinned_events_btn.addActionListener({ pinned_action_popup.show(pinned_events_btn,0,0) })
+
         panel.add(
             room_header_panel,
             BorderLayout.PAGE_START
@@ -987,11 +989,22 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     override fun refresh() {
         transition(m.refresh(), true)
     }
+    fun generatePinned(menu: JPopupMenu) {
+        while(menu.getComponentCount() > 0) {
+            menu.remove(0)
+        }
+        val pinned_event_previews = m.getPinnedEventPreviews()
+        pinned_event_previews.forEach {
+            val pinned_option = JMenuItem(it)
+            menu.add(pinned_option)
+        }
+    }
     fun update(new_m: MatrixChatRoom, window_width: Int) {
-        if (m.messages != new_m.messages || last_window_width != window_width) {
+        if (m.messages != new_m.messages || last_window_width != window_width || !new_m.pinned.equals(m.pinned)) {
             m = new_m
             recycling_message_list.reset(window_width, m.messages)
             last_window_width = window_width
+            generatePinned(pinned_action_popup)
         } else {
             m = new_m
         }
