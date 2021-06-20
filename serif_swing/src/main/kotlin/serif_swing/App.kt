@@ -866,11 +866,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 Triple(listOf(sender, btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_loc(msg); })
             },
             "text" to { msg, repaint_cell ->
-                val message = SerifText(stringToAttributedURLString(msg.message))
+                val message = SerifText(stringToAttributedURLString(msg.message + "reply: ${msg.replied_event}"))
                 message.addMouseListener(URLMouseListener(message))
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> message.setText(stringToAttributedURLString(msg.message)); set_sender(msg); set_menu(msg) })
+                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> message.setText(stringToAttributedURLString(msg.message + "reply: ${msg.replied_event}")); set_sender(msg); set_menu(msg) })
             }
         ),
        { began, ended ->
