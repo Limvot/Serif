@@ -194,16 +194,16 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
             }
             when (msg_content) {
                 is TextRMEC -> {
+                    val in_reply_to = msg_content.relates_to?.in_reply_to?.event_id?.let { in_reply_to_id ->
+                        toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0).first.first()
+                    }
                     val normal_msg_builder = {
-                        val in_reply_to = msg_content.relates_to?.in_reply_to?.event_id?.let { in_reply_to_id ->
-                            toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0).first.first()
-                        }
                         SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, reactions, in_reply_to)
                     }
                     if((msg_content.new_content != null) && (msg_content.relates_to?.event_id == null)) {
                         //This is a poorly formed edit
                         //No idea which event this edit is editing, just display fallback msg
-                        SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, reactions)
+                        SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, reactions, in_reply_to)
                     } else {
                         if(is_edit_content(msg_content)) {
                             //Don't display edits
@@ -220,7 +220,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                                         edited.id,
                                         it.origin_server_ts,
                                         reactions,
-                                        null // TODO: support editing replies msg_content.relates_to?.in_reply_to?.event_id ?: ""
+                                        in_reply_to
                                         )
                                 } else {
                                     normal_msg_builder()
