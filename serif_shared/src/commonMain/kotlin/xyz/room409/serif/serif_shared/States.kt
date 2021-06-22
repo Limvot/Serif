@@ -197,13 +197,26 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                     val in_reply_to = msg_content.relates_to?.in_reply_to?.event_id?.let { in_reply_to_id ->
                         toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0).first.first()
                     }
+                    val transform_body = { body_message: String ->
+                        if (in_reply_to != null) {
+                            var stripping = true
+                            body_message.lines().filter {
+                                if (stripping && it.startsWith("> ")) {
+                                    false
+                                } else {
+                                    stripping = false
+                                    true
+                                }
+                            }.joinToString("\n")
+                        } else { body_message }
+                    }
                     val normal_msg_builder = {
-                        SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, reactions, in_reply_to)
+                        SharedUiMessagePlain(it.sender, transform_body(it.content.body), it.event_id, it.origin_server_ts, reactions, in_reply_to)
                     }
                     if((msg_content.new_content != null) && (msg_content.relates_to?.event_id == null)) {
                         //This is a poorly formed edit
                         //No idea which event this edit is editing, just display fallback msg
-                        SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, reactions, in_reply_to)
+                        SharedUiMessagePlain(it.sender, transform_body(it.content.body), it.event_id, it.origin_server_ts, reactions, in_reply_to)
                     } else {
                         if(is_edit_content(msg_content)) {
                             //Don't display edits
@@ -216,7 +229,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                                 if(edited != null) {
                                     SharedUiMessagePlain(
                                         it.sender,
-                                        "${edited.message} (edited)",
+                                        transform_body("${edited.message} (edited)"),
                                         edited.id,
                                         it.origin_server_ts,
                                         reactions,

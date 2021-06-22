@@ -661,10 +661,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     fun setRoomName(name: String) {
         room_name.setText("Room Name: $name")
     }
-    fun updatePinOptionText(event_id: String, menu_item: JMenuItem) {
-        val pin_str = if(m.pinned.contains(event_id)) { "Unpin" } else { "Pin" }
-        menu_item.setText(pin_str)
-    }
     val mk_sender = { msg: SharedUiMessage ->
         val render_text = { msg: SharedUiMessage ->
             if (msg.reactions.size > 0) {
@@ -680,75 +676,74 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     }
     val mk_menu = { msg_in: SharedUiMessage  ->
         var msg = msg_in
-        val reply_option = JMenuItem("Reply")
-        reply_option.addActionListener({
-            println("Now writing a reply")
-            replied_event_id = msg.id
-        })
-        val react_option = JMenuItem("React")
-        react_option.addActionListener({
-            println("Now writing a reaction")
-            reacted_event_id = msg.id
-        })
-        val edit_option = JMenuItem("Edit")
-        edit_option.addActionListener({
-            println("Now editing a message")
-            edited_event_id = msg.id
-            message_field.text = msg.message
-        })
-        val pin_option = JMenuItem()
-        updatePinOptionText(msg.id,pin_option)
-        pin_option.addActionListener({
-            m.togglePinnedEvent(msg.id)
-        })
-        val show_src_option = JMenuItem("Show Source")
-        show_src_option.addActionListener({
-            val json_str = m.getEventSrc(msg.id)
-
-            val window = SwingUtilities.getWindowAncestor(panel)
-            val dim = window.getSize()
-            val h = dim.height
-            val w = dim.width
-            val dialog = JDialog(window, "Event Source")
-
-            val dpanel = JPanel(BorderLayout())
-            val src_txt = JTextPane()
-            src_txt.setContentType("text/plain")
-            src_txt.setText(json_str)
-            src_txt.setEditable(false)
-
-            val close_btn = SmoothButton("Close")
-            close_btn.addActionListener({
-                dialog.setVisible(false)
-                dialog.dispose()
-            })
-
-            dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
-            dpanel.add(close_btn,BorderLayout.PAGE_END)
-            dialog.add(dpanel)
-
-            dialog.setSize(w,h/2)
-            dialog.setVisible(true)
-            dialog.setResizable(false)
-            dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
-        })
-
-        val msg_action_popup = JPopupMenu()
-        msg_action_popup.add(reply_option)
-        msg_action_popup.add(react_option)
-        if(msg.sender.contains(m.username)) {
-            msg_action_popup.add(edit_option)
-        }
-        msg_action_popup.add(pin_option)
-        msg_action_popup.add(show_src_option)
-
         val msg_action_button = SmoothButton("...")
         msg_action_button.addActionListener({
+            val reply_option = JMenuItem("Reply")
+            reply_option.addActionListener({
+                println("Now writing a reply")
+                replied_event_id = msg.id
+            })
+            val react_option = JMenuItem("React")
+            react_option.addActionListener({
+                println("Now writing a reaction")
+                reacted_event_id = msg.id
+            })
+            val edit_option = JMenuItem("Edit")
+            edit_option.addActionListener({
+                println("Now editing a message")
+                edited_event_id = msg.id
+                message_field.text = msg.message
+            })
+            val pin_option = JMenuItem()
+            val pin_str = if(m.pinned.contains(msg.id)) { "Unpin" } else { "Pin" }
+            pin_option.setText(pin_str)
+            pin_option.addActionListener({
+                m.togglePinnedEvent(msg.id)
+            })
+            val show_src_option = JMenuItem("Show Source")
+            show_src_option.addActionListener({
+                val json_str = m.getEventSrc(msg.id)
+
+                val window = SwingUtilities.getWindowAncestor(panel)
+                val dim = window.getSize()
+                val h = dim.height
+                val w = dim.width
+                val dialog = JDialog(window, "Event Source")
+
+                val dpanel = JPanel(BorderLayout())
+                val src_txt = JTextPane()
+                src_txt.setContentType("text/plain")
+                src_txt.setText(json_str)
+                src_txt.setEditable(false)
+
+                val close_btn = SmoothButton("Close")
+                close_btn.addActionListener({
+                    dialog.setVisible(false)
+                    dialog.dispose()
+                })
+
+                dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
+                dpanel.add(close_btn,BorderLayout.PAGE_END)
+                dialog.add(dpanel)
+
+                dialog.setSize(w,h/2)
+                dialog.setVisible(true)
+                dialog.setResizable(false)
+                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+            })
+
+            val msg_action_popup = JPopupMenu()
+            msg_action_popup.add(reply_option)
+            msg_action_popup.add(react_option)
+            if(msg.sender.contains(m.username)) {
+                msg_action_popup.add(edit_option)
+            }
+            msg_action_popup.add(pin_option)
+            msg_action_popup.add(show_src_option)
             msg_action_popup.show(msg_action_button,0,0)
         })
         Pair(msg_action_button,
-            { new_msg: SharedUiMessage -> msg = new_msg;
-              updatePinOptionText(msg.id,pin_option); })
+            { new_msg: SharedUiMessage -> msg = new_msg; })
     }
     val recycling_message_list = RecyclingList<SharedUiMessage>(last_window_width,
         { when (it) {
@@ -866,11 +861,15 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 Triple(listOf(sender, btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_loc(msg); })
             },
             "text" to { msg, repaint_cell ->
-                val message = SerifText(stringToAttributedURLString((msg.replied_event?.let { "in reply to ${it}: " } ?: "") + msg.message))
+                fun render_with_replies(msg: SharedUiMessage): String {
+                    val prev = msg.replied_event?.let { "in reply to ${it.sender}:\n" + render_with_replies(it).lines().map { "----$it" }.joinToString("\n") + "\n" } ?: ""
+                    return prev + msg.message
+                }
+                val message = SerifText(stringToAttributedURLString(render_with_replies(msg)))
                 message.addMouseListener(URLMouseListener(message))
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> message.setText(stringToAttributedURLString((msg.replied_event?.let { "in reply to ${it}: " } ?: "") + msg.message)); set_sender(msg); set_menu(msg) })
+                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> message.setText(stringToAttributedURLString(render_with_replies(msg))); set_sender(msg); set_menu(msg) })
             }
         ),
        { began, ended ->
