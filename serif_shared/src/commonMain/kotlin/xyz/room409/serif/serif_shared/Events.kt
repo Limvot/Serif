@@ -136,6 +136,8 @@ class StateEvent<T>(
 
 @Serializable
 class RoomCanonicalAliasContent(val alias: String? = null, val alt_aliases: List<String>? = null)
+@Serializable
+class RoomPinnedEventContent(val pinned: List<String>? = null)
 
 // RoomMessageEvent and RoomMessageEventContent should eventually be generic on message type
 @Serializable
@@ -265,6 +267,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
                 type == "m.room.name" -> RoomNameStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
                 type == "m.space.child" -> SpaceChildStateEventSerializer
+                type == "m.room.pinned_events" -> RoomPinnedEventSerializer
                 element.jsonObject["state_key"] != null -> StateEventFallbackSerializer
                 type.startsWith("m.room") -> RoomEventFallbackSerializer
                 else -> EventFallbackSerializer
@@ -290,6 +293,7 @@ object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<Room
 object EventFallbackSerializer : GenericJsonEventSerializer<EventFallback>(EventFallback.serializer())
 object RoomEventFallbackSerializer : GenericJsonEventSerializer<RoomEventFallback>(RoomEventFallback.serializer())
 object RoomMessageEventSerializer : GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
+object RoomPinnedEventSerializer : GenericJsonEventSerializer<StateEvent<RoomPinnedEventContent>>(StateEvent.serializer(RoomPinnedEventContent.serializer()))
 object RoomNameStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomNameContent>>(StateEvent.serializer(RoomNameContent.serializer()))
 object RoomCanonicalAliasStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
 object SpaceChildStateEventSerializer : GenericJsonEventSerializer<StateEvent<SpaceChildContent>>(StateEvent.serializer(SpaceChildContent.serializer()))
