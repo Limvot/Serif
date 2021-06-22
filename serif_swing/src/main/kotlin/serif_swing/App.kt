@@ -225,98 +225,6 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         transition(m.refresh(), true)
     }
 }
-/*
-class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixRooms) : SwingState() {
-    var message_label = SerifText(m.message)
-    var inner_scroll_pane = JPanel()
-    init {
-        panel.layout = BorderLayout()
-        var topPanel = JPanel()
-        topPanel.layout = BoxLayout(topPanel, BoxLayout.LINE_AXIS)
-        topPanel.add(message_label)
-        var newRoomButton = SmoothButton("New Room")
-        topPanel.add(newRoomButton)
-        newRoomButton.addActionListener({
-
-            val window = SwingUtilities.getWindowAncestor(panel)
-            val dim = window.getSize()
-            val h = dim.height
-            val w = dim.width
-            val dialog = JDialog(window, "Create Room")
-
-            val dpanel = JPanel()
-            dpanel.layout = BoxLayout(dpanel, BoxLayout.PAGE_AXIS)
-            // name, room_alias_name, topic
-            var roomname_field = SmoothTextField(20)
-            var roomname_label = SmoothLabel("Room Name: ")
-            var alias_field = SmoothTextField(20)
-            var alias_label = SmoothLabel("Alias: ")
-            var topic_field = SmoothTextField(20)
-            var topic_label = SmoothLabel("Topic: ")
-
-            val create_btn = SmoothButton("Create")
-            create_btn.addActionListener({
-                println(m.createRoom(roomname_field.text, alias_field.text, topic_field.text))
-                dialog.setVisible(false)
-                dialog.dispose()
-            })
-
-            val close_btn = SmoothButton("Close")
-            close_btn.addActionListener({
-                dialog.setVisible(false)
-                dialog.dispose()
-            })
-            dpanel.add(roomname_label)
-            dpanel.add(roomname_field)
-            dpanel.add(alias_label)
-            dpanel.add(alias_field)
-            dpanel.add(topic_label)
-            dpanel.add(topic_field)
-            dpanel.add(create_btn)
-            dpanel.add(close_btn)
-            dialog.add(dpanel)
-
-            dialog.setSize(w, h / 2)
-            dialog.setVisible(true)
-            dialog.setResizable(false)
-            dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
-        })
-        panel.add(topPanel, BorderLayout.PAGE_START)
-
-        inner_scroll_pane.layout = GridLayout(0, 1)
-        for ((id, name, unreadCount, highlightCount, lastMessage) in m.rooms) {
-            var button = JButton()
-            button.layout = BoxLayout(button, BoxLayout.PAGE_AXIS)
-
-            val room_name = SerifText("$name ($unreadCount unread / $highlightCount mentions)")
-            val last_message = SerifText(lastMessage?.message?.take(80) ?: "")
-
-            button.add(room_name)
-            button.add(last_message)
-
-            button.addActionListener({ transition(m.getRoom(id, 20, null, 0), true) })
-            inner_scroll_pane.add(button)
-        }
-        panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
-
-        var back_button = SmoothButton("(Fake) Logout")
-        panel.add(back_button, BorderLayout.PAGE_END)
-        back_button.addActionListener({ transition(m.fake_logout(), true) })
-    }
-    override fun refresh() {
-        transition(m.refresh(), true)
-    }
-    fun update(new_m: MatrixRooms) {
-        if (m.rooms != new_m.rooms) {
-            println("Having to transition, rooms !=")
-            transition(new_m, false)
-        } else {
-            message_label.setText(new_m.message)
-            m = new_m
-        }
-    }
-}
-*/
 class ImageFileFilter : FileFilter() {
     override fun accept(f: File): Boolean {
         if (f.isDirectory()) { return true }
@@ -772,26 +680,21 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         mapOf(
             "room" to { msg: SharedUiMessage, repaint_cell ->
                 var transition_room_id: String = ""
-                val room_btn1 = SmoothButton("")
-                val room_btn2 = SmoothButton("")
+                val room_btn = SmoothButton("")
                 val set_click = { msgi: SharedUiRoom ->
                     transition_room_id = msgi.id
-                    room_btn1.setText("${msgi.message} (${msgi.unreadCount} unread / ${msgi.highlightCount} mentions)")
-                    room_btn2.setText("${msgi.lastMessage?.message?.take(80) ?: ""}")
+                    room_btn.setText("${msgi.message} (${msgi.unreadCount} unread / ${msgi.highlightCount} mentions)")
                 }
                 set_click(msg as SharedUiRoom)
-                room_btn1.addActionListener({
-                    transition(m.getRoom(transition_room_id), false)
-                })
-                room_btn2.addActionListener({
+                room_btn.addActionListener({
                     transition(m.getRoom(transition_room_id), false)
                 })
                 RecyclableItemGeneratorResult(
                     listOf(),
-                    listOf(room_btn1,room_btn2, JLabel(" ")),
-                    listOf(),
+                    listOf(room_btn, JLabel(" ")),
+                    msg.lastMessage?.let { listOf(it) } ?: listOf(),
                     { Unit },
-                    { msg, repaint_cell -> set_click(msg as SharedUiRoom); Pair(listOf(),listOf()) }
+                    { msg, repaint_cell -> set_click(msg as SharedUiRoom); Pair(listOf(), msg.lastMessage?.let { listOf(it) } ?: listOf()) }
                 )
             },
             "img" to { msg: SharedUiMessage, repaint_cell ->

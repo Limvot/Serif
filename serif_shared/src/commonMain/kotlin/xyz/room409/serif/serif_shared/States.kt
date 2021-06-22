@@ -56,38 +56,6 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         return mclient.getStoredSessions()
     }
 }
-/*
-class MatrixRooms(private val msession: MatrixSession, val message: String) : MatrixState() {
-    val rooms: List<SharedUiRoom> = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event ->
-        SharedUiRoom(
-            id,
-            name,
-            unread_notif,
-            unread_highlight,
-            last_event?.let { SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, mapOf()) }
-        )
-    }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
-    override fun refresh(): MatrixState = MatrixRooms(
-        msession = msession,
-        message = "updated...\n"
-    )
-    fun createRoom(name: String, room_alias_name: String, topic: String) = msession.createRoom(name, room_alias_name, topic)
-
-    fun getRoom(id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): MatrixState {
-        return MatrixChatRoom(
-            msession,
-            id,
-            window_back_length,
-            message_window_base,
-            window_forward_length
-        )
-    }
-    fun fake_logout(): MatrixState {
-        msession.closeSession()
-        return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
-    }
-}
-*/
 abstract class SharedUiMessage() {
     abstract val sender: String
     abstract val message: String
