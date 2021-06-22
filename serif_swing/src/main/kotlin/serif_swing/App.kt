@@ -578,7 +578,11 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
                 c.setSize(our_width, 1000)
                 val d = c.getPreferredSize()
                 val force_width = true
-                if (force_width) {
+                if(c is JButton && (c as JButton).getText() == "...") {
+                    //Handle "..." button on widgets
+                    c.setSize(d.width, d.height)
+                    c.setBounds(0, our_height, d.width, d.height)
+                } else if (force_width) {
                     c.setSize(our_width, d.height)
                     c.setBounds(0, our_height, our_width, d.height)
                 } else {
@@ -678,17 +682,20 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         var msg = msg_in
         val reply_option = JMenuItem("Reply")
         reply_option.addActionListener({
-            println("Now writing a reply")
+            msg_context_label.setText("Replying to: ${msg.sender} ${msg.message}")
+            msg_context_panel.setVisible(true)
             replied_event_id = msg.id
         })
         val react_option = JMenuItem("React")
         react_option.addActionListener({
-            println("Now writing a reaction")
+            msg_context_label.setText("Reacting to: ${msg.sender} ${msg.message}")
+            msg_context_panel.setVisible(true)
             reacted_event_id = msg.id
         })
         val edit_option = JMenuItem("Edit")
         edit_option.addActionListener({
-            println("Now editing a message")
+            msg_context_label.setText("Editing: ${msg.message}")
+            msg_context_panel.setVisible(true)
             edited_event_id = msg.id
             message_field.text = msg.message
         })
@@ -884,10 +891,15 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val c_left = GridBagConstraints()
     val c_right = GridBagConstraints()
     val message_field = SmoothTextField(20)
+    val pinned_events_btn = SmoothButton("Pinned Events")
+    val pinned_action_popup = JPopupMenu()
+    val msg_context_label = SmoothLabel("Reply")
+    val msg_context_panel = JPanel()
     var replied_event_id = ""
     var reacted_event_id = ""
     var edited_event_id = ""
     init {
+        msg_context_panel.setVisible(false)
         panel.layout = BorderLayout()
         setRoomName(m.name)
         panel.add(
@@ -906,6 +918,9 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             BorderLayout.CENTER
         )
 
+        val room_footer_panel = JPanel()
+        room_footer_panel.layout = BoxLayout(room_footer_panel, BoxLayout.PAGE_AXIS)
+        msg_context_panel.layout = BorderLayout()
         val message_panel = JPanel()
         message_panel.layout = BorderLayout()
         var back_button = SmoothButton("Back")
@@ -918,10 +933,22 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         var send_button = SmoothButton("Send")
         msg_panel_actions.add(send_button)
         message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
-        panel.add(message_panel, BorderLayout.PAGE_END)
+        val cancel_msg_context_btn = SmoothButton("[x]")
+        cancel_msg_context_btn.addActionListener({
+            replied_event_id  = ""
+            reacted_event_id = ""
+            edited_event_id = ""
+            msg_context_panel.setVisible(false)
+        })
+        msg_context_panel.add(cancel_msg_context_btn, BorderLayout.LINE_START)
+        msg_context_panel.add(msg_context_label, BorderLayout.CENTER)
+        room_footer_panel.add(msg_context_panel)
+        room_footer_panel.add(message_panel)
+        panel.add(room_footer_panel, BorderLayout.PAGE_END)
         val onSend: (ActionEvent) -> Unit = {
             val text = message_field.text
             message_field.text = ""
+            msg_context_panel.setVisible(false)
             val res =
                 when {
                     replied_event_id == "" && edited_event_id == "" && reacted_event_id == "" -> m.sendMessage(text)

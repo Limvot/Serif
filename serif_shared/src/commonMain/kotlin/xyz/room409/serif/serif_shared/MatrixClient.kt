@@ -80,9 +80,9 @@ fun isStandaloneEvent(e: Event): Boolean {
 fun getRelatedEvent(e: Event): String? {
     if (e as? RoomMessageEvent != null) {
         if (e.content is ReactionRMEC) {
-            return e.content!!.relates_to!!.event_id!!
+            return e.content.relates_to.event_id!!
         } else if (e.content is TextRMEC && is_edit_content(e.content)) {
-            return e.content!!.relates_to!!.event_id!!
+            return e.content.relates_to!!.event_id!!
         }
     }
     return null
@@ -159,7 +159,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             if (new_events.size == 0) {
                 break;
             }
-            back_base_seqId = new_events.first()!!.second
+            back_base_seqId = new_events.first().second
         }
 
         var fore_base_seqId = base_and_seqId_and_prevBatch.second
@@ -170,7 +170,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             if (new_events.size == 0) {
                 break
             }
-            fore_base_seqId = new_events.last()!!.second
+            fore_base_seqId = new_events.last().second
         }
 
         val prelim_total_events = back_events + listOf(base_and_seqId_and_prevBatch).filter { isStandaloneEvent(it.first) } + fore_events
