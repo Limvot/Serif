@@ -484,8 +484,9 @@ class SerifText(private var text: AttributedString) : JComponent() {
     }
 }
 
-class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val make: Map<String, (T,()->Unit) -> Triple<List<Component>,()->Unit,(T,()->Unit) -> Unit>>, val render_report: (Int,Int)-> Unit) : JComponent(), Scrollable {
-    data class RecyclableItem<T>(var start: Int, var end: Int, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,()->Unit) -> Unit)
+data class RecyclableItemGeneratorResult<T>(val pre_items: List<T>, val sub_components: List<Component>, val post_items: List<T>, val deactivate: () -> Unit, val recycle: (T,() -> Unit) -> Pair<List<T>,List<T>>)
+class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val make: Map<String, (T,()->Unit) -> RecyclableItemGeneratorResult<T>>, val render_report: (Int,Int)-> Unit) : JComponent(), Scrollable {
+    data class RecyclableItem<T>(var start: Int, var end: Int, var indent: Int, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,() -> Unit) -> Pair<List<T>,List<T>>)
     val recycle_map: MutableMap<String, ArrayDeque<RecyclableItem<T>>> = mutableMapOf()
     val subs: MutableList<Pair<String, RecyclableItem<T>>> = mutableListOf()
     var current_items: List<T> = listOf()
@@ -498,7 +499,7 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         addMouseListener(object : MouseListener, MouseMotionListener {
             fun dispatchEvent(e: MouseEvent) {
                 for ((_typ, recycleable) in subs) {
-                    val (sy, ey, sub_components, _deactivate, _recycle) = recycleable
+                    val (sy, ey, indent, sub_components, _deactivate, _recycle) = recycleable
                     if ( (sy <= e.point.y)
                        &&(ey >= e.point.y) ) {
                         var sub_offset = sy
@@ -559,39 +560,48 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
             recycle_map.getOrPut(typ, { ArrayDeque() }).add(recycleable)
         }
         subs.clear()
-        for (i in items) {
-            var height_delta = 0
-            val typ = choose(i)
-            val our_height_copy = our_height
-            val repaint_lambda = {  repaint(0, our_height_copy, our_width, height_delta) }
-            val possible_recycleable = recycle_map[typ]?.removeLastOrNull()
-            val recycleable = if (possible_recycleable != null) {
-                possible_recycleable.recycle(i, repaint_lambda)
-                possible_recycleable.start = our_height
-                possible_recycleable
-            } else {
-                println("Creating a new $typ")
-                val (sub_components, deactivate, recycle) = make[typ]!!(i, repaint_lambda)
-                RecyclableItem<T>(our_height, -1, sub_components, deactivate, recycle)
-            }
-            for (c in recycleable.sub_components) {
-                c.setSize(our_width, 1000)
-                val d = c.getPreferredSize()
-                val force_width = true
-                if (force_width) {
-                    c.setSize(our_width, d.height)
-                    c.setBounds(0, our_height, our_width, d.height)
+        val indent_incr = 100
+        fun flatten_into_recyclables(items: List<T>, indent: Int) {
+            for (i in items) {
+                var height_delta = 0
+                val typ = choose(i)
+                val our_height_copy = our_height
+                val repaint_lambda = { repaint(0, our_height_copy, our_width, height_delta) }
+                val possible_recycleable = recycle_map[typ]?.removeLastOrNull()
+                val (recycleable, post_items) = if (possible_recycleable != null) {
+                    // TODO
+                    val (pre_items, post_items) = possible_recycleable.recycle(i, repaint_lambda)
+                    flatten_into_recyclables(pre_items, indent + indent_incr)
+                    possible_recycleable.start = our_height
+                    possible_recycleable.indent = indent
+                    Pair(possible_recycleable, post_items)
                 } else {
-                    c.setSize(d.width, d.height)
-                    c.setBounds(0, our_height, d.width, d.height)
+                    println("Creating a new $typ")
+                    // TODO
+                    val (pre_items, sub_components, post_items, deactivate, recycle) = make[typ]!!(i, repaint_lambda)
+                    flatten_into_recyclables(pre_items, indent + indent_incr)
+                    Pair(RecyclableItem<T>(our_height, -1, indent, sub_components, deactivate, recycle), post_items)
                 }
-                height_delta += c.height
-                // Have to alert our hierarchy that we've changed size
+                for (c in recycleable.sub_components) {
+                    c.setSize(our_width, 1000)
+                    val d = c.getPreferredSize()
+                    val force_width = true
+                    if (force_width) {
+                        c.setSize(our_width-indent, d.height)
+                        c.setBounds(indent, our_height, our_width-indent, d.height)
+                    } else {
+                        c.setSize(d.width, d.height)
+                        c.setBounds(indent, our_height, d.width, d.height)
+                    }
+                    height_delta += c.height
+                }
+                recycleable.end = our_height + height_delta
+                subs.add(Pair(typ, recycleable))
+                our_height += height_delta
+                flatten_into_recyclables(post_items, indent + indent_incr)
             }
-            recycleable.end = our_height + height_delta
-            subs.add(Pair(typ, recycleable))
-            our_height += height_delta
         }
+        flatten_into_recyclables(items, 0)
         current_items = items
 
         if (new_idx != -1) {
@@ -619,7 +629,7 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         began = null
         ended = null
         for ((i, typ_recycleable) in subs.withIndex()) {
-            val (sy, ey, sub_components, _refresh) = typ_recycleable.second
+            val (sy, ey, indent, sub_components, _refresh) = typ_recycleable.second
             if ( (sy <= clip_bounds_ey)
                &&(ey >= clip_bounds.y) ) {
                 if (began == null) {
@@ -628,11 +638,13 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
                 }
                 ended = i
                 ended_pix = ey - clip_bounds_ey
+                g.translate(indent, 0)
                 for (c in sub_components) {
                     c.paint(g)
                     count += 1
                     g.translate(0, c.height)
                 }
+                g.translate(-indent, 0)
                 sets += 1
             } else {
                 g.translate(0, ey-sy)
@@ -781,11 +793,17 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 set_icon_image(icon, msg, repaint_cell)
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, JLabel(icon), menu), { icon.setImageObserver(null) }, { msg, repaint_cell ->
-                    set_icon_image(icon, msg as SharedUiImgMessage, repaint_cell)
-                    set_sender(msg)
-                    set_menu(msg)
-                })
+                RecyclableItemGeneratorResult(
+                    listOf(),
+                    listOf(sender, JLabel(icon), menu),
+                    listOf(),
+                    { icon.setImageObserver(null) }, { msg, repaint_cell ->
+                        set_icon_image(icon, msg as SharedUiImgMessage, repaint_cell)
+                        set_sender(msg)
+                        set_menu(msg)
+                        Pair(listOf(), listOf())
+                    }
+                )
             },
             "audio" to { msg, repaint_cell ->
                 msg as SharedUiAudioMessage
@@ -797,7 +815,13 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 })
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, play_btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); audio_url = (msg as SharedUiAudioMessage).url; })
+                RecyclableItemGeneratorResult(
+                    listOf(),
+                    listOf(sender, play_btn, menu),
+                    listOf(),
+                    { Unit },
+                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); audio_url = (msg as SharedUiAudioMessage).url; Pair(listOf(),listOf()) }
+                )
             },
             "video" to { msg, repaint_cell ->
                 val video_btn = JButton()
@@ -811,7 +835,13 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, video_btn, menu), { vp.clear() }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell); })
+                RecyclableItemGeneratorResult(
+                    listOf(),
+                    listOf(sender, video_btn, menu),
+                    listOf(),
+                    { vp.clear() },
+                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell); Pair(listOf(),listOf()) }
+                )
             },
             "file" to { msg, repaint_cell ->
                 var msg = msg as SharedUiFileMessage
@@ -842,7 +872,13 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 })
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_down(msg); })
+                RecyclableItemGeneratorResult(
+                    listOf(),
+                    listOf(sender, btn, menu),
+                    listOf(),
+                    { Unit },
+                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_down(msg); Pair(listOf(),listOf()) }
+                )
             },
             "location" to { msg, repaint_cell ->
                 val btn = SmoothButton("Location")
@@ -858,18 +894,26 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 set_loc(msg)
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, btn, menu), { Unit }, { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_loc(msg); })
+                RecyclableItemGeneratorResult(
+                    listOf(),
+                    listOf(sender, btn, menu),
+                    listOf(),
+                    { Unit },
+                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_loc(msg); Pair(listOf(),listOf()) }
+                )
             },
             "text" to { msg, repaint_cell ->
-                fun render_with_replies(msg: SharedUiMessage): String {
-                    val prev = msg.replied_event?.let { "in reply to ${it.sender}:\n" + render_with_replies(it).lines().map { "----$it" }.joinToString("\n") + "\n" } ?: ""
-                    return prev + msg.message
-                }
-                val message = SerifText(stringToAttributedURLString(render_with_replies(msg)))
+                val message = SerifText(stringToAttributedURLString(msg.message))
                 message.addMouseListener(URLMouseListener(message))
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
-                Triple(listOf(sender, message, menu), { Unit }, { msg, repaint_cell -> message.setText(stringToAttributedURLString(render_with_replies(msg))); set_sender(msg); set_menu(msg) })
+                RecyclableItemGeneratorResult(
+                    msg.replied_event?.let { listOf(it) } ?: listOf(),
+                    listOf(sender, message, menu),
+                    listOf(),
+                    { Unit },
+                    { msg, repaint_cell -> message.setText(stringToAttributedURLString(msg.message)); set_sender(msg); set_menu(msg); Pair(msg.replied_event?.let { listOf(it) } ?: listOf(),listOf()) }
+                )
             }
         ),
        { began, ended ->
