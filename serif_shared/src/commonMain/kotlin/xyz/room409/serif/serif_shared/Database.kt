@@ -73,19 +73,19 @@ object Database {
         return local
     }
 
-    fun <T> mapRooms(session_id: Long, f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = (this.db?.sessionDbQueries?.getRooms(session_id)?.executeAsList() ?: listOf()).map { r ->
-        f(r.id, r.name, r.unread_notif_count.toInt(), r.unread_highlight_count.toInt(), r.last_event?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) as? RoomMessageEvent })
+    fun <T> mapRooms(session_id: Long, f: (String,String,Int,Int,String?) -> T): List<T> = (this.db?.sessionDbQueries?.getRooms(session_id)?.executeAsList() ?: listOf()).map { r ->
+        f(r.id, r.name, r.unread_notif_count.toInt(), r.unread_highlight_count.toInt(), r.last_event)
     }
 
     // setter that doesn't overwrite if passed null, if doesn't exist using default
-    fun setRoomSummary(session_id: Long, id: String, name: String?, unread_notif_count: Int?, unread_highlight_count: Int?, last_event: RoomMessageEvent?) {
+    fun setRoomSummary(session_id: Long, id: String, name: String?, unread_notif_count: Int?, unread_highlight_count: Int?, last_event: String?) {
         val old = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()
         if (old != null) {
             this.db?.sessionDbQueries?.updateRoomSummary(
                 name ?: old.name,
                 unread_notif_count?.toLong() ?: old?.unread_notif_count ?: 0,
                 unread_highlight_count?.toLong() ?: old?.unread_highlight_count ?: 0,
-                last_event?.raw_self?.toString() ?: old?.last_event,
+                last_event ?: old?.last_event,
                 session_id,
                 id
             )
@@ -96,12 +96,12 @@ object Database {
                 name ?: id,
                 unread_notif_count?.toLong() ?: 0,
                 unread_highlight_count?.toLong() ?: 0,
-                last_event?.raw_self?.toString()
+                last_event
             )
         }
     }
     fun getRoomSummary(session_id: Long, id: String) = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()?.let {
-        Triple(it.name,Pair(it.unread_notif_count.toInt(), it.unread_highlight_count.toInt()),it.last_event?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) as? RoomMessageEvent })
+        Triple(it.name,Pair(it.unread_notif_count.toInt(), it.unread_highlight_count.toInt()), it.last_event)
     }
 
     fun setStateEvent(session_id: Long, roomId: String, event: StateEvent<*>) {

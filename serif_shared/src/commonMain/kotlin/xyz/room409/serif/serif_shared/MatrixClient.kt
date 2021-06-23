@@ -121,12 +121,12 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun <T> mapRooms(f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = Database.mapRooms(session_id, f)
-    fun getReleventRoomEventsForWindow(room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): Pair<List<Event>, Boolean> {
+    fun <T> mapRooms(f: (String,String,Int,Int,String?) -> T): List<T> = Database.mapRooms(session_id, f)
+    fun getReleventRoomEventsForWindow(room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int, force_event: Boolean): Pair<List<Event>, Boolean> {
         // if message_window_base is null, than no matter what
         // we are following live.
         val overrideCurrent = message_window_base == null
-        val base_and_seqId_and_prevBatch = message_window_base?.let { Database.getRoomEventAndIdx(session_id, room_id, it) } ?: Database.getMostRecentRoomEventAndIdx(session_id, room_id)
+        val base_and_seqId_and_prevBatch = message_window_base?.let { Database.getRoomEventAndIdx(session_id, room_id, it) } ?: if (!force_event) { Database.getMostRecentRoomEventAndIdx(session_id, room_id) } else { null }
         // completely empty room!!
         if (base_and_seqId_and_prevBatch == null) {
             return Pair(listOf(), true)
@@ -480,7 +480,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                     determineRoomName(room_id),
                     room.unread_notifications?.notification_count,
                     room.unread_notifications?.highlight_count,
-                    room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent
+                    (room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent)?.event_id
                 )
             }
             Database.updateSessionNextBatch(session_id, new_sync_response.next_batch)

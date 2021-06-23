@@ -134,11 +134,11 @@ class SharedUiLocationMessage(
     override val replied_event: SharedUiMessage? = null,
 ) : SharedUiMessage()
 
-fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): Pair<List<SharedUiMessage>, Boolean> {
+fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int, force_event: Boolean): Pair<List<SharedUiMessage>, Boolean> {
     val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
     val reaction_maps: MutableMap<String, MutableMap<String, MutableSet<String>>> = mutableMapOf()
 
-    val (event_range, tracking_live) = msession.getReleventRoomEventsForWindow(room_id, window_back_length, message_window_base, window_forward_length)
+    val (event_range, tracking_live) = msession.getReleventRoomEventsForWindow(room_id, window_back_length, message_window_base, window_forward_length, force_event)
 
     event_range.forEach {
         if (it as? RoomMessageEvent != null) {
@@ -189,7 +189,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
             when (msg_content) {
                 is TextRMEC -> {
                     val in_reply_to = msg_content.relates_to?.in_reply_to?.event_id?.let { in_reply_to_id ->
-                        toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0).first.first()
+                        toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0, true).first.firstOrNull()
                     }
                     val transform_body = { body_message: String ->
                         if (in_reply_to != null) {
@@ -265,7 +265,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                 message=summary?.first ?: event.state_key,
                 unreadCount=summary?.second?.first ?: 0,
                 highlightCount=summary?.second?.first ?: 0,
-                lastMessage=summary?.third?.let { SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, mapOf()) }
+                lastMessage=summary?.third?.let { toSharedUiMessageList(msession, username, event.state_key, 0, it, 0, true).first.firstOrNull() }
             )
         } else if (it as? RoomEvent != null) {
             // This won't actually happen currently,
@@ -297,18 +297,18 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
         messages = if (room_id == "Room List") {
             pinned = listOf()
             message_window_base = null
-            msession.mapRooms { id, name, unread_notif, unread_highlight, last_event ->
+            msession.mapRooms { id, name, unread_notif, unread_highlight, last_event_id ->
                 SharedUiRoom(
                     id=id,
                     message=name,
                     unreadCount=unread_notif,
                     highlightCount=unread_highlight,
-                    lastMessage=last_event?.let { SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, mapOf()) }
+                    lastMessage=last_event_id?.let { toSharedUiMessageList(msession, username, id, 0, it, 0, false).first.firstOrNull() }
                 )
             }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
         } else {
             pinned = msession.getPinnedEvents(room_id)
-            val (got_messages, tracking_live) = toSharedUiMessageList(msession, username, room_id, window_back_length, message_window_base_in, window_forward_length_in)
+            val (got_messages, tracking_live) = toSharedUiMessageList(msession, username, room_id, window_back_length, message_window_base_in, window_forward_length_in, false)
             if (tracking_live) {
                 message_window_base = null
             } else {
