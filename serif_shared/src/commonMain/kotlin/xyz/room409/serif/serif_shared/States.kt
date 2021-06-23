@@ -294,18 +294,69 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
     val message_window_base: String?
     val pinned: List<String>
     init {
-        messages = if (room_id == "Room List") {
+        messages = if (room_id == "Room List" || room_id == "All Rooms" || msession.getRoomType(room_id) == "m.space") {
             pinned = listOf()
             message_window_base = null
-            msession.mapRooms { id, name, unread_notif, unread_highlight, last_event_id ->
-                SharedUiRoom(
+            val (spaces, rooms) = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event_id ->
+                Pair(id, SharedUiRoom(
                     id=id,
                     message=name,
                     unreadCount=unread_notif,
                     highlightCount=unread_highlight,
                     lastMessage=last_event_id?.let { toSharedUiMessageList(msession, username, id, 0, it, 0, false).first.firstOrNull() }
-                )
-            }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
+                ))
+            }.sortedBy { -(it.second.lastMessage?.timestamp ?: 0) }.partition { msession.getRoomType(it.second.id) == "m.space" }
+            if (room_id == "All Rooms") {
+                rooms.map { it.second }
+            } else {
+                val spaces = spaces.toMap()
+                val childrenSet: MutableSet<String> = mutableSetOf()
+                val spaceChildren: MutableMap<String, List<String>> = mutableMapOf()
+                val liveMap = rooms.toMap().toMutableMap()
+                fun resolveSpace(id: String) {
+                    if (liveMap.containsKey(id)) {
+                        // already done or circular space, break the link
+                        return
+                    }
+                    val children = msession.getSpaceChildren(id)
+                    spaceChildren.put(id, children)
+                    for (child in children) {
+                        if (spaces.containsKey(child)) {
+                            childrenSet.add(child)
+                            resolveSpace(child)
+                        }
+                    }
+                    var total_unread = 0
+                    var total_highlight = 0
+                    val latest = children.map { liveMap[it] }.filterNotNull().minByOrNull {
+                        total_unread += it.unreadCount
+                        total_highlight += it.highlightCount
+                        -(it.lastMessage?.timestamp ?: 0)
+                    }
+                    liveMap[id] = SharedUiRoom(
+                        id=id,
+                        message=spaces[id]!!.message,
+                        unreadCount=total_unread,
+                        highlightCount=total_highlight,
+                        lastMessage=latest
+                    )
+                }
+                for (space_id in spaces.keys) {
+                    resolveSpace(space_id)
+                }
+                if (room_id == "Room List") {
+                    listOf(SharedUiRoom(
+                        id="All Rooms",
+                        message="All Rooms",
+                        unreadCount=0,
+                        highlightCount=0,
+                        lastMessage=null
+                    )) + spaces.keys.filter { id -> !childrenSet.contains(id) }.map { liveMap[it]!! }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
+                } else {
+                    // it's a space! Grab this one from the liveMap and sort it
+                    spaceChildren[room_id]!!.map { liveMap[it]!! }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
+                }
+            }
         } else {
             pinned = msession.getPinnedEvents(room_id)
             val (got_messages, tracking_live) = toSharedUiMessageList(msession, username, room_id, window_back_length, message_window_base_in, window_forward_length_in, false)

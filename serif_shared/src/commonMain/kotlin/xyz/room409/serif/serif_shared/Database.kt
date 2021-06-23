@@ -113,8 +113,8 @@ object Database {
     }
     fun getStateEvent(session_id: Long, roomId: String, type: String, stateKey: String): Event? =
         this.db?.sessionDbQueries?.getStateEvent(session_id, roomId, type, stateKey)?.executeAsOneOrNull()?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) }
-    fun getStateEvents(session_id: Long, roomId: String, type: String): List<Event> =
-        this.db?.sessionDbQueries?.getStateEvents(session_id, roomId, type)?.executeAsList()?.map { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) } ?: listOf()
+    fun getStateEvents(session_id: Long, roomId: String, type: String): List<Pair<String,Event>> =
+        this.db?.sessionDbQueries?.getStateEvents(session_id, roomId, type)?.executeAsList()?.map { Pair(it.stateKey, JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data)) } ?: listOf()
 
     fun updatePrevBatch(session_id: Long, roomId: String, eventId: String, prevBatch: String?) {
         this.db!!.sessionDbQueries!!.updatePrevBatch(prevBatch, session_id, roomId, eventId)

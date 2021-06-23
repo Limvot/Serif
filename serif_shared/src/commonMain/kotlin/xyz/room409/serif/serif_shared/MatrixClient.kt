@@ -175,8 +175,6 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
         val prelim_total_events = back_events + listOf(base_and_seqId_and_prevBatch).filter { isStandaloneEvent(it.first) } + fore_events
         val relatedEvents = Database.getRelatedEvents(session_id, room_id, prelim_total_events.map { it.first.event_id })
-        //val spaceChildren = Database.getStateEvents(session_id, room_id, "m.space.child")
-        //val total_events = spaceChildren + (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }
         val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }
         // in addition to overrrideCurrent, the other condition for following live
         // is that we have less events forward than requested, so our window overlaps
@@ -441,6 +439,12 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         client.close()
         sync_should_run = false
     }
+    fun getSpaceChildren(id: String): List<String> = Database.getStateEvents(session_id, id, "m.space.child").map { (id,event) ->
+        if (event.castToStateEventWithContentOfType<SpaceChildContent>() != null) {
+            id
+        } else { null }
+    }.filterNotNull()
+    fun getRoomType(id: String) = Database.getStateEvent(session_id, id, "m.room.create", "")?.castToStateEventWithContentOfType<RoomCreationContent>()?.type
     fun getPinnedEvents(id: String): List<String> {
         return Database.getStateEvent(session_id, id, "m.room.pinned_events", "")?.castToStateEventWithContentOfType<RoomPinnedEventContent>()?.pinned
             ?: listOf()
