@@ -80,9 +80,9 @@ fun isStandaloneEvent(e: Event): Boolean {
 fun getRelatedEvent(e: Event): String? {
     if (e as? RoomMessageEvent != null) {
         if (e.content is ReactionRMEC) {
-            return e.content!!.relates_to!!.event_id!!
+            return e.content.relates_to.event_id!!
         } else if (e.content is TextRMEC && is_edit_content(e.content)) {
-            return e.content!!.relates_to!!.event_id!!
+            return e.content.relates_to!!.event_id!!
         }
     }
     return null
@@ -95,6 +95,7 @@ inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as
 
 class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
+    private var in_flight_media_requests: MutableSet<String> = mutableSetOf()
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
         // 30 seconds is Matrix recommended, afaik
@@ -158,7 +159,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             if (new_events.size == 0) {
                 break;
             }
-            back_base_seqId = new_events.first()!!.second
+            back_base_seqId = new_events.first().second
         }
 
         var fore_base_seqId = base_and_seqId_and_prevBatch.second
@@ -169,7 +170,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             if (new_events.size == 0) {
                 break
             }
-            fore_base_seqId = new_events.last()!!.second
+            fore_base_seqId = new_events.last().second
         }
 
         val prelim_total_events = back_events + listOf(base_and_seqId_and_prevBatch).filter { isStandaloneEvent(it.first) } + fore_events
@@ -330,12 +331,26 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 }
             }
 
-            //No valid cache hit
-            val media = mediaQuery(media_url)
-            val result = Database.addMediaToCache(media_url, media, existing_entry)
+            synchronized(this) {
+                if (in_flight_media_requests.contains(media_url)) {
+                    return Error("Media request already in flight");
+                }
+                in_flight_media_requests.add(media_url)
+            }
+            thread(start = true) {
+                //No valid cache hit
+                println("Background thread request for $media_url")
+                val media = mediaQuery(media_url)
+                val result = Database.addMediaToCache(media_url, media, existing_entry)
+                println("Finished downloading $media_url in the backkground with $result")
+                synchronized(this) {
+                    in_flight_media_requests.remove(media_url)
+                }
+                onUpdate()
+             }
 
-            println("Media file at $result")
-            return Success(result)
+            println("Returning early, downloading $media_url in the background")
+            return Error("Downloading media in the background")
         } catch (e: Exception) {
             println("Error with media retrieval $e")
             return Error("Media Retrieval Failed", e)
