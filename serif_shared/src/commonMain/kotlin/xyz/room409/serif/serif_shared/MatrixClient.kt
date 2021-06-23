@@ -74,7 +74,7 @@ fun isStandaloneEvent(e: Event): Boolean {
     if (e as? RoomMessageEvent != null) {
         return !(e.content is ReactionRMEC || (e.content is TextRMEC && is_edit_content(e.content)))
     } else {
-        return false
+        return e.castToStateEventWithContentOfType<SpaceChildContent>() != null
     }
 }
 fun getRelatedEvent(e: Event): String? {
@@ -121,12 +121,12 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun <T> mapRooms(f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = Database.mapRooms(session_id, f)
-    fun getReleventRoomEventsForWindow(room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): Pair<List<Event>, Boolean> {
+    fun <T> mapRooms(f: (String,String,Int,Int,String?) -> T): List<T> = Database.mapRooms(session_id, f)
+    fun getReleventRoomEventsForWindow(room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int, force_event: Boolean): Pair<List<Event>, Boolean> {
         // if message_window_base is null, than no matter what
         // we are following live.
         val overrideCurrent = message_window_base == null
-        val base_and_seqId_and_prevBatch = message_window_base?.let { Database.getRoomEventAndIdx(session_id, room_id, it) } ?: Database.getMostRecentRoomEventAndIdx(session_id, room_id)
+        val base_and_seqId_and_prevBatch = message_window_base?.let { Database.getRoomEventAndIdx(session_id, room_id, it) } ?: if (!force_event) { Database.getMostRecentRoomEventAndIdx(session_id, room_id) } else { null }
         // completely empty room!!
         if (base_and_seqId_and_prevBatch == null) {
             return Pair(listOf(), true)
@@ -182,7 +182,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         return Pair(total_events, overrideCurrent || fore_events.size < window_forward_length)
     }
     fun getRoomEvent(room_id: String, event_id: String): Event? = Database.getRoomEventAndIdx(session_id, room_id, event_id)?.first
-    fun getRoomName(id: String) = Database.getRoomName(session_id, id)
+    fun getRoomSummary(id: String) = Database.getRoomSummary(session_id, id)
     fun createRoom(name:String, room_alias_name: String, topic: String): Outcome<String> {
         try {
             val result = runBlocking {
@@ -254,6 +254,31 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         } catch (e: Exception) {
             return Error("Receipt Failed", e)
         }
+    }
+    fun sendPinnedStateEventImpl(eventIds: List<String>, room_id: String): Outcome<String> {
+        try {
+            val content = RoomPinnedEventContent(eventIds)
+            val result = runBlocking {
+                        client.put<String>("$server/_matrix/client/r0/rooms/$room_id/state/m.room.pinned_events/?access_token=$access_token") {
+                            contentType(ContentType.Application.Json)
+                            body = content
+                        }
+            }
+            println("pinning put result: $result")
+            return Success("The msg was pinned")
+        } catch (e: Exception) {
+            return Error("Pin Failed", e)
+        }
+    }
+    fun sendPinnedEvent(eventId: String, room_id: String): Outcome<String> {
+        val current = getPinnedEvents(room_id)
+        if(!current.contains(eventId)) { return sendPinnedStateEventImpl(current.plus(eventId), room_id) }
+        return Error("Pinning Already Pinned event")
+    }
+    fun sendUnpinnedEvent(eventId: String, room_id: String): Outcome<String> {
+        val current = getPinnedEvents(room_id)
+        if(current.contains(eventId)) { return sendPinnedStateEventImpl(current.minus(eventId), room_id) }
+        return Error("Unpinning unpinned event")
     }
 
     fun sendImageMessage(url: String, room_id: String): Outcome<String> {
@@ -414,6 +439,16 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         client.close()
         sync_should_run = false
     }
+    fun getSpaceChildren(id: String): List<String> = Database.getStateEvents(session_id, id, "m.space.child").map { (id,event) ->
+        if (event.castToStateEventWithContentOfType<SpaceChildContent>() != null) {
+            id
+        } else { null }
+    }.filterNotNull()
+    fun getRoomType(id: String) = Database.getStateEvent(session_id, id, "m.room.create", "")?.castToStateEventWithContentOfType<RoomCreationContent>()?.type
+    fun getPinnedEvents(id: String): List<String> {
+        return Database.getStateEvent(session_id, id, "m.room.pinned_events", "")?.castToStateEventWithContentOfType<RoomPinnedEventContent>()?.pinned
+            ?: listOf()
+    }
     fun determineRoomName(id: String): String {
         return Database.getStateEvent(session_id, id, "m.room.name", "")?.castToStateEventWithContentOfType<RoomNameContent>()?.name
             ?: Database.getStateEvent(session_id, id, "m.room.canonical_alias", "")?.castToStateEventWithContentOfType<RoomCanonicalAliasContent>()?.alias
@@ -449,7 +484,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                     determineRoomName(room_id),
                     room.unread_notifications?.notification_count,
                     room.unread_notifications?.highlight_count,
-                    room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent
+                    (room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent)?.event_id
                 )
             }
             Database.updateSessionNextBatch(session_id, new_sync_response.next_batch)

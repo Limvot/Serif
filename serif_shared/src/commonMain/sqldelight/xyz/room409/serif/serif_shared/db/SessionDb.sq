@@ -111,8 +111,8 @@ SELECT data FROM RoomState
 WHERE (sessionId = ? AND roomId = ? AND type = ? AND stateKey = ?);
 
 getStateEvents:
-SELECT data FROM RoomState
-WHERE (sessionId = ? AND roomId = ?);
+SELECT stateKey, data FROM RoomState
+WHERE (sessionId = ? AND roomId = ? AND type = ?);
 
 
 
