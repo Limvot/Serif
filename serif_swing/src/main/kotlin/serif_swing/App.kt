@@ -731,14 +731,14 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
                 RecyclableItemGeneratorResult(
-                    listOf(),
+                    msg.replied_event?.let { listOf(it) } ?: listOf(),
                     listOf(sender, JLabel(icon), menu),
                     listOf(),
                     { icon.setImageObserver(null) }, { msg, repaint_cell ->
                         set_icon_image(icon, msg as SharedUiImgMessage, repaint_cell)
                         set_sender(msg)
                         set_menu(msg)
-                        Pair(listOf(), listOf())
+                        Pair(msg.replied_event?.let { listOf(it) } ?: listOf(), listOf())
                     }
                 )
             },

@@ -170,27 +170,33 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
         if (it as? RoomMessageEvent != null) {
             val reactions = reaction_maps.get(it.event_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
             val msg_content = it.content
+
+            val in_reply_to = when(msg_content) {
+                is TextRMEC -> msg_content.relates_to
+                is ImageRMEC -> msg_content.relates_to
+                else -> null
+            }?.in_reply_to?.event_id?.let { in_reply_to_id ->
+                toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0, true).first.firstOrNull()
+            }
+
             var generate_media_msg = { url: String, func: (String,String,String,Long,Map<String,Set<String>>,SharedUiMessage?,String) -> SharedUiMessage ->
                 when (val url_local = msession.getLocalMediaPathFromUrl(url)) {
                     is Success -> {
                         func(
                             it.sender, it.content.body, it.event_id,
-                            it.origin_server_ts, reactions, null, url_local.value
+                            it.origin_server_ts, reactions, in_reply_to, url_local.value
                         )
                     }
                     is Error -> {
                         SharedUiMessagePlain(
                             it.sender, "Failed to load media ${url}",
-                            it.event_id, it.origin_server_ts, reactions, null
+                            it.event_id, it.origin_server_ts, reactions, in_reply_to
                         )
                     }
                 }
             }
             when (msg_content) {
                 is TextRMEC -> {
-                    val in_reply_to = msg_content.relates_to?.in_reply_to?.event_id?.let { in_reply_to_id ->
-                        toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0, true).first.firstOrNull()
-                    }
                     val transform_body = { body_message: String ->
                         if (in_reply_to != null) {
                             var stripping = true
