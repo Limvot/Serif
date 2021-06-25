@@ -187,7 +187,8 @@ class ImageRMEC(
     override val body: String = "<missing message body, likely redacted>",
     override val msgtype: String = "<missing type, likely redacted>",
     val info: ImageInfo,
-    val url: String
+    val url: String,
+    @SerialName("m.relates_to") val relates_to: RelationBlock? = null
 ) : RoomMessageEventContent()
 @Serializable
 class AudioRMEC(
