@@ -255,6 +255,31 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             return Error("Receipt Failed", e)
         }
     }
+    fun sendPinnedStateEventImpl(eventIds: List<String>, room_id: String): Outcome<String> {
+        try {
+            val content = RoomPinnedEventContent(eventIds)
+            val result = runBlocking {
+                        client.put<String>("$server/_matrix/client/r0/rooms/$room_id/state/m.room.pinned_events/?access_token=$access_token") {
+                            contentType(ContentType.Application.Json)
+                            body = content
+                        }
+            }
+            println("pinning put result: $result")
+            return Success("The msg was pinned")
+        } catch (e: Exception) {
+            return Error("Pin Failed", e)
+        }
+    }
+    fun sendPinnedEvent(eventId: String, room_id: String): Outcome<String> {
+        val current = getPinnedEvents(room_id)
+        if(!current.contains(eventId)) { return sendPinnedStateEventImpl(current.plus(eventId), room_id) }
+        return Error("Pinning Already Pinned event")
+    }
+    fun sendUnpinnedEvent(eventId: String, room_id: String): Outcome<String> {
+        val current = getPinnedEvents(room_id)
+        if(current.contains(eventId)) { return sendPinnedStateEventImpl(current.minus(eventId), room_id) }
+        return Error("Unpinning unpinned event")
+    }
 
     fun sendImageMessage(url: String, room_id: String): Outcome<String> {
         try {
@@ -413,6 +438,10 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         // TO ACT LIKE A LOGOUT, CLOSING THE CLIENT
         client.close()
         sync_should_run = false
+    }
+    fun getPinnedEvents(id: String): List<String> {
+        return Database.getStateEvent(session_id, id, "m.room.pinned_events", "")?.castToStateEventWithContentOfType<RoomPinnedEventContent>()?.pinned
+            ?: listOf()
     }
     fun determineRoomName(id: String): String {
         return Database.getStateEvent(session_id, id, "m.room.name", "")?.castToStateEventWithContentOfType<RoomNameContent>()?.name

@@ -665,6 +665,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     fun setRoomName(name: String) {
         room_name.setText("Room Name: $name")
     }
+    fun updatePinOptionText(event_id: String, menu_item: JMenuItem) {
+        val pin_str = if(m.pinned.contains(event_id)) { "Unpin" } else { "Pin" }
+        menu_item.setText(pin_str)
+    }
     val mk_sender = { msg: SharedUiMessage ->
         val render_text = { msg: SharedUiMessage ->
             if (msg.reactions.size > 0) {
@@ -698,6 +702,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             msg_context_panel.setVisible(true)
             edited_event_id = msg.id
             message_field.text = msg.message
+        })
+        val pin_option = JMenuItem()
+        updatePinOptionText(msg.id,pin_option)
+        pin_option.addActionListener({
+            m.togglePinnedEvent(msg.id)
         })
         val show_src_option = JMenuItem("Show Source")
         show_src_option.addActionListener({
@@ -737,13 +746,16 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         if(msg.sender.contains(m.username)) {
             msg_action_popup.add(edit_option)
         }
+        msg_action_popup.add(pin_option)
         msg_action_popup.add(show_src_option)
 
         val msg_action_button = SmoothButton("...")
         msg_action_button.addActionListener({
             msg_action_popup.show(msg_action_button,0,0)
         })
-        Pair(msg_action_button, { new_msg: SharedUiMessage -> msg = new_msg; })
+        Pair(msg_action_button,
+            { new_msg: SharedUiMessage -> msg = new_msg;
+              updatePinOptionText(msg.id,pin_option); })
     }
     val recycling_message_list = RecyclingList<SharedUiMessage>(last_window_width,
         { when (it) {
@@ -902,8 +914,15 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         msg_context_panel.setVisible(false)
         panel.layout = BorderLayout()
         setRoomName(m.name)
+        val room_header_panel = JPanel()
+        room_header_panel.layout = BorderLayout()
+        room_header_panel.add(room_name, BorderLayout.LINE_START)
+        room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)
+        generatePinned(pinned_action_popup)
+        pinned_events_btn.addActionListener({ pinned_action_popup.show(pinned_events_btn,0,0) })
+
         panel.add(
-            room_name,
+            room_header_panel,
             BorderLayout.PAGE_START
         )
 
@@ -995,11 +1014,22 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     override fun refresh() {
         transition(m.refresh(), true)
     }
+    fun generatePinned(menu: JPopupMenu) {
+        while(menu.getComponentCount() > 0) {
+            menu.remove(0)
+        }
+        val pinned_event_previews = m.getPinnedEventPreviews()
+        pinned_event_previews.forEach {
+            val pinned_option = JMenuItem(it)
+            menu.add(pinned_option)
+        }
+    }
     fun update(new_m: MatrixChatRoom, window_width: Int) {
-        if (m.messages != new_m.messages || last_window_width != window_width) {
+        if (m.messages != new_m.messages || last_window_width != window_width || !new_m.pinned.equals(m.pinned)) {
             m = new_m
             recycling_message_list.reset(window_width, m.messages)
             last_window_width = window_width
+            generatePinned(pinned_action_popup)
         } else {
             m = new_m
         }
