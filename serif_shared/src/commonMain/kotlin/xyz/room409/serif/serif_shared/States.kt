@@ -165,16 +165,16 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             if (it as? RoomMessageEvent != null) {
                 val msg_content = it.content
                 if (msg_content is ReactionRMEC) {
-                    val relates_to = msg_content!!.relates_to!!.event_id!!
-                    val key = msg_content!!.relates_to!!.key!!
+                    val relates_to = msg_content.relates_to.event_id!!
+                    val key = msg_content.relates_to.key!!
                     val reactions_for_msg = reaction_maps.getOrPut(relates_to, { mutableMapOf() })
                     reactions_for_msg.getOrPut(key, { mutableSetOf() }).add(it.sender)
                 } else if (msg_content is TextRMEC) {
                     if (is_edit_content(msg_content)) {
                         // This is an edit
-                        val replaced_id = msg_content!!.relates_to!!.event_id!!
-                        val reactions = reaction_maps.get(replaced_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
-                        val edit_msg = SharedUiMessagePlain(it.sender, msg_content!!.new_content!!.body,
+                        val replaced_id = msg_content.relates_to!!.event_id!!
+                        val reactions = reaction_maps.get(replaced_id)?.entries?.map { (key, senders) -> Pair(key, senders.toSet())}?.toMap() ?: mapOf()
+                        val edit_msg = SharedUiMessagePlain(it.sender, msg_content.new_content!!.body,
                             it.event_id, it.origin_server_ts, reactions)
 
                         if (edit_maps.contains(replaced_id)) {
@@ -189,7 +189,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         val edits: Map<String,ArrayList<SharedUiMessage>> = edit_maps.toMap()
         messages = event_range.map {
             if (it as? RoomMessageEvent != null) {
-                val reactions = reaction_maps.get(it.event_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
+                val reactions = reaction_maps.get(it.event_id)?.entries?.map { (key, senders) -> Pair(key, senders.toSet())}?.toMap() ?: mapOf()
                 val msg_content = it.content
                 var generate_media_msg = { url: String, func: (String,String,String,Long,Map<String,Set<String>>,String,String) -> SharedUiMessage ->
                     when (val url_local = msession.getLocalMediaPathFromUrl(url)) {

@@ -658,6 +658,7 @@ class MentionListener(val tf: SmoothTextField, val autocompl: () -> Unit) : Docu
             autocompl()
         }
     }
+
 }
 
 class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom, var last_window_width: Int) : SwingState() {
@@ -924,7 +925,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     init {
         val mention_listener = MentionListener(message_field, {
             val members = m.members
-            val text = message_field.text.split("@")?.lastOrNull()?.split(" ")?.firstOrNull() ?: ""
+            val text = message_field.text.split("@").lastOrNull()?.split(" ")?.firstOrNull() ?: ""
             val suggestions = if(text == "") { members } else { members.filter({ it.contains(text)}) }
             val mentions_popup = JPopupMenu()
             for(acct in suggestions) {
