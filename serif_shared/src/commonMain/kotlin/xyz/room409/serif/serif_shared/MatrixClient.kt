@@ -439,6 +439,15 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         client.close()
         sync_should_run = false
     }
+    fun getRoomMembers(id: String): List<String> {
+        val events = Database.getStateEvents(session_id, id)
+        return events.map({ it : Event ->
+            if(it as? RoomEventFallback != null) {
+                if(it.type == "m.room.member") { it.sender }
+                else { null }
+            } else { null }
+        }).filterNotNull()
+    }
     fun getPinnedEvents(id: String): List<String> {
         return Database.getStateEvent(session_id, id, "m.room.pinned_events", "")?.castToStateEventWithContentOfType<RoomPinnedEventContent>()?.pinned
             ?: listOf()

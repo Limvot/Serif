@@ -18,6 +18,8 @@ import java.io.InputStreamReader
 import java.text.AttributedString
 import javax.sound.sampled.AudioSystem
 import javax.swing.*
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 import javax.swing.filechooser.*
 import javax.swing.text.*
 import javax.swing.text.html.HTML
@@ -648,6 +650,15 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         }
     }
 }
+class MentionListener(val tf: SmoothTextField, val autocompl: () -> Unit) : DocumentListener {
+    override fun changedUpdate(ev: DocumentEvent) { }
+    override fun removeUpdate(ev: DocumentEvent) { }
+    override fun insertUpdate(ev: DocumentEvent) {
+        if(tf.text.contains("@")) {
+            autocompl()
+        }
+    }
+}
 
 class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom, var last_window_width: Int) : SwingState() {
     // From @stephenhay via https://mathiasbynens.be/demo/url-regex
@@ -911,6 +922,28 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var reacted_event_id = ""
     var edited_event_id = ""
     init {
+        val mention_listener = MentionListener(message_field, {
+            val members = m.members
+            val text = message_field.text.split("@")?.lastOrNull()?.split(" ")?.firstOrNull() ?: ""
+            val suggestions = if(text == "") { members } else { members.filter({ it.contains(text)}) }
+            val mentions_popup = JPopupMenu()
+            for(acct in suggestions) {
+                val autocomp_opt = JMenuItem(acct)
+                autocomp_opt.addActionListener({
+                    val cursor_pos = message_field.getCaretPosition()
+                    val start_pos = message_field.text.indexOfLast({ (it == '@') })
+                    val new_str = message_field.text.replaceRange(start_pos, cursor_pos, acct.drop(1))
+                    message_field.text = new_str
+                })
+                mentions_popup.add(autocomp_opt)
+            }
+            mentions_popup.setRequestFocusEnabled(false)
+            val caret_pos = message_field.getCaretPosition()
+            mentions_popup.show(message_field,50,0)
+            message_field.setCaretPosition(caret_pos)
+            message_field.grabFocus()
+        })
+        message_field.getDocument().addDocumentListener(mention_listener)
         msg_context_panel.setVisible(false)
         panel.layout = BorderLayout()
         setRoomName(m.name)

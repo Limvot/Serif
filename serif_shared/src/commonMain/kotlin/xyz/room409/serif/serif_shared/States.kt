@@ -146,7 +146,9 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     val messages: List<SharedUiMessage>
     val message_window_base: String?
     val pinned: List<String>
+    val members: List<String>
     init {
+        members = msession.getRoomMembers(room_id)
         pinned = msession.getPinnedEvents(room_id)
 
         val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()

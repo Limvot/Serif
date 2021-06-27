@@ -263,6 +263,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
                 type == "m.room.name" -> RoomNameStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
                 type == "m.room.pinned_events" -> RoomPinnedEventSerializer
+                type == "m.room.member" -> RoomEventFallbackSerializer
                 element.jsonObject["state_key"] != null -> StateEventFallbackSerializer
                 type.startsWith("m.room") -> RoomEventFallbackSerializer
                 else -> EventFallbackSerializer
