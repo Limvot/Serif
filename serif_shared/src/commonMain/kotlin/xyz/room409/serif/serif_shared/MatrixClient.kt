@@ -164,7 +164,26 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             return Error("Image Upload Failed", e)
         }
     }
-
+    fun getRedactEvent(roomID: String, eventID: String) {
+        val redactedReplacementEvent = runBlocking {
+                        client.get<Event>("$server//_matrix/client/r0/rooms/{roomID}/event/{eventID}?access_token=$access_token")
+        }
+        sync_response!!.rooms.join[roomID]!!.timeline.events = sync_response!!.rooms.join[roomID]!!.timeline.events.map{if((it as? RoomEvent)?.event_id==eventID){redactedReplacementEvent}else{it}}
+    }
+    fun sendRedactEvent(roomID: String, eventID: String):  Outcome<String>  {
+        try {
+            val result = runBlocking {
+                val redaction_confirmation =
+                        client.put<EventIdResponse>("$server/_matrix/client/r0/rooms/$roomID/redact/$eventID/$transactionId?access_token=$access_token")
+                transactionId++
+                Database.updateSession(access_token, transactionId)
+                redaction_confirmation
+            }
+            return Success("Our redaction event id is: $result")
+        } catch (e: Exception) {
+            return Error("Redaction Failed", e)
+        }
+    }
     fun getLocalMediaPathFromUrl(media_url: String): Outcome<String> {
         try {
             val cached_media = Database.getMediaInCache(media_url)
@@ -241,6 +260,10 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                         // sections of timeline with different prev_patch, etc
                         sync_response!!.rooms.join[room_id]!!.timeline.events += room.timeline.events
                         sync_response!!.rooms.join[room_id]!!.unread_notifications = room.unread_notifications
+                        for(event in room.timeline.events)
+                            if(event is RoomMessageEvent && event.redacts != null) {
+                                getRedactEvent(room_id,event.redacts)
+                            }
                     } else {
                         sync_response!!.rooms.join[room_id] = room
                     }

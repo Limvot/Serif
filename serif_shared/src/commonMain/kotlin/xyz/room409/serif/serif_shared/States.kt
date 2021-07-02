@@ -246,6 +246,13 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             is Error -> println("read receipt failed because ${readReceiptResult.cause}")
         }
     }
+    fun sendRedaction(eventID:String): MatrixState {
+        when (val sendMessageResult = msession.sendRedactEvent(room_id,eventID)) {
+            is Success -> { println("${sendMessageResult.value}") }
+            is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
+        }
+        return this
+    }
     override fun refresh(): MatrixState = MatrixChatRoom(
         msession,
         room_id,

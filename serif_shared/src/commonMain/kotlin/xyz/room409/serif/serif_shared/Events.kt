@@ -132,6 +132,7 @@ class RoomCanonicalAliasContent(val alias: String? = null, val alt_aliases: List
 class RoomMessageEvent(
     override val raw_self: JsonObject,
     override val raw_content: JsonElement,
+    val redacts: String?=null,
     override val type: String,
     override val event_id: String,
     override val sender: String,
@@ -145,6 +146,14 @@ class RoomMessageEvent(
 abstract class RoomMessageEventContent {
     abstract val body: String
     abstract val msgtype: String
+}
+@Serializable
+class RedactionRMEC(
+        override val body: String = "<missing message body, likely redacted>",
+        override val msgtype: String = "<missing type, likely redacted>",
+        val reason: String = "no reason given"
+) : RoomMessageEventContent() {
+    constructor(reason:String) : this(msgtype = "m.room.redaction", body = "", reason = reason)
 }
 @Serializable
 class TextRMEC(
