@@ -426,7 +426,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 synchronized(this) {
                     println("This backfill for $room_id failed with an exception $e")
                     e.printStackTrace()
-                    in_flight_backfill_requests.remove(room_id)
+                    in_flight_backfill_requests.remove(Triple(room_id, event_id, from))
                 }
             }
         }

@@ -46,7 +46,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation("com.google.android.material:material:1.2.0")
-                implementation("io.ktor:ktor-client-android:$ktor_version")
+                implementation("io.ktor:ktor-client-cio:$ktor_version")
                 implementation("com.squareup.sqldelight:android-driver:$sql_delight_version")
             }
         }
@@ -77,8 +77,8 @@ android {
     defaultConfig {
         minSdkVersion(24)
         targetSdkVersion(29)
-        versionCode = 1
-        versionName = "1.0"
+        //versionCode = 1
+        //versionName = "1.0"
     }
     buildTypes {
         getByName("release") {

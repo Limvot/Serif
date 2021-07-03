@@ -16,8 +16,8 @@ pluginManagement {
 rootProject.name = "Serif"
 
 
-include(":serif_cli")
 include(":serif_swing")
+//include(":Jetchat")
 include(":serif_android")
 include(":serif_shared")
 
