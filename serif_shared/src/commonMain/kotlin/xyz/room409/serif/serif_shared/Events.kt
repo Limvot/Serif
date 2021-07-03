@@ -157,6 +157,10 @@ class RedactionRMEC(
     constructor(reason:String) : this(msgtype = "m.room.redaction", body = "", reason = reason)
 }
 @Serializable
+class RedactionBody(
+    val reason : String
+)
+@Serializable
 class TextRMEC(
     override val body: String = "<missing message body, likely redacted>",
     override val msgtype: String = "<missing type, likely redacted>",

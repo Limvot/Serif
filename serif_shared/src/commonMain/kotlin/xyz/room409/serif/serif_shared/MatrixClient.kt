@@ -174,7 +174,11 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         try {
             val result = runBlocking {
                 val redaction_confirmation =
-                        client.put<EventIdResponse>("$server/_matrix/client/r0/rooms/$roomID/redact/$eventID/$transactionId?access_token=$access_token")
+
+                        client.put<EventIdResponse>("$server/_matrix/client/r0/rooms/$roomID/redact/$eventID/$transactionId?access_token=$access_token") {
+                            contentType(ContentType.Application.Json)
+                            body = RedactionBody(reason = "User Sent")
+                                }
                 transactionId++
                 Database.updateSession(access_token, transactionId)
                 redaction_confirmation

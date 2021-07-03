@@ -439,6 +439,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
                 val confirm_btn = JButton("Yes")
                 confirm_btn.addActionListener({
+                    m.sendRedaction(msg.id)
                     dialog.setVisible(false)
                     dialog.dispose()
                 })
