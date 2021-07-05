@@ -48,6 +48,8 @@ dependencies {
     implementation("androidx.navigation:navigation-fragment-ktx:2.3.4")
     implementation("com.google.accompanist:accompanist-insets:0.13.0")
 
+    // My new
+    implementation("com.google.accompanist:accompanist-coil:0.13.0")
 
 }
 

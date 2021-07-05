@@ -70,11 +70,18 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     // Intercepts back navigation when the drawer is open
+                    val roomPath by viewModel.roomPath.collectAsState()
                     val scope = rememberCoroutineScope()
                     if (scaffoldState.drawerState.isOpen) {
                         BackPressHandler {
                             scope.launch {
                                 scaffoldState.drawerState.close()
+                            }
+                        }
+                    } else if (roomPath.size > 0) {
+                        BackPressHandler {
+                            scope.launch {
+                                viewModel.exitRoom()
                             }
                         }
                     }

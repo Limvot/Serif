@@ -33,7 +33,6 @@ import androidx.fragment.app.activityViewModels
 import androidx.navigation.findNavController
 import xyz.room409.serif.serif_android.MainViewModel
 import xyz.room409.serif.serif_android.R
-import xyz.room409.serif.serif_android.data.exampleUiState
 import xyz.room409.serif.serif_android.theme.JetchatTheme
 import com.google.accompanist.insets.ExperimentalAnimatedInsets
 import com.google.accompanist.insets.LocalWindowInsets
@@ -70,11 +69,9 @@ class ConversationFragment : Fragment() {
                     val messages by activityViewModel.messages.collectAsState()
                     ConversationContent(
                         //uiState = exampleUiState,
-                        uiState = ConversationUiState("woo", 12, listOf(Message(
-                            "milo",
-                            "YOU KNOW IT BABY5",
-                            "nowish"
-                        )) + messages.map { Message(it.sender, it.message, "${it.timestamp}") }),
+                        uiState = ConversationUiState("woo", 12, messages.reversed()),
+                        sendMessage = { message -> activityViewModel.sendMessage(message); },
+                        navigateToRoom = { room -> activityViewModel.navigateToRoom(room); },
                         navigateToProfile = { user ->
                             // Click callback
                             val bundle = bundleOf("userId" to user)

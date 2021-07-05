@@ -73,14 +73,18 @@ import androidx.compose.ui.unit.dp
 import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
 import xyz.room409.serif.serif_android.R
 import xyz.room409.serif.serif_android.components.JetchatAppBar
-import xyz.room409.serif.serif_android.data.exampleUiState
 import xyz.room409.serif.serif_android.theme.JetchatTheme
 import xyz.room409.serif.serif_android.theme.elevatedSurface
 import com.google.accompanist.insets.LocalWindowInsets
 import com.google.accompanist.insets.navigationBarsWithImePadding
 import com.google.accompanist.insets.rememberInsetsPaddingValues
 import com.google.accompanist.insets.statusBarsPadding
+import com.google.accompanist.coil.rememberCoilPainter
 import kotlinx.coroutines.launch
+import xyz.room409.serif.serif_shared.SharedUiImgMessage
+import xyz.room409.serif.serif_shared.SharedUiMessage
+import xyz.room409.serif.serif_shared.SharedUiRoom
+import java.io.File
 
 /**
  * Entry point for a conversation screen.
@@ -93,6 +97,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun ConversationContent(
     uiState: ConversationUiState,
+    sendMessage: (String) -> Unit,
+    navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
     modifier: Modifier = Modifier,
     onNavIconPressed: () -> Unit = { }
@@ -108,16 +114,13 @@ fun ConversationContent(
             Column(Modifier.fillMaxSize()) {
                 Messages(
                     messages = uiState.messages,
+                    navigateToRoom = navigateToRoom,
                     navigateToProfile = navigateToProfile,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
                 UserInput(
-                    onMessageSent = { content ->
-                        uiState.addMessage(
-                            Message(authorMe, content, timeNow)
-                        )
-                    },
+                    onMessageSent = sendMessage,
                     resetScroll = {
                         scope.launch {
                             scrollState.scrollToItem(0)
@@ -202,7 +205,8 @@ const val ConversationTestTag = "ConversationTestTag"
 
 @Composable
 fun Messages(
-    messages: List<Message>,
+    messages: List<SharedUiMessage>,
+    navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
     scrollState: LazyListState,
     modifier: Modifier = Modifier
@@ -226,11 +230,11 @@ fun Messages(
                 .fillMaxSize()
         ) {
             for (index in messages.indices) {
-                val prevAuthor = messages.getOrNull(index - 1)?.author
-                val nextAuthor = messages.getOrNull(index + 1)?.author
+                val prevAuthor = messages.getOrNull(index - 1)?.sender
+                val nextAuthor = messages.getOrNull(index + 1)?.sender
                 val content = messages[index]
-                val isFirstMessageByAuthor = prevAuthor != content.author
-                val isLastMessageByAuthor = nextAuthor != content.author
+                val isFirstMessageByAuthor = prevAuthor != content.sender
+                val isLastMessageByAuthor = nextAuthor != content.sender
 
                 // Hardcode day dividers for simplicity
                 if (index == messages.size - 1) {
@@ -245,9 +249,10 @@ fun Messages(
 
                 item {
                     Message(
+                        onRoomClick = navigateToRoom,
                         onAuthorClick = { name -> navigateToProfile(name) },
                         msg = content,
-                        isUserMe = content.author == authorMe,
+                        isUserMe = content.sender == authorMe,
                         isFirstMessageByAuthor = isFirstMessageByAuthor,
                         isLastMessageByAuthor = isLastMessageByAuthor
                     )
@@ -284,8 +289,9 @@ fun Messages(
 
 @Composable
 fun Message(
+    onRoomClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit,
-    msg: Message,
+    msg: SharedUiMessage,
     isUserMe: Boolean,
     isFirstMessageByAuthor: Boolean,
     isLastMessageByAuthor: Boolean
@@ -302,14 +308,14 @@ fun Message(
             // Avatar
             Image(
                 modifier = Modifier
-                    .clickable(onClick = { onAuthorClick(msg.author) })
+                    .clickable(onClick = { onAuthorClick(msg.sender) })
                     .padding(horizontal = 16.dp)
                     .size(42.dp)
                     .border(1.5.dp, borderColor, CircleShape)
                     .border(3.dp, MaterialTheme.colors.surface, CircleShape)
                     .clip(CircleShape)
                     .align(Alignment.Top),
-                painter = painterResource(id = msg.authorImage),
+                painter = painterResource(id = R.drawable.someone_else),
                 contentScale = ContentScale.Crop,
                 contentDescription = null,
             )
@@ -321,6 +327,7 @@ fun Message(
             msg = msg,
             isFirstMessageByAuthor = isFirstMessageByAuthor,
             isLastMessageByAuthor = isLastMessageByAuthor,
+            roomClicked = onRoomClick,
             authorClicked = onAuthorClick,
             modifier = Modifier
                 .padding(end = 16.dp)
@@ -331,9 +338,10 @@ fun Message(
 
 @Composable
 fun AuthorAndTextMessage(
-    msg: Message,
+    msg: SharedUiMessage,
     isFirstMessageByAuthor: Boolean,
     isLastMessageByAuthor: Boolean,
+    roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -341,7 +349,7 @@ fun AuthorAndTextMessage(
         if (isLastMessageByAuthor) {
             AuthorNameTimestamp(msg)
         }
-        ChatItemBubble(msg, isFirstMessageByAuthor, authorClicked = authorClicked)
+        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -353,11 +361,11 @@ fun AuthorAndTextMessage(
 }
 
 @Composable
-private fun AuthorNameTimestamp(msg: Message) {
+private fun AuthorNameTimestamp(msg: SharedUiMessage) {
     // Combine author and timestamp for a11y.
     Row(modifier = Modifier.semantics(mergeDescendants = true) {}) {
         Text(
-            text = msg.author,
+            text = msg.sender,
             style = MaterialTheme.typography.subtitle1,
             modifier = Modifier
                 .alignBy(LastBaseline)
@@ -366,7 +374,7 @@ private fun AuthorNameTimestamp(msg: Message) {
         Spacer(modifier = Modifier.width(8.dp))
         CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
             Text(
-                text = msg.timestamp,
+                text = "${msg.timestamp}",
                 style = MaterialTheme.typography.caption,
                 modifier = Modifier.alignBy(LastBaseline)
             )
@@ -408,8 +416,9 @@ private fun RowScope.DayHeaderLine() {
 
 @Composable
 fun ChatItemBubble(
-    message: Message,
+    message: SharedUiMessage,
     lastMessageByAuthor: Boolean,
+    roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit
 ) {
 
@@ -425,15 +434,15 @@ fun ChatItemBubble(
         Surface(color = backgroundBubbleColor, shape = bubbleShape) {
             ClickableMessage(
                 message = message,
+                roomClicked = roomClicked,
                 authorClicked = authorClicked
             )
         }
-
-        message.image?.let {
+        if (message is SharedUiImgMessage) {
             Spacer(modifier = Modifier.height(4.dp))
             Surface(color = backgroundBubbleColor, shape = bubbleShape) {
                 Image(
-                    painter = painterResource(it),
+                    painter = rememberCoilPainter(File(message.url)),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.size(160.dp),
                     contentDescription = stringResource(id = R.string.attached_image)
@@ -444,53 +453,32 @@ fun ChatItemBubble(
 }
 
 @Composable
-fun ClickableMessage(message: Message, authorClicked: (String) -> Unit) {
+fun ClickableMessage(message: SharedUiMessage, roomClicked: (String) -> Unit, authorClicked: (String) -> Unit) {
     val uriHandler = LocalUriHandler.current
 
-    val styledMessage = messageFormatter(text = message.content)
+    val styledMessage = messageFormatter(text = message.message)
 
     ClickableText(
         text = styledMessage,
         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
         modifier = Modifier.padding(8.dp),
         onClick = {
-            styledMessage
-                .getStringAnnotations(start = it, end = it)
-                .firstOrNull()
-                ?.let { annotation ->
-                    when (annotation.tag) {
-                        SymbolAnnotationType.LINK.name -> uriHandler.openUri(annotation.item)
-                        SymbolAnnotationType.PERSON.name -> authorClicked(annotation.item)
-                        else -> Unit
+            if (message is SharedUiRoom) {
+                roomClicked(message.id)
+            } else {
+                styledMessage
+                    .getStringAnnotations(start = it, end = it)
+                    .firstOrNull()
+                    ?.let { annotation ->
+                        when (annotation.tag) {
+                            SymbolAnnotationType.LINK.name -> uriHandler.openUri(annotation.item)
+                            SymbolAnnotationType.PERSON.name -> authorClicked(annotation.item)
+                            else -> Unit
+                        }
                     }
-                }
+            }
         }
     )
-}
-
-@Preview
-@Composable
-fun ConversationPreview() {
-    JetchatTheme {
-        ConversationContent(
-            uiState = exampleUiState,
-            navigateToProfile = { }
-        )
-    }
-}
-
-@Preview
-@Composable
-fun channelBarPrev() {
-    JetchatTheme {
-        ChannelNameBar(channelName = "composers", channelMembers = 52)
-    }
-}
-
-@Preview
-@Composable
-fun DayHeaderPrev() {
-    DayHeader("Aug 6")
 }
 
 private val JumpToBottomThreshold = 56.dp

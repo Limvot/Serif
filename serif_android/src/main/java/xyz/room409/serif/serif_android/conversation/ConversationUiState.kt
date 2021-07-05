@@ -19,19 +19,16 @@ package xyz.room409.serif.serif_android.conversation
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.mutableStateListOf
 import xyz.room409.serif.serif_android.R
+import xyz.room409.serif.serif_shared.SharedUiMessage
 
 class ConversationUiState(
     val channelName: String,
     val channelMembers: Int,
-    initialMessages: List<Message>
+    initialMessages: List<SharedUiMessage>
 ) {
-    private val _messages: MutableList<Message> =
+    private val _messages: MutableList<SharedUiMessage> =
         mutableStateListOf(*initialMessages.toTypedArray())
-    val messages: List<Message> = _messages
-
-    fun addMessage(msg: Message) {
-        _messages.add(msg)
-    }
+    val messages: List<SharedUiMessage> = _messages
 }
 
 @Immutable

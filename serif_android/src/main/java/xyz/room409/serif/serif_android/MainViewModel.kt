@@ -31,54 +31,83 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var m: MatrixState
     private val _messages: MutableStateFlow<List<SharedUiMessage>> = MutableStateFlow(listOf())
     val messages: StateFlow<List<SharedUiMessage>> = _messages
+    private val _roomPath: MutableStateFlow<List<String>> = MutableStateFlow(listOf())
+    val roomPath: StateFlow<List<String>> = _roomPath
     init {
         // small hack
         if (Database.db == null) {
             Database.initDb(DriverFactory(application))
         }
+        Platform.context = application
         m = MatrixLogin()
-        var messageOne = "nothing"
+        val on_refresh: () -> Unit = {
+            m = m.refresh()
+            refresh()
+        }
         when (val _m = m) {
             is MatrixLogin -> {
-                m = _m.login("<>>", "<>>") {
-                    m = m.refresh()
-                    when (val _m = m) {
-                        is MatrixLogin -> {
-                            _messages.value = listOf(
-                                SharedUiMessagePlain("a",_m.login_message + " cont","c",1,mapOf(),null),
-                            )
-                        }
-                        is MatrixChatRoom -> {
-                            _messages.value = _m.messages;
-                        }
-                    }
+                val sessions = _m.getSessions()
+                if (sessions.size > 0) {
+                    m = _m.loginFromSession(sessions[0], on_refresh)
+                } else {
+                    m = _m.login("testuser", "keyboardcowpeople", on_refresh)
                 }
+                refresh()
             }
             else -> {
-                messageOne = "hmmm2"
+                status_message("Tried to login from not Matrixlogin, impossible")
             }
         }
-        var messageTwo = "nothing"
+    }
+    fun refresh() {
+        when (val _m = m) {
+            is MatrixLogin -> {
+                status_message(_m.login_message)
+            }
+            is MatrixChatRoom -> {
+                _messages.value = _m.messages
+                _roomPath.value = _m.room_ids
+            }
+        }
+    }
+    fun status_message(message: String) {
+        _messages.value = listOf(SharedUiMessagePlain("System Status",message,"c",1,mapOf(),null))
+    }
+    fun sendMessage(message: String) {
         when (val _m = m) {
             is MatrixChatRoom -> {
-                _messages.value = _m.messages;
-            }
-            is MatrixLogin -> {
-                messageTwo = _m.login_message
+                _m.sendMessage(message)
             }
             else -> {
-                messageTwo = "hmmmm2"
+                status_message("Tried to send message not on a room")
             }
         }
-        _messages.value = listOf(
-            SharedUiMessagePlain("a",messageOne,"c",1,mapOf(),null),
-            SharedUiMessagePlain("a",messageTwo,"c",1,mapOf(),null),
-        )
+    }
+    fun navigateToRoom(id: String) {
+        when (val _m = m) {
+            is MatrixChatRoom -> {
+                m = _m.getRoom(id)
+                refresh()
+            }
+            else -> {
+                status_message("Tried to navigate on not a chat room")
+            }
+        }
+    }
+    fun exitRoom() {
+        when (val _m = m) {
+            is MatrixChatRoom -> {
+                m = _m.exitRoom()
+                refresh()
+            }
+            else -> {
+                status_message("Tried to exit on not a chat room")
+            }
+        }
     }
 
     private val _drawerShouldBeOpened = MutableStateFlow(false)
     val drawerShouldBeOpened: StateFlow<Boolean> = _drawerShouldBeOpened
-
     fun openDrawer() {
         _drawerShouldBeOpened.value = true
     }

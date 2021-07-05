@@ -5,7 +5,7 @@ import kotlin.math.*
 sealed class MatrixState {
     val version: String
         get() {
-            return "Serif Matrix client, pre-alpha on ${Platform().platform}"
+            return "Serif Matrix client, pre-alpha on ${Platform.platform}"
         }
     abstract fun refresh(): MatrixState
 }

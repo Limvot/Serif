@@ -1,5 +1,8 @@
 package xyz.room409.serif.serif_shared
 
-expect class Platform() {
+import java.io.File
+
+expect object Platform {
     val platform: String
+    fun getFile(): File
 }
