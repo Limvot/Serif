@@ -37,9 +37,17 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-rxjava2:1.0.0-rc01")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.3.1")
     implementation("androidx.activity:activity-compose:1.3.0-alpha06")
+    implementation("androidx.navigation:navigation-runtime-ktx:2.3.5")
 
     // UI Tests
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.0.0-rc01")
+
+    // More from JetChat
+    implementation("androidx.compose.ui:ui-viewbinding:1.0.0-rc01")
+    implementation("androidx.compose.ui:ui-util:1.0.0-rc01")
+    implementation("androidx.navigation:navigation-fragment-ktx:2.3.4")
+    implementation("com.google.accompanist:accompanist-insets:0.13.0")
+
 
 }
 
@@ -58,6 +66,7 @@ android {
     buildFeatures {
         // Enables Jetpack Compose for this module
         compose = true
+        viewBinding = true
     }
     buildTypes {
         getByName("release") {
