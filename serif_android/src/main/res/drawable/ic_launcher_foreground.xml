@@ -29,25 +29,19 @@
           android:endY="125.024"
           android:endX="68.6386"
           android:type="linear">
-        <item android:offset="0" android:color="#FF0037E6"/>
-        <item android:offset="0.5" android:color="#FF0540F2"/>
+        <item android:offset="0" android:color="#FFFF7777"/>
+        <item android:offset="0.5" android:color="#FF000000"/>
       </gradient>
     </aapt:attr>
   </path>
   <path
       android:pathData="M54.621,49.266C54.621,46.01 57.26,43.371 60.516,43.371H69.105C72.361,43.371 75,46.01 75,49.266V49.266C75,52.521 72.361,55.161 69.105,55.161H60.516C57.26,55.161 54.621,52.521 54.621,49.266V49.266Z"
-      android:fillColor="#F3B711"/>
-  <path
-      android:pathData="M66.916,43.371C66.916,43.371 66.916,43.371 66.916,43.371C66.916,46.627 64.277,49.266 61.021,49.266H54.621C54.621,49.266 54.621,49.266 54.621,49.266C54.621,46.01 57.26,43.371 60.516,43.371H66.916Z"
-      android:fillColor="#ffffff"
-      android:fillType="evenOdd"/>
+      android:fillColor="#FFB755"/>
+
   <path
       android:pathData="M35,61.055C35,57.799 37.639,55.16 40.895,55.16H49.653C52.908,55.16 55.547,57.799 55.547,61.055V61.055C55.547,64.311 52.908,66.95 49.653,66.95H40.895C37.639,66.95 35,64.311 35,61.055V61.055Z"
       android:fillColor="#ffffff"/>
-  <path
-      android:pathData="M55.547,61.055C55.547,61.055 55.547,61.055 55.547,61.055C55.547,64.311 52.908,66.95 49.653,66.95H42.832C42.832,66.95 42.832,66.95 42.832,66.949C42.832,63.694 45.471,61.055 48.726,61.055H55.547Z"
-      android:fillColor="#F3B711"
-      android:fillType="evenOdd"/>
+
   <path
       android:pathData="M59,66.949C59,63.694 61.639,61.055 64.895,61.055V61.055C68.15,61.055 70.789,63.694 70.789,66.949V66.949C70.789,70.205 68.15,72.844 64.895,72.844V72.844C61.639,72.844 59,70.205 59,66.949V66.949Z"
       android:fillColor="#F3B711"/>

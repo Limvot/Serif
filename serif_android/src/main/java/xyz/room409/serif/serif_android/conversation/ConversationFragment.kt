@@ -65,11 +65,12 @@ class ConversationFragment : Fragment() {
                 LocalBackPressedDispatcher provides requireActivity().onBackPressedDispatcher,
                 LocalWindowInsets provides windowInsets,
             ) {
-                JetchatTheme {
+                JetchatTheme(false) {
+                    val roomName by activityViewModel.roomName.collectAsState()
+                    val ourUserId by activityViewModel.ourUserId.collectAsState()
                     val messages by activityViewModel.messages.collectAsState()
                     ConversationContent(
-                        //uiState = exampleUiState,
-                        uiState = ConversationUiState("woo", 12, messages.reversed()),
+                        uiState = ConversationUiState(roomName, ourUserId, 12, messages.reversed()),
                         sendMessage = { message -> activityViewModel.sendMessage(message); },
                         navigateToRoom = { room -> activityViewModel.navigateToRoom(room); },
                         navigateToProfile = { user ->

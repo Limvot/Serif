@@ -85,6 +85,8 @@ import xyz.room409.serif.serif_shared.SharedUiImgMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
 import java.io.File
+import java.text.DateFormat
+import java.util.*
 
 /**
  * Entry point for a conversation screen.
@@ -103,9 +105,6 @@ fun ConversationContent(
     modifier: Modifier = Modifier,
     onNavIconPressed: () -> Unit = { }
 ) {
-    val authorMe = stringResource(R.string.author_me)
-    val timeNow = stringResource(id = R.string.now)
-
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -114,6 +113,7 @@ fun ConversationContent(
             Column(Modifier.fillMaxSize()) {
                 Messages(
                     messages = uiState.messages,
+                    ourUserId = uiState.ourUserId,
                     navigateToRoom = navigateToRoom,
                     navigateToProfile = navigateToProfile,
                     modifier = Modifier.weight(1f),
@@ -206,6 +206,7 @@ const val ConversationTestTag = "ConversationTestTag"
 @Composable
 fun Messages(
     messages: List<SharedUiMessage>,
+    ourUserId: String,
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
     scrollState: LazyListState,
@@ -214,7 +215,6 @@ fun Messages(
     val scope = rememberCoroutineScope()
     Box(modifier = modifier) {
 
-        val authorMe = stringResource(id = R.string.author_me)
         LazyColumn(
             reverseLayout = true,
             state = scrollState,
@@ -236,14 +236,16 @@ fun Messages(
                 val isFirstMessageByAuthor = prevAuthor != content.sender
                 val isLastMessageByAuthor = nextAuthor != content.sender
 
-                // Hardcode day dividers for simplicity
-                if (index == messages.size - 1) {
-                    item {
-                        DayHeader("20 Aug")
-                    }
-                } else if (index == 2) {
-                    item {
-                        DayHeader("Today")
+                val df = DateFormat.getDateInstance()
+                val prevTimestamp = messages.getOrNull(index-1)?.timestamp?.let {
+                    df.format(Date(it))
+                }
+                if (prevTimestamp != null) {
+                    val newTimestamp = df.format(Date(content.timestamp))
+                    if (prevTimestamp != newTimestamp) {
+                        item {
+                            DayHeader(prevTimestamp)
+                        }
                     }
                 }
 
@@ -252,7 +254,7 @@ fun Messages(
                         onRoomClick = navigateToRoom,
                         onAuthorClick = { name -> navigateToProfile(name) },
                         msg = content,
-                        isUserMe = content.sender == authorMe,
+                        isUserMe = content.sender == ourUserId,
                         isFirstMessageByAuthor = isFirstMessageByAuthor,
                         isLastMessageByAuthor = isLastMessageByAuthor
                     )
@@ -374,7 +376,7 @@ private fun AuthorNameTimestamp(msg: SharedUiMessage) {
         Spacer(modifier = Modifier.width(8.dp))
         CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
             Text(
-                text = "${msg.timestamp}",
+                text = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(msg.timestamp)),
                 style = MaterialTheme.typography.caption,
                 modifier = Modifier.alignBy(LastBaseline)
             )

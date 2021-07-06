@@ -31,14 +31,11 @@
             android:endY="125.024"
             android:endX="68.6386"
             android:type="linear">
-          <item android:offset="0" android:color="#FF0037E6"/>
-          <item android:offset="0.5" android:color="#FF0540F2"/>
+          <item android:offset="0" android:color="#FFFF7777"/>
+          <item android:offset="0.5" android:color="#FF000000"/>
         </gradient>
       </aapt:attr>
     </path>
-    <path
-        android:pathData="M54.621,49.266C54.621,46.01 57.26,43.371 60.516,43.371H69.105C72.361,43.371 75,46.01 75,49.266V49.266C75,52.521 72.361,55.161 69.105,55.161H60.516C57.26,55.161 54.621,52.521 54.621,49.266V49.266Z"
-        android:fillColor="#F3B711"/>
     <path
         android:pathData="M66.916,43.371C66.916,43.371 66.916,43.371 66.916,43.371C66.916,46.627 64.277,49.266 61.021,49.266H54.621C54.621,49.266 54.621,49.266 54.621,49.266C54.621,46.01 57.26,43.371 60.516,43.371H66.916Z"
         android:fillColor="#ffffff"

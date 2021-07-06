@@ -311,7 +311,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
                     highlightCount=unread_highlight,
                     lastMessage=last_event_id?.let { toSharedUiMessageList(msession, username, id, 0, it, 0, false).first.firstOrNull() }
                 ))
-            }.sortedBy { -(it.second.lastMessage?.timestamp ?: 0) }.partition { msession.getRoomType(it.second.id) == "m.space" }
+            }.sortedBy { (it.second.lastMessage?.timestamp ?: 0) }.partition { msession.getRoomType(it.second.id) == "m.space" }
             if (room_id == "All Rooms") {
                 rooms.map { it.second }
             } else {
@@ -351,16 +351,16 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
                     resolveSpace(space_id)
                 }
                 if (room_id == "Room List") {
-                    listOf(SharedUiRoom(
+                    spaces.keys.filter { id -> !childrenSet.contains(id) }.map { liveMap[it]!! }.sortedBy { (it.lastMessage?.timestamp ?: 0) } + listOf(SharedUiRoom(
                         id="All Rooms",
                         message="All Rooms",
                         unreadCount=0,
                         highlightCount=0,
                         lastMessage=null
-                    )) + spaces.keys.filter { id -> !childrenSet.contains(id) }.map { liveMap[it]!! }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
+                    ))
                 } else {
                     // it's a space! Grab this one from the liveMap and sort it
-                    spaceChildren[room_id]!!.map { liveMap[it]!! }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
+                    spaceChildren[room_id]!!.map { liveMap[it]!! }.sortedBy { (it.lastMessage?.timestamp ?: 0) }
                 }
             }
         } else {

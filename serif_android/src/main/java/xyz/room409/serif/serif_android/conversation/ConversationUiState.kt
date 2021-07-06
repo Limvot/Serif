@@ -23,6 +23,7 @@ import xyz.room409.serif.serif_shared.SharedUiMessage
 
 class ConversationUiState(
     val channelName: String,
+    val ourUserId: String,
     val channelMembers: Int,
     initialMessages: List<SharedUiMessage>
 ) {
@@ -37,5 +38,5 @@ data class Message(
     val content: String,
     val timestamp: String,
     val image: Int? = null,
-    val authorImage: Int = if (author == "me") R.drawable.ali else R.drawable.someone_else
+    val authorImage: Int = R.drawable.someone_else
 )

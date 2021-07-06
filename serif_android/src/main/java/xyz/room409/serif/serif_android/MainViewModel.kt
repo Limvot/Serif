@@ -23,16 +23,23 @@ import kotlinx.coroutines.flow.StateFlow
 
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
+import java.util.*
 
 /**
  * Used to communicate between screens.
  */
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var m: MatrixState
+    private var username: String? = null
+    private var password: String? = null
+    private val _ourUserId: MutableStateFlow<String> = MutableStateFlow("")
+    val ourUserId: StateFlow<String> = _ourUserId
     private val _messages: MutableStateFlow<List<SharedUiMessage>> = MutableStateFlow(listOf())
     val messages: StateFlow<List<SharedUiMessage>> = _messages
     private val _roomPath: MutableStateFlow<List<String>> = MutableStateFlow(listOf())
     val roomPath: StateFlow<List<String>> = _roomPath
+    private val _roomName: MutableStateFlow<String> = MutableStateFlow("<>")
+    val roomName: StateFlow<String> = _roomName
     init {
         // small hack
         if (Database.db == null) {
@@ -40,46 +47,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         Platform.context = application
         m = MatrixLogin()
-        val on_refresh: () -> Unit = {
-            m = m.refresh()
-            refresh()
-        }
-        when (val _m = m) {
-            is MatrixLogin -> {
-                val sessions = _m.getSessions()
-                if (sessions.size > 0) {
-                    m = _m.loginFromSession(sessions[0], on_refresh)
-                } else {
-                    m = _m.login("testuser", "keyboardcowpeople", on_refresh)
-                }
-                refresh()
-            }
-            else -> {
-                status_message("Tried to login from not Matrixlogin, impossible")
-            }
-        }
+        refresh()
     }
     fun refresh() {
         when (val _m = m) {
             is MatrixLogin -> {
-                status_message(_m.login_message)
+                val milli = Date().getTime()
+                var fake_messages: List<SharedUiMessage> = listOf(SharedUiMessagePlain("System Status",_m.login_message,"a",milli,mapOf(),null))
+                fake_messages += _m.getSessions().map { SharedUiRoom("System Status", "Session: $it",it,milli,mapOf(),null, 0, 0, null) }
+                if (username != null) {
+                    fake_messages += listOf(SharedUiMessagePlain("You", username!!,"b",milli,mapOf(),null))
+                }
+                if (password != null) {
+                    fake_messages += listOf(SharedUiMessagePlain("You", password!!,"c",milli,mapOf(),null))
+                }
+                _messages.value = fake_messages
+                _roomPath.value = listOf()
+                _roomName.value = "Login"
             }
             is MatrixChatRoom -> {
                 _messages.value = _m.messages
                 _roomPath.value = _m.room_ids
+                _roomName.value = _m.name
+                _ourUserId.value = _m.username
             }
         }
     }
     fun status_message(message: String) {
-        _messages.value = listOf(SharedUiMessagePlain("System Status",message,"c",1,mapOf(),null))
+        _messages.value = listOf(SharedUiMessagePlain("System Status",message,"c",Date().getTime(),mapOf(),null))
     }
     fun sendMessage(message: String) {
         when (val _m = m) {
             is MatrixChatRoom -> {
                 _m.sendMessage(message)
             }
-            else -> {
-                status_message("Tried to send message not on a room")
+            is MatrixLogin -> {
+                if (username == null) {
+                    username = message
+                } else if (password == null) {
+                    password = message
+                    m = _m.login(username!!, password!!) {
+                        m = m.refresh()
+                        refresh()
+                    }
+                    username = null
+                    password = null
+                }
+                refresh()
             }
         }
     }
@@ -88,6 +102,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             is MatrixChatRoom -> {
                 m = _m.getRoom(id)
                 refresh()
+            }
+            is MatrixLogin -> {
+                if (_m.getSessions().contains(id)) {
+                    m = _m.loginFromSession(id) {
+                        m = m.refresh()
+                        refresh()
+                    }
+                    refresh()
+                }
             }
             else -> {
                 status_message("Tried to navigate on not a chat room")
