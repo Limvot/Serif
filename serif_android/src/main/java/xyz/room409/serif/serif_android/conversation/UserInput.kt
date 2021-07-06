@@ -112,15 +112,11 @@ enum class EmojiStickerSelector {
     STICKER
 }
 
-@Preview
-@Composable
-fun UserInputPreview() {
-    UserInput(onMessageSent = {})
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun UserInput(
+    roomName: String,
     onMessageSent: (String) -> Unit,
     modifier: Modifier = Modifier,
     resetScroll: () -> Unit = {},
@@ -141,6 +137,7 @@ fun UserInput(
     Column(modifier) {
         Divider()
         UserInputText(
+            roomName = roomName,
             textFieldValue = textState,
             onTextChanged = { textState = it },
             // Only show the keyboard if there's no input selector and text field has focus
@@ -376,6 +373,7 @@ var SemanticsPropertyReceiver.keyboardShownProperty by KeyboardShownKey
 @ExperimentalFoundationApi
 @Composable
 private fun UserInputText(
+    roomName: String,
     keyboardType: KeyboardType = KeyboardType.Text,
     onTextChanged: (TextFieldValue) -> Unit,
     textFieldValue: TextFieldValue,
@@ -431,7 +429,7 @@ private fun UserInputText(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .padding(start = 16.dp),
-                        text = stringResource(id = R.string.textfield_hint),
+                        text = "Message $roomName",
                         style = MaterialTheme.typography.body1.copy(color = disableContentColor)
                     )
                 }

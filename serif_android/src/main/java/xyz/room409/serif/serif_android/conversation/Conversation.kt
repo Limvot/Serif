@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,14 +49,7 @@ import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,18 +62,20 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
 import xyz.room409.serif.serif_android.R
 import xyz.room409.serif.serif_android.components.JetchatAppBar
-import xyz.room409.serif.serif_android.theme.JetchatTheme
 import xyz.room409.serif.serif_android.theme.elevatedSurface
 import com.google.accompanist.insets.LocalWindowInsets
 import com.google.accompanist.insets.navigationBarsWithImePadding
 import com.google.accompanist.insets.rememberInsetsPaddingValues
 import com.google.accompanist.insets.statusBarsPadding
 import com.google.accompanist.coil.rememberCoilPainter
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
@@ -99,6 +95,7 @@ import java.util.*
 @Composable
 fun ConversationContent(
     uiState: ConversationUiState,
+    bumpWindowBase: (Int?) -> Unit,
     sendMessage: (String) -> Unit,
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
@@ -114,12 +111,14 @@ fun ConversationContent(
                 Messages(
                     messages = uiState.messages,
                     ourUserId = uiState.ourUserId,
+                    bumpWindowBase = bumpWindowBase,
                     navigateToRoom = navigateToRoom,
                     navigateToProfile = navigateToProfile,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
                 UserInput(
+                    uiState.channelName,
                     onMessageSent = sendMessage,
                     resetScroll = {
                         scope.launch {
@@ -140,6 +139,18 @@ fun ConversationContent(
                 modifier = Modifier.statusBarsPadding(),
             )
         }
+    }
+
+    // Shift our window
+    LaunchedEffect(scrollState) {
+        snapshotFlow { scrollState.firstVisibleItemIndex }
+            .map { index -> if (index > ((scrollState.layoutInfo.totalItemsCount * 3) / 4)) { 1 } else if (index < ((scrollState.layoutInfo.totalItemsCount * 1) / 4)) { -1 } else { 0 } }
+            //.distinctUntilChanged()
+            .filter { it != 0 }
+            .collect {
+                println("LOOKING TO BUMP $it - ${scrollState.firstVisibleItemIndex} / ${scrollState.layoutInfo.totalItemsCount}")
+                bumpWindowBase(scrollState.firstVisibleItemIndex)
+            }
     }
 }
 
@@ -207,6 +218,7 @@ const val ConversationTestTag = "ConversationTestTag"
 fun Messages(
     messages: List<SharedUiMessage>,
     ourUserId: String,
+    bumpWindowBase: (Int?) -> Unit,
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
     scrollState: LazyListState,
@@ -230,6 +242,10 @@ fun Messages(
                 .fillMaxSize()
         ) {
             for (index in messages.indices) {
+            //itemsIndexed(
+            //    items = messages,
+            //    key = {i,x -> x.id}
+            //) { index, content ->
                 val prevAuthor = messages.getOrNull(index - 1)?.sender
                 val nextAuthor = messages.getOrNull(index + 1)?.sender
                 val content = messages[index]
@@ -240,16 +256,18 @@ fun Messages(
                 val prevTimestamp = messages.getOrNull(index-1)?.timestamp?.let {
                     df.format(Date(it))
                 }
+
                 if (prevTimestamp != null) {
                     val newTimestamp = df.format(Date(content.timestamp))
                     if (prevTimestamp != newTimestamp) {
-                        item {
+                        item(content.id + prevTimestamp) {
                             DayHeader(prevTimestamp)
                         }
                     }
                 }
 
-                item {
+
+                item(content.id) {
                     Message(
                         onRoomClick = navigateToRoom,
                         onAuthorClick = { name -> navigateToProfile(name) },
@@ -281,6 +299,7 @@ fun Messages(
             enabled = jumpToBottomButtonEnabled,
             onClicked = {
                 scope.launch {
+                    bumpWindowBase(null)
                     scrollState.animateScrollToItem(0)
                 }
             },

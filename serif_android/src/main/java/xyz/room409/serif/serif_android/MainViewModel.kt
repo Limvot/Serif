@@ -128,6 +128,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+    fun bumpWindow(id: String?) {
+        when (val _m = m) {
+            is MatrixChatRoom -> {
+                //m = _m.refresh(_m.window_back_length, id, _m.window_forward_length)
+                m = _m.refresh(20, id, 20)
+                refresh()
+            }
+            else -> {
+                status_message("Tried to exit on not a chat room")
+            }
+        }
+    }
 
     private val _drawerShouldBeOpened = MutableStateFlow(false)
     val drawerShouldBeOpened: StateFlow<Boolean> = _drawerShouldBeOpened

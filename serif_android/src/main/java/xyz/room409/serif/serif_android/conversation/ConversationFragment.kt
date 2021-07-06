@@ -70,7 +70,8 @@ class ConversationFragment : Fragment() {
                     val ourUserId by activityViewModel.ourUserId.collectAsState()
                     val messages by activityViewModel.messages.collectAsState()
                     ConversationContent(
-                        uiState = ConversationUiState(roomName, ourUserId, 12, messages.reversed()),
+                        bumpWindowBase = { idx -> activityViewModel.bumpWindow(idx?.let { messages.reversed()[it].id }); },
+                        uiState = ConversationUiState(roomName, ourUserId, 0, messages.reversed()),
                         sendMessage = { message -> activityViewModel.sendMessage(message); },
                         navigateToRoom = { room -> activityViewModel.navigateToRoom(room); },
                         navigateToProfile = { user ->
