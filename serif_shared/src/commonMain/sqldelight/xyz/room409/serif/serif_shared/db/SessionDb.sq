@@ -53,6 +53,25 @@ selectCachedMedia:
 SELECT * FROM MediaCache
 WHERE mxcUrl = ?;
 
+CREATE TABLE IF NOT EXISTS ContactCache (
+ sender TEXT NOT NULL PRIMARY KEY,
+ displayName TEXT NOT NULL,
+ avatarUrl TEXT NOT NULL
+);
+
+insertContact:
+INSERT INTO ContactCache(sender, displayName, avatarUrl)
+VALUES(?,?,?);
+
+updateContact:
+UPDATE ContactCache
+SET displayName = ?, avatarUrl =?
+WHERE sender = ?;
+
+selectCachedContact:
+SELECT * FROM MediaCache
+WHERE sender = ?;
+
 deleteAllCache:
 DELETE FROM MediaCache;
 

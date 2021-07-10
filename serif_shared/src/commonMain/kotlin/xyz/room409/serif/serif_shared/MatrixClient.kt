@@ -96,6 +96,7 @@ inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as
 class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
     private var in_flight_media_requests: MutableSet<String> = mutableSetOf()
+    private var in_flight_user_requests: MutableSet<String> = mutableSetOf()
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
         // 30 seconds is Matrix recommended, afaik
@@ -310,6 +311,53 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             return sendMessageImpl(body, room_id)
         } catch (e: Exception) {
             return Error("Image Upload Failed", e)
+        }
+    }
+
+    fun getDiplayNameAndAvatarMedia(sender: String) Pair<String, String> {
+        val (displayname, avatar_url) = getLocalDisplayNameAndAvatarBySender(sender)
+        val avatar_media_path = getLocalMediaPathFromUrl(avatar_url) //TODO: parse for success/error
+        return Pair(displayname, avatar_media_path)
+    }
+
+    fun getLocalDisplayNameAndAvatarUrlBySender(sender: String): Pair<String, String> {
+        try {
+            val cached_media = Database.getUserDataFromCache(sender)
+            if (cached_user != null) {
+                return Success(cached_user)
+            }
+
+            synchronized(this) {
+                if (in_flight_user_requests.contains(sender)) {
+                    return Error("User request already in flight");
+                }
+                in_flight_user_requests.add(sender)
+            }
+            thread(start = true) {
+                //No valid cache hit
+                println("Background thread request for $sender")
+                val (displayname, avatar_url) = getUserProfile(sender)
+                val result = Database.addUserDataToCache(sender, displayname, avatar_url, false)
+                println("Finished downloading $sender in the background with $result")
+                synchronized(this) {
+                    in_flight_user_requests.remove(sender)
+                }
+                onUpdate()
+            }
+
+            println("Returning early, downloading $sender in the background")
+            return Error("Downloading user in the background")
+        } catch (e: Exception) {
+            println("Error with user retrieval $e")
+            return Error("User Retrieval Failed", e)
+        }
+    }
+
+    fun getUserProfile(sender: String): Pair<String,String> {
+        return runBlocking {
+            val user_profile_response =
+                    client.get<ProfileResponse>("$server/_matrix/client/r0/profile/$sender?access_token=$access_token")
+            Pair(user_profile_response.displayname, user_profile_response.avatar_url)
         }
     }
 
