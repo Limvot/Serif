@@ -672,6 +672,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     fun setRoomName(name: String) {
         room_name.setText("Room Name: $name")
     }
+    fun updatePinOptionText(event_id: String, menu_item: JMenuItem) {
+        val pin_str = if(m.pinned.contains(event_id)) { "Unpin" } else { "Pin" }
+        menu_item.setText(pin_str)
+    }
     val mk_sender = { msg: SharedUiMessage ->
         val render_text = { msg: SharedUiMessage ->
             if (msg.reactions.size > 0) {
