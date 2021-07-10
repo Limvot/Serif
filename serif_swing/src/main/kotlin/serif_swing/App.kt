@@ -505,7 +505,7 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
                         var sub_offset = sy
                         for (c in sub_components) {
                             if (e.point.y < sub_offset + c.height) {
-                                val new_e = MouseEvent(c, e.id, e.getWhen(), e.modifiers, e.x, e.y-sub_offset, e.xOnScreen, e.yOnScreen, e.clickCount, e.isPopupTrigger(), e.button)
+                                val new_e = MouseEvent(c, e.id, e.getWhen(), e.modifiers, e.x-indent, e.y-sub_offset, e.xOnScreen, e.yOnScreen, e.clickCount, e.isPopupTrigger(), e.button)
                                 // a hack so that stuff like buttons have a proper parent when the reply/edit menu pops up and uses it
                                 add(c)
                                 c.dispatchEvent(new_e)
@@ -586,11 +586,11 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
                     c.setSize(our_width, 1000)
                     val d = c.getPreferredSize()
                     if(c is JButton && (c as JButton).getText() == "...") {
-                        c.setSize(our_width-indent, d.height)
-                        c.setBounds(indent, our_height, our_width-indent, d.height)
-                    } else {
                         c.setSize(d.width, d.height)
                         c.setBounds(indent, our_height, d.width, d.height)
+                    } else {
+                        c.setSize(our_width-indent, d.height)
+                        c.setBounds(indent, our_height, our_width-indent, d.height)
                     }
                     height_delta += c.height
                 }
