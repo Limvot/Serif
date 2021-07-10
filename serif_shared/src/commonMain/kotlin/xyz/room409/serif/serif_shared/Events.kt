@@ -137,7 +137,7 @@ class RoomCanonicalAliasContent(val alias: String? = null, val alt_aliases: List
 @Serializable
 class RoomPinnedEventContent(val pinned: List<String>? = null)
 @Serializable
-class RoomMemberEventContent(val pinned: List<String>? = null) //TODO: change signature to be relevant
+class RoomMemberEventContent(val displayname: String, val avatar_url: String?)
 
 // RoomMessageEvent and RoomMessageEventContent should eventually be generic on message type
 @Serializable
