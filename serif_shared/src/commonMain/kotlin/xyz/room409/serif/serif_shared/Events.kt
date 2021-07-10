@@ -56,7 +56,7 @@ data class FileInfo(val mimetype: String, val size: Int)
 @Serializable
 data class MediaUploadResponse(val content_uri: String)
 @Serializable
-data class ProfileResponse(val displayname: String, val avatar_url: String)
+data class ProfileResponse(val displayname: String, val avatar_url: String?)
 @Serializable
 data class EventIdResponse(val event_id: String)
 @Serializable

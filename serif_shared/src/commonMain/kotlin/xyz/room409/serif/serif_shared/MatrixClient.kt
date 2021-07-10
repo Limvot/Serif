@@ -314,18 +314,24 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun getDiplayNameAndAvatarMedia(sender: String) Pair<String, String?> {
-        val (displayname, avatar_url) = getLocalDisplayNameAndAvatarBySender(sender)
-        val avatar_media_path = getLocalMediaPathFromUrl(avatar_url)
+    fun getDiplayNameAndAvatarMedia(sender: String): Pair<String, String?> {
+        val (displayname, avatar_url) =
+                when (val user_profile_info = getLocalDisplayNameAndAvatarUrlBySender(sender)) {
+                    is Success -> Pair(user_profile_info.value.first, user_profile_info.value.second)
+                    is Error -> Pair(sender, null) //Falling back on showing full sender string with no icon
+                }
+        if (avatar_url == null) {
+            return Pair(displayname, null)
+        }
         return when (val avatar_media_path = getLocalMediaPathFromUrl(avatar_url)) {
             is Success -> Pair(displayname, avatar_media_path.value)
-            is Error -> Pair(displayname, null) //TODO: Should we leave UI to handle missing/unset avatars?
+            is Error -> Pair(displayname, null)
         }
     }
 
-    fun getLocalDisplayNameAndAvatarUrlBySender(sender: String): Pair<String, String> {
+    fun getLocalDisplayNameAndAvatarUrlBySender(sender: String): Outcome<Pair<String, String?>> {
         try {
-            val cached_media = Database.getUserDataFromCache(sender)
+            val cached_user = Database.getUserDataFromCache(sender)
             if (cached_user != null) {
                 return Success(cached_user)
             }
@@ -356,7 +362,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun getUserProfile(sender: String): Pair<String,String> {
+    fun getUserProfile(sender: String): Pair<String,String?> {
         return runBlocking {
             val user_profile_response =
                     client.get<ProfileResponse>("$server/_matrix/client/r0/profile/$sender?access_token=$access_token")

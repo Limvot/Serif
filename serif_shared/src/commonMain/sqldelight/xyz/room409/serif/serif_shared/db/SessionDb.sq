@@ -56,7 +56,7 @@ WHERE mxcUrl = ?;
 CREATE TABLE IF NOT EXISTS ContactCache (
  sender TEXT NOT NULL PRIMARY KEY,
  displayName TEXT NOT NULL,
- avatarUrl TEXT NOT NULL
+ avatarUrl TEXT
 );
 
 insertContact:
@@ -69,7 +69,7 @@ SET displayName = ?, avatarUrl =?
 WHERE sender = ?;
 
 selectCachedContact:
-SELECT * FROM MediaCache
+SELECT * FROM ContactCache
 WHERE sender = ?;
 
 deleteAllCache:

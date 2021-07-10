@@ -73,19 +73,18 @@ object Database {
         return local
     }
 
-    fun getUserDataFromCache(sender: String): Pair<String,String> {
-        return this.db?.sessionDbQueries?.selectCachedContact(sender) { _: String, displayName: String, avatarUrl: String  ->
+    fun getUserDataFromCache(sender: String): Pair<String,String?>? {
+        return this.db?.sessionDbQueries?.selectCachedContact(sender) { _: String, displayName: String, avatarUrl: String?  ->
             Pair(displayName, avatarUrl)
         }?.executeAsOneOrNull()
     }
 
-    fun addUserDataToCache(sender: String, displayname: String, avatar_url: String, update: Boolean): String {
+    fun addUserDataToCache(sender: String, displayname: String, avatar_url: String?, update: Boolean) {
         if (update) {
             this.db?.sessionDbQueries?.updateContact(displayname, avatar_url, sender)
         } else {
             this.db?.sessionDbQueries?.insertContact(sender, displayname, avatar_url)
         }
-        return local
     }
 
     fun <T> mapRooms(session_id: Long, f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = (this.db?.sessionDbQueries?.getRooms(session_id)?.executeAsList() ?: listOf()).map { r ->
