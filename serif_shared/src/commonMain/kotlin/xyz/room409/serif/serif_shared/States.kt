@@ -80,7 +80,7 @@ abstract class SharedUiMessage() {
     abstract val message: String
     abstract val id: String
     abstract val timestamp: Long
-    abstract val replied_event: String
+    abstract val replied_event: SharedUiMessage?
     abstract val reactions: Map<String, Set<String>>
 }
 data class SharedUiMessagePlain(
@@ -89,7 +89,7 @@ data class SharedUiMessagePlain(
     override val id: String,
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
-    override val replied_event: String = ""
+    override val replied_event: SharedUiMessage? = null
 ) : SharedUiMessage()
 class SharedUiImgMessage(
     override val sender: String,
@@ -97,7 +97,7 @@ class SharedUiImgMessage(
     override val id: String,
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
-    override val replied_event: String = "",
+    override val replied_event: SharedUiMessage? = null,
     val url: String
 ) : SharedUiMessage()
 class SharedUiAudioMessage(
@@ -106,7 +106,7 @@ class SharedUiAudioMessage(
     override val id: String,
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
-    override val replied_event: String = "",
+    override val replied_event: SharedUiMessage? = null,
     val url: String
 ) : SharedUiMessage()
 class SharedUiVideoMessage(
@@ -115,7 +115,7 @@ class SharedUiVideoMessage(
     override val id: String,
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
-    override val replied_event: String = "",
+    override val replied_event: SharedUiMessage? = null,
     val url: String
 ) : SharedUiMessage()
 class SharedUiFileMessage(
@@ -127,7 +127,7 @@ class SharedUiFileMessage(
     val filename: String,
     val mimetype: String,
     val url: String,
-    override val replied_event: String = "",
+    override val replied_event: SharedUiMessage? = null,
 ) : SharedUiMessage()
 class SharedUiLocationMessage(
     override val sender: String,
@@ -136,9 +136,160 @@ class SharedUiLocationMessage(
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
     val location: String,
-    override val replied_event: String = "",
+    override val replied_event: SharedUiMessage? = null,
 ) : SharedUiMessage()
 
+fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): Pair<List<SharedUiMessage>, Boolean> {
+    val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
+    val reaction_maps: MutableMap<String, MutableMap<String, MutableSet<String>>> = mutableMapOf()
+
+    val (event_range, tracking_live) = msession.getReleventRoomEventsForWindow(room_id, window_back_length, message_window_base, window_forward_length)
+
+    event_range.forEach {
+        if (it as? RoomMessageEvent != null) {
+            val msg_content = it.content
+            if (msg_content is ReactionRMEC) {
+                val relates_to = msg_content!!.relates_to!!.event_id!!
+                val key = msg_content!!.relates_to!!.key!!
+                val reactions_for_msg = reaction_maps.getOrPut(relates_to, { mutableMapOf() })
+                reactions_for_msg.getOrPut(key, { mutableSetOf() }).add(it.sender)
+            } else if (msg_content is TextRMEC) {
+                if (is_edit_content(msg_content)) {
+                    // This is an edit
+                    val replaced_id = msg_content!!.relates_to!!.event_id!!
+                    val reactions = reaction_maps.get(replaced_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
+                    val edit_msg = SharedUiMessagePlain(it.sender, msg_content!!.new_content!!.body,
+                        it.event_id, it.origin_server_ts, reactions)
+
+                    if (edit_maps.contains(replaced_id)) {
+                        edit_maps.get(replaced_id)!!.add(edit_msg)
+                    } else {
+                        edit_maps.put(replaced_id, arrayListOf(edit_msg))
+                    }
+                }
+            }
+        }
+    }
+    val edits: Map<String,ArrayList<SharedUiMessage>> = edit_maps.toMap()
+    val messages = event_range.map {
+        if (it as? RoomMessageEvent != null) {
+            val reactions = reaction_maps.get(it.event_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
+            val msg_content = it.content
+
+            val in_reply_to = when(msg_content) {
+                is TextRMEC -> msg_content.relates_to
+                is AudioRMEC -> msg_content.relates_to
+                is ImageRMEC -> msg_content.relates_to
+                is FileRMEC -> msg_content.relates_to
+                is LocationRMEC -> msg_content.relates_to
+                is VideoRMEC -> msg_content.relates_to
+                else -> null
+            }?.in_reply_to?.event_id?.let { in_reply_to_id ->
+                toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0).first.firstOrNull()
+            }
+
+            var generate_media_msg = { url: String, func: (String,String,String,Long,Map<String,Set<String>>,SharedUiMessage?,String) -> SharedUiMessage ->
+                when (val url_local = msession.getLocalMediaPathFromUrl(url)) {
+                    is Success -> {
+                        func(
+                            it.sender, it.content.body, it.event_id,
+                            it.origin_server_ts, reactions, in_reply_to, url_local.value
+                        )
+                    }
+                    is Error -> {
+                        SharedUiMessagePlain(
+                            it.sender, "Failed to load media ${url}",
+                            it.event_id, it.origin_server_ts, reactions, in_reply_to
+                        )
+                    }
+                }
+            }
+            when (msg_content) {
+                is TextRMEC -> {
+                    val transform_body = { body_message: String ->
+                        if (in_reply_to != null) {
+                            var stripping = true
+                            body_message.lines().filter {
+                                if (stripping && it.startsWith("> ")) {
+                                    false
+                                } else {
+                                    stripping = false
+                                    true
+                                }
+                            }.joinToString("\n")
+                        } else { body_message }
+                    }
+                    val normal_msg_builder = {
+                        SharedUiMessagePlain(it.sender, transform_body(it.content.body), it.event_id, it.origin_server_ts, reactions, in_reply_to)
+                    }
+                    if((msg_content.new_content != null) && (msg_content.relates_to?.event_id == null)) {
+                        //This is a poorly formed edit
+                        //No idea which event this edit is editing, just display fallback msg
+                        SharedUiMessagePlain(it.sender, transform_body(it.content.body), it.event_id, it.origin_server_ts, reactions, in_reply_to)
+                    } else {
+                        if(is_edit_content(msg_content)) {
+                            //Don't display edits
+                            null
+                        } else {
+                            //This is a text message, check for any edits of this message
+                            if(edits.contains(it.event_id)) {
+                                val possible_edits = edits.get(it.event_id)!!
+                                val edited = possible_edits.lastOrNull { it.sender.contains(username) }
+                                if(edited != null) {
+                                    SharedUiMessagePlain(
+                                        it.sender,
+                                        transform_body("${edited.message} (edited)"),
+                                        edited.id,
+                                        it.origin_server_ts,
+                                        reactions,
+                                        in_reply_to
+                                        )
+                                } else {
+                                    normal_msg_builder()
+                                }
+                            } else {
+                                //No edits for this event
+                                normal_msg_builder()
+                            }
+                        }
+                    }
+                }
+                is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
+                is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
+                is VideoRMEC -> generate_media_msg(msg_content.url, ::SharedUiVideoMessage)
+                is FileRMEC -> {
+                    SharedUiFileMessage(
+                        it.sender, it.content.body, it.event_id,
+                        it.origin_server_ts, reactions, msg_content.filename,
+                        msg_content.info.mimetype, msg_content.url
+                    )
+                }
+                is LocationRMEC -> {
+                    SharedUiLocationMessage(
+                        it.sender, it.content.body, it.event_id,
+                        it.origin_server_ts, reactions, msg_content.geo_uri
+                    )
+                }
+                is ReactionRMEC -> null
+                else -> SharedUiMessagePlain(it.sender, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
+            }
+        } else if (it as? RoomEvent != null) {
+            // This won't actually happen currently,
+            // as all non RoomMessageEvents will be filtered out by the
+            // isStandaloneEvent filter when pulling from the database.
+            // In general, keeping the two up to date will require
+            // some effort.
+            // TODO: something else? Either always show, or always hide?
+            println("unhandled room event $it")
+            SharedUiMessagePlain(it.sender, "UNHANDLED ROOM EVENT!!! $it", it.event_id, it.origin_server_ts, mapOf())
+        } else {
+            println("IMPOSSIBLE unhandled non room event $it")
+            throw Exception("IMPOSSIBLE unhandled non room event $it")
+            SharedUiMessagePlain("impossible", "impossible", "impossible", 0, mapOf())
+        }
+    }.filterNotNull()
+    return Pair(messages, tracking_live)
+}
 
 class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, val window_back_length: Int, message_window_base_in: String?, window_forward_length_in: Int) : MatrixState() {
     val username = msession.user
@@ -148,133 +299,14 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     val pinned: List<String>
     init {
         pinned = msession.getPinnedEvents(room_id)
-
-        val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
-        val reaction_maps: MutableMap<String, MutableMap<String, MutableSet<String>>> = mutableMapOf()
-
-        val (event_range, tracking_live) = msession.getReleventRoomEventsForWindow(room_id, window_back_length, message_window_base_in, window_forward_length_in)
+        val (got_messages, tracking_live) = toSharedUiMessageList(msession, username, room_id, window_back_length, message_window_base_in, window_forward_length_in)
+        messages = got_messages
         if (tracking_live) {
             message_window_base = null
         } else {
             message_window_base = message_window_base_in
         }
 
-        event_range.forEach {
-            if (it as? RoomMessageEvent != null) {
-                val msg_content = it.content
-                if (msg_content is ReactionRMEC) {
-                    val relates_to = msg_content!!.relates_to!!.event_id!!
-                    val key = msg_content!!.relates_to!!.key!!
-                    val reactions_for_msg = reaction_maps.getOrPut(relates_to, { mutableMapOf() })
-                    reactions_for_msg.getOrPut(key, { mutableSetOf() }).add(it.sender)
-                } else if (msg_content is TextRMEC) {
-                    if (is_edit_content(msg_content)) {
-                        // This is an edit
-                        val replaced_id = msg_content!!.relates_to!!.event_id!!
-                        val reactions = reaction_maps.get(replaced_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
-                        val edit_msg = SharedUiMessagePlain(it.sender, msg_content!!.new_content!!.body,
-                            it.event_id, it.origin_server_ts, reactions)
-
-                        if (edit_maps.contains(replaced_id)) {
-                            edit_maps.get(replaced_id)!!.add(edit_msg)
-                        } else {
-                            edit_maps.put(replaced_id, arrayListOf(edit_msg))
-                        }
-                    }
-                }
-            }
-        }
-        val edits: Map<String,ArrayList<SharedUiMessage>> = edit_maps.toMap()
-        messages = event_range.map {
-            if (it as? RoomMessageEvent != null) {
-                val reactions = reaction_maps.get(it.event_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
-                val msg_content = it.content
-                var generate_media_msg = { url: String, func: (String,String,String,Long,Map<String,Set<String>>,String,String) -> SharedUiMessage ->
-                    when (val url_local = msession.getLocalMediaPathFromUrl(url)) {
-                        is Success -> {
-                            func(
-                                it.sender, it.content.body, it.event_id,
-                                it.origin_server_ts, reactions, "", url_local.value
-                            )
-                        }
-                        is Error -> {
-                            SharedUiMessagePlain(
-                                it.sender, "Failed to load media ${url}",
-                                it.event_id, it.origin_server_ts, reactions, ""
-                            )
-                        }
-                    }
-                }
-                when (msg_content) {
-                    is TextRMEC -> {
-                        val normal_msg_builder = {
-                            SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, reactions, msg_content.relates_to?.in_reply_to?.event_id ?: "")
-                        }
-                        if((msg_content.new_content != null) && (msg_content.relates_to?.event_id == null)) {
-                            //This is a poorly formed edit
-                            //No idea which event this edit is editing, just display fallback msg
-                            SharedUiMessagePlain(it.sender, it.content.body, it.event_id, it.origin_server_ts, reactions)
-                        } else {
-                            if(is_edit_content(msg_content)) {
-                                //Don't display edits
-                                null
-                            } else {
-                                //This is a text message, check for any edits of this message
-                                if(edits.contains(it.event_id)) {
-                                    val possible_edits = edits.get(it.event_id)!!
-                                    val edited = possible_edits.lastOrNull { it.sender.contains(username) }
-                                    if(edited != null) {
-                                        SharedUiMessagePlain(
-                                            it.sender,
-                                            "${edited.message} (edited)",
-                                            edited.id,
-                                            it.origin_server_ts,
-                                            reactions,
-                                            msg_content.relates_to?.in_reply_to?.event_id ?: "")
-                                    } else {
-                                        normal_msg_builder()
-                                    }
-                                } else {
-                                    //No edits for this event
-                                    normal_msg_builder()
-                                }
-                            }
-                        }
-                    }
-                    is ImageRMEC -> generate_media_msg(msg_content.url, ::SharedUiImgMessage)
-                    is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
-                    is VideoRMEC -> generate_media_msg(msg_content.url, ::SharedUiVideoMessage)
-                    is FileRMEC -> {
-                        SharedUiFileMessage(
-                            it.sender, it.content.body, it.event_id,
-                            it.origin_server_ts, reactions, msg_content.filename,
-                            msg_content.info.mimetype, msg_content.url
-                        )
-                    }
-                    is LocationRMEC -> {
-                        SharedUiLocationMessage(
-                            it.sender, it.content.body, it.event_id,
-                            it.origin_server_ts, reactions, msg_content.geo_uri
-                        )
-                    }
-                    is ReactionRMEC -> null
-                    else -> SharedUiMessagePlain(it.sender, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
-                }
-            } else if (it as? RoomEvent != null) {
-                // This won't actually happen currently,
-                // as all non RoomMessageEvents will be filtered out by the
-                // isStandaloneEvent filter when pulling from the database.
-                // In general, keeping the two up to date will require
-                // some effort.
-                // TODO: something else? Either always show, or always hide?
-                println("unhandled room event $it")
-                SharedUiMessagePlain(it.sender, "UNHANDLED ROOM EVENT!!! $it", it.event_id, it.origin_server_ts, mapOf())
-            } else {
-                println("IMPOSSIBLE unhandled non room event $it")
-                throw Exception("IMPOSSIBLE unhandled non room event $it")
-                SharedUiMessagePlain("impossible", "impossible", "impossible", 0, mapOf())
-            }
-        }.filterNotNull()
     }
     val window_forward_length: Int = if (message_window_base != null) { window_forward_length_in } else { 0 }
     fun sendMessage(msg: String): MatrixState {
