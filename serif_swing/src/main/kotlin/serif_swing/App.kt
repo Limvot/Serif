@@ -693,22 +693,25 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         var msg = msg_in
         val msg_action_button = SmoothButton("...")
         msg_action_button.addActionListener({
-            val reply_option = JMenuItem("Reply")
-            reply_option.addActionListener({
-                println("Now writing a reply")
-                replied_event_id = msg.id
-            })
-            val react_option = JMenuItem("React")
-            react_option.addActionListener({
-                println("Now writing a reaction")
-                reacted_event_id = msg.id
-            })
-            val edit_option = JMenuItem("Edit")
-            edit_option.addActionListener({
-                println("Now editing a message")
-                edited_event_id = msg.id
-                message_field.text = msg.message
-            })
+			val reply_option = JMenuItem("Reply")
+			reply_option.addActionListener({
+				msg_context_label.setText("Replying to: ${msg.sender} ${msg.message}")
+				msg_context_panel.setVisible(true)
+				replied_event_id = msg.id
+			})
+			val react_option = JMenuItem("React")
+			react_option.addActionListener({
+				msg_context_label.setText("Reacting to: ${msg.sender} ${msg.message}")
+				msg_context_panel.setVisible(true)
+				reacted_event_id = msg.id
+			})
+			val edit_option = JMenuItem("Edit")
+			edit_option.addActionListener({
+				msg_context_label.setText("Editing: ${msg.message}")
+				msg_context_panel.setVisible(true)
+				edited_event_id = msg.id
+				message_field.text = msg.message
+			})
             val pin_option = JMenuItem()
             updatePinOptionText(msg.id,pin_option)
             pin_option.addActionListener({
@@ -818,11 +821,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
                 RecyclableItemGeneratorResult(
-                    listOf(),
+                    msg.replied_event?.let { listOf(it) } ?: listOf(),
                     listOf(sender, play_btn, menu),
                     listOf(),
                     { Unit },
-                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); audio_url = (msg as SharedUiAudioMessage).url; Pair(listOf(),listOf()) }
+                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); audio_url = (msg as SharedUiAudioMessage).url; Pair(msg.replied_event?.let { listOf(it) } ?: listOf(), listOf()) }
                 )
             },
             "video" to { msg, repaint_cell ->
@@ -837,12 +840,15 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
 
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
+				if (msg.replied_event != null) {
+					println("Video reply!!! ${msg.replied_event}")
+				}
                 RecyclableItemGeneratorResult(
-                    listOf(),
+                    msg.replied_event?.let { listOf(it) } ?: listOf(),
                     listOf(sender, video_btn, menu),
                     listOf(),
                     { vp.clear() },
-                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell); Pair(listOf(),listOf()) }
+                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); vp.loadVideo((msg as SharedUiVideoMessage).url, video_btn, repaint_cell); Pair(msg.replied_event?.let { listOf(it) } ?: listOf(), listOf()) }
                 )
             },
             "file" to { msg, repaint_cell ->
@@ -875,11 +881,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
                 RecyclableItemGeneratorResult(
-                    listOf(),
+                    msg.replied_event?.let { listOf(it) } ?: listOf(),
                     listOf(sender, btn, menu),
                     listOf(),
                     { Unit },
-                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_down(msg); Pair(listOf(),listOf()) }
+                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_down(msg); Pair(msg.replied_event?.let { listOf(it) } ?: listOf(), listOf()) }
                 )
             },
             "location" to { msg, repaint_cell ->
@@ -897,11 +903,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
                 RecyclableItemGeneratorResult(
-                    listOf(),
+                    msg.replied_event?.let { listOf(it) } ?: listOf(),
                     listOf(sender, btn, menu),
                     listOf(),
                     { Unit },
-                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_loc(msg); Pair(listOf(),listOf()) }
+                    { msg, repaint_cell -> set_sender(msg); set_menu(msg); set_loc(msg); Pair(msg.replied_event?.let { listOf(it) } ?: listOf(), listOf()) }
                 )
             },
             "text" to { msg, repaint_cell ->

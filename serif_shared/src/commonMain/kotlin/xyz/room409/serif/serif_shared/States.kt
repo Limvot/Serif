@@ -178,7 +178,11 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
 
             val in_reply_to = when(msg_content) {
                 is TextRMEC -> msg_content.relates_to
+                is AudioRMEC -> msg_content.relates_to
                 is ImageRMEC -> msg_content.relates_to
+                is FileRMEC -> msg_content.relates_to
+                is LocationRMEC -> msg_content.relates_to
+                is VideoRMEC -> msg_content.relates_to
                 else -> null
             }?.in_reply_to?.event_id?.let { in_reply_to_id ->
                 toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0).first.firstOrNull()
