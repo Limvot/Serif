@@ -314,10 +314,13 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun getDiplayNameAndAvatarMedia(sender: String) Pair<String, String> {
+    fun getDiplayNameAndAvatarMedia(sender: String) Pair<String, String?> {
         val (displayname, avatar_url) = getLocalDisplayNameAndAvatarBySender(sender)
-        val avatar_media_path = getLocalMediaPathFromUrl(avatar_url) //TODO: parse for success/error
-        return Pair(displayname, avatar_media_path)
+        val avatar_media_path = getLocalMediaPathFromUrl(avatar_url)
+        return when (val avatar_media_path = getLocalMediaPathFromUrl(avatar_url)) {
+            is Success -> Pair(displayname, avatar_media_path.value)
+            is Error -> Pair(displayname, null) //TODO: Should we leave UI to handle missing/unset avatars?
+        }
     }
 
     fun getLocalDisplayNameAndAvatarUrlBySender(sender: String): Pair<String, String> {
