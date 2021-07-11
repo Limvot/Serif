@@ -224,11 +224,10 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
     fun sendMessage(msg: String, room_id: String, reply_id: String = ""): Outcome<String> {
-        val (msg, relation) = if(reply_id != "") {
-            Pair("> in reply to $reply_id\n\n$msg",
-                 RelationBlock(ReplyToRelation(reply_id)))
+        val relation = if(reply_id != "") {
+            RelationBlock(ReplyToRelation(reply_id))
         } else {
-            Pair(msg, null)
+            null
         }
         val body = TextRMEC(msg, relation)
         return sendMessageImpl(body, room_id)
