@@ -364,7 +364,8 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
                     )) + spaces.keys.filter { id -> !childrenSet.contains(id) }.map { liveMap[it]!! }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
                 } else {
                     // it's a space! Grab this one from the liveMap and sort it
-                    spaceChildren[room_id]!!.map { liveMap[it]!! }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
+                    // Note it can be null, we're not necessarily in every room in the space
+                    spaceChildren[room_id]!!.map { liveMap[it] }.filterNotNull().sortedBy { -(it.lastMessage?.timestamp ?: 0) }
                 }
             }
         } else {
