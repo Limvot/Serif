@@ -173,7 +173,11 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
 
             val in_reply_to = when(msg_content) {
                 is TextRMEC -> msg_content.relates_to
+                is AudioRMEC -> msg_content.relates_to
                 is ImageRMEC -> msg_content.relates_to
+                is FileRMEC -> msg_content.relates_to
+                is LocationRMEC -> msg_content.relates_to
+                is VideoRMEC -> msg_content.relates_to
                 else -> null
             }?.in_reply_to?.event_id?.let { in_reply_to_id ->
                 toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0, true).first.firstOrNull()
@@ -360,7 +364,8 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
                     ))
                 } else {
                     // it's a space! Grab this one from the liveMap and sort it
-                    spaceChildren[room_id]!!.map { liveMap[it]!! }.sortedBy { (it.lastMessage?.timestamp ?: 0) }
+                    // Note it can be null, we're not necessarily in every room in the space
+                    spaceChildren[room_id]!!.map { liveMap[it] }.filterNotNull().sortedBy { (it.lastMessage?.timestamp ?: 0) }
                 }
             }
         } else {
