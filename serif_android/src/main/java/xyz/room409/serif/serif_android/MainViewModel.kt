@@ -18,8 +18,11 @@ package xyz.room409.serif.serif_android
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
@@ -77,66 +80,74 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = listOf(SharedUiMessagePlain("System Status",message,"c",Date().getTime(),mapOf(),null))
     }
     fun sendMessage(message: String) {
-        when (val _m = m) {
-            is MatrixChatRoom -> {
-                _m.sendMessage(message)
-            }
-            is MatrixLogin -> {
-                if (username == null) {
-                    username = message
-                } else if (password == null) {
-                    password = message
-                    m = _m.login(username!!, password!!) {
-                        m = m.refresh()
-                        refresh()
-                    }
-                    username = null
-                    password = null
+        viewModelScope.launch(Dispatchers.IO) {
+            when (val _m = m) {
+                is MatrixChatRoom -> {
+                    _m.sendMessage(message)
                 }
-                refresh()
-            }
-        }
-    }
-    fun navigateToRoom(id: String) {
-        when (val _m = m) {
-            is MatrixChatRoom -> {
-                m = _m.getRoom(id)
-                refresh()
-            }
-            is MatrixLogin -> {
-                if (_m.getSessions().contains(id)) {
-                    m = _m.loginFromSession(id) {
-                        m = m.refresh()
-                        refresh()
+                is MatrixLogin -> {
+                    if (username == null) {
+                        username = message
+                    } else if (password == null) {
+                        password = message
+                        m = _m.login(username!!, password!!) {
+                            m = m.refresh()
+                            refresh()
+                        }
+                        username = null
+                        password = null
                     }
                     refresh()
                 }
             }
-            else -> {
-                status_message("Tried to navigate on not a chat room")
+        }
+    }
+    fun navigateToRoom(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            when (val _m = m) {
+                is MatrixChatRoom -> {
+                    m = _m.getRoom(id)
+                    refresh()
+                }
+                is MatrixLogin -> {
+                    if (_m.getSessions().contains(id)) {
+                        m = _m.loginFromSession(id) {
+                            m = m.refresh()
+                            refresh()
+                        }
+                        refresh()
+                    }
+                }
+                else -> {
+                    status_message("Tried to navigate on not a chat room")
+                }
             }
         }
     }
     fun exitRoom() {
-        when (val _m = m) {
-            is MatrixChatRoom -> {
-                m = _m.exitRoom()
-                refresh()
-            }
-            else -> {
-                status_message("Tried to exit on not a chat room")
+        viewModelScope.launch(Dispatchers.IO) {
+            when (val _m = m) {
+                is MatrixChatRoom -> {
+                    m = _m.exitRoom()
+                    refresh()
+                }
+                else -> {
+                    status_message("Tried to exit on not a chat room")
+                }
             }
         }
     }
     fun bumpWindow(id: String?) {
-        when (val _m = m) {
-            is MatrixChatRoom -> {
-                //m = _m.refresh(_m.window_back_length, id, _m.window_forward_length)
-                m = _m.refresh(20, id, 20)
-                refresh()
-            }
-            else -> {
-                status_message("Tried to exit on not a chat room")
+        viewModelScope.launch(Dispatchers.IO) {
+            when (val _m = m) {
+                is MatrixChatRoom -> {
+                    //m = _m.refresh(_m.window_back_length, id, _m.window_forward_length)
+                    m = _m.refresh(20, id, 20)
+                    refresh()
+                }
+                else -> {
+                    status_message("Tried to exit on not a chat room")
+                }
             }
         }
     }
