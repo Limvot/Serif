@@ -657,12 +657,25 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         }
     }
 }
-class MentionListener(val tf: SmoothTextField, val autocompl: () -> Unit) : DocumentListener {
+class MentionListener(val tf: SmoothTextField, val autocompl: (String) -> Unit, val deactivate: () -> Unit) : DocumentListener {
     override fun changedUpdate(ev: DocumentEvent) { }
-    override fun removeUpdate(ev: DocumentEvent) { }
-    override fun insertUpdate(ev: DocumentEvent) {
-        if(tf.text.contains("@")) {
-            autocompl()
+    override fun removeUpdate(ev: DocumentEvent) { checkDisplayMentionList() }
+    override fun insertUpdate(ev: DocumentEvent) { checkDisplayMentionList() }
+    fun checkDisplayMentionList() {
+        val caret_pos = tf.getCaretPosition()
+        val substr_end_idx = min(tf.text.count(), caret_pos+1)
+        val substr = tf.text.substring(0,substr_end_idx)
+        val closest_mention_start_index = substr.indexOfLast({it == '@'})
+        if(closest_mention_start_index != -1) {
+            val mention_str = tf.text.substring(closest_mention_start_index)
+            if(mention_str.find({ it -> it.isWhitespace() }) != null) {
+                //user has hit space since typing @
+                deactivate()
+            } else {
+                autocompl(mention_str)
+            }
+        } else {
+            deactivate()
         }
     }
 
@@ -961,17 +974,19 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val message_field = SmoothTextField(20)
     val pinned_events_btn = SmoothButton("Pinned Events")
     val pinned_action_popup = JPopupMenu()
+    val mentions_popup = JPopupMenu()
     val msg_context_label = SmoothLabel("Reply")
     val msg_context_panel = JPanel()
     var replied_event_id = ""
     var reacted_event_id = ""
     var edited_event_id = ""
     init {
-        val mention_listener = MentionListener(message_field, {
+        val mention_listener = MentionListener(message_field, { mention_txt: String ->
             val members = m.members
-            val text = message_field.text.split("@").lastOrNull()?.split(" ")?.firstOrNull() ?: ""
-            val suggestions = if(text == "") { members } else { members.filter({ it.contains(text)}) }
-            val mentions_popup = JPopupMenu()
+            val text = mention_txt.split("@").lastOrNull()?.split(" ")?.firstOrNull() ?: ""
+            val suggestions = if(text == "") { members } else { members.filter({it.contains(text)}) }
+            mentions_popup.setVisible(false)
+            mentions_popup.removeAll()
             for(acct in suggestions) {
                 val autocomp_opt = JMenuItem(acct)
                 autocomp_opt.addActionListener({
@@ -983,9 +998,14 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 mentions_popup.add(autocomp_opt)
             }
             mentions_popup.setRequestFocusEnabled(false)
-            val caret_pos = message_field.getCaretPosition()
-            mentions_popup.show(message_field,50,0)
-            message_field.setCaretPosition(caret_pos)
+            mentions_popup.show(message_field,0,0)
+            message_field.grabFocus()
+
+            val h = SwingUtilities.getWindowAncestor(panel).getSize().height - mentions_popup.getHeight()
+            mentions_popup.setLocation(0,h)
+        },
+        {
+            mentions_popup.setVisible(false)
             message_field.grabFocus()
         })
         message_field.getDocument().addDocumentListener(mention_listener)
