@@ -297,7 +297,9 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     val messages: List<SharedUiMessage>
     val message_window_base: String?
     val pinned: List<String>
+    val members: List<String>
     init {
+        members = msession.getRoomMembers(room_id)
         pinned = msession.getPinnedEvents(room_id)
         val (got_messages, tracking_live) = toSharedUiMessageList(msession, username, room_id, window_back_length, message_window_base_in, window_forward_length_in)
         messages = got_messages
