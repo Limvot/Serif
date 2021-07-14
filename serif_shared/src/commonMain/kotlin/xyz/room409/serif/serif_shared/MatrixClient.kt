@@ -312,12 +312,11 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             return Error("Image Upload Failed", e)
         }
     }
-    /*fun getRedactEvent(roomID: String, eventID: String) {
-        val redactedReplacementEvent = runBlocking {
-                        client.get<Event>("$server//_matrix/client/r0/rooms/{roomID}/event/{eventID}?access_token=$access_token")
-        }
-        sync_response!!.rooms.join[roomID]!!.timeline.events = sync_response!!.rooms.join[roomID]!!.timeline.events.map{if((it as? RoomEvent)?.event_id==eventID){redactedReplacementEvent}else{it}}
-    }*/
+    fun getRedactEvent(roomID: String, eventID: String) : RoomEvent{
+        runBlocking {
+            client.get<Event>("$server//_matrix/client/r0/rooms/$roomID/event/$eventID?access_token=$access_token")
+    }
+
     fun sendRedactEvent(roomID: String, eventID: String):  Outcome<String> {
         try {
             val result = runBlocking {
@@ -481,6 +480,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                     (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }
                 }
                 val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
+                val redactedEvents : MutableList<String> = mutableListOf()
                 synchronized(this) {
                     val max = Database.maxId()
                     var insertId = idBetween(max, "z", true)
@@ -492,11 +492,16 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                             println("adding event from sync at $insertId")
                             Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event), if (index == 0 && room.timeline.limited) { room.timeline.prev_batch } else { null })
                             insertId = idBetween(insertId, "z", true)
+                            if(event is RoomMessageEvent && event.redacts != null)
+                                redactedEvents.add(event.redacts)
                         } catch (e: Exception) {
                             println("while trying to insert (from mergeInSync) ${event} got exception $e")
-
                         }
                     }
+                }
+                for (redactId in redactedEvents) {
+                    val freshRedact = getRedactEvent(room_id,redactId)
+                    Database.replaceRoomEvent(freshRedact,room_id,session_id)
                 }
                 Database.setRoomSummary(
                     session_id,
