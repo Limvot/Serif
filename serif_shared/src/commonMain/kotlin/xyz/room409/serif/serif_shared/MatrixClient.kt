@@ -314,24 +314,33 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun getDiplayNameAndAvatarMedia(sender: String): Pair<String, String?> {
+    fun getDiplayNameAndAvatarFilePath(sender: String, roomId: String?): Pair<String, String?> {
         val (displayname, avatar_url) =
-                when (val user_profile_info = getLocalDisplayNameAndAvatarUrlBySender(sender)) {
-                    is Success -> Pair(user_profile_info.value.first, user_profile_info.value.second)
-                    is Error -> Pair(sender, null) //Falling back on showing full sender string with no icon
+                if(roomId != null) { //Get info at the Room-Member level
+                     when (val room_member_info = getLocalRoomMemberDetails(sender, roomId)) {
+                        is Success -> Pair(room_member_info.value.first, room_member_info.value.second)
+                        is Error -> Pair(sender, null)
+                    }
+                } else { //Get info at the User-Profile level
+                    when (val user_profile_info = getLocalUserProfileDetails(sender)) {
+                        is Success -> Pair(user_profile_info.value.first, user_profile_info.value.second)
+                        is Error -> Pair(sender, null)
+                    }
                 }
-        if (avatar_url == null) {
-            return Pair(displayname, null)
-        }
-        return when (val avatar_media_path = getLocalMediaPathFromUrl(avatar_url)) {
-            is Success -> Pair(displayname, avatar_media_path.value)
-            is Error -> Pair(displayname, null)
+
+        return if (avatar_url != null) {
+            when (val avatar_file_path = getLocalMediaPathFromUrl(avatar_url)) {
+                is Success -> Pair(displayname, avatar_file_path.value)
+                is Error -> Pair(displayname, null)
+            }
+        } else {
+            Pair(displayname, null)
         }
     }
 
-    fun getLocalDisplayNameAndAvatarUrlBySender(sender: String): Outcome<Pair<String, String?>> {
+    fun getLocalUserProfileDetails(sender: String): Outcome<Pair<String, String?>> {
         try {
-            val cached_user = Database.getUserDataFromCache(sender)
+            val cached_user = Database.getUserProfileFromCache(sender)
             if (cached_user != null) {
                 return Success(cached_user)
             }
@@ -346,7 +355,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 //No valid cache hit
                 println("Background thread request for $sender")
                 val (displayname, avatar_url) = getUserProfile(sender)
-                val result = Database.addUserDataToCache(sender, displayname, avatar_url, false)
+                val result = Database.addUserProfileToCache(sender, displayname, avatar_url, false)
                 println("Finished downloading $sender in the background with $result")
                 synchronized(this) {
                     in_flight_user_requests.remove(sender)
@@ -355,10 +364,25 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             }
 
             println("Returning early, downloading $sender in the background")
-            return Error("Downloading user in the background")
+            return Error("Downloading user profile in the background")
         } catch (e: Exception) {
-            println("Error with user retrieval $e")
-            return Error("User Retrieval Failed", e)
+            println("Error with user profile retrieval $e")
+            return Error("User Profile Retrieval Failed", e)
+        }
+    }
+
+    fun getLocalRoomMemberDetails(sender: String, roomId: String): Outcome<Pair<String?, String?>> {
+        return try {
+            val roomMemberEventContent = Database.getStateEvent(session_id, roomId, "m.room.member", sender)
+                    ?.castToStateEventWithContentOfType<RoomMemberEventContent>()
+            if(roomMemberEventContent == null) {
+
+            } else {
+                Success(Pair(roomMemberEventContent?.displayname, roomMemberEventContent?.avatar_url))
+            }
+        } catch (e: Exception) {
+            println("Error with room member details retrieval $e")
+            Error("Room Member details Retrieval Failed", e)
         }
     }
 

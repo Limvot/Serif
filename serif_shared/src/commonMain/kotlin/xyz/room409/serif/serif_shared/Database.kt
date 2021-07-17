@@ -73,13 +73,13 @@ object Database {
         return local
     }
 
-    fun getUserDataFromCache(sender: String): Pair<String,String?>? {
+    fun getUserProfileFromCache(sender: String): Pair<String,String?>? {
         return this.db?.sessionDbQueries?.selectCachedContact(sender) { _: String, displayName: String, avatarUrl: String?  ->
             Pair(displayName, avatarUrl)
         }?.executeAsOneOrNull()
     }
 
-    fun addUserDataToCache(sender: String, displayname: String, avatar_url: String?, update: Boolean) {
+    fun addUserProfileToCache(sender: String, displayname: String, avatar_url: String?, update: Boolean) {
         if (update) {
             this.db?.sessionDbQueries?.updateContact(displayname, avatar_url, sender)
         } else {

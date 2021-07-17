@@ -77,6 +77,8 @@ class MatrixRooms(private val msession: MatrixSession, val message: String) : Ma
 }
 abstract class SharedUiMessage() {
     abstract val sender: String
+    abstract val displayname: String?
+    abstract val avatar_file_path: String?
     abstract val message: String
     abstract val id: String
     abstract val timestamp: Long
@@ -86,6 +88,8 @@ abstract class SharedUiMessage() {
 data class SharedUiMessagePlain(
     override val sender: String,
     override val message: String,
+    override val displayname: String?,
+    override val message: String,
     override val id: String,
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
@@ -93,6 +97,8 @@ data class SharedUiMessagePlain(
 ) : SharedUiMessage()
 class SharedUiImgMessage(
     override val sender: String,
+    override val message: String,
+    override val displayname: String?,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
@@ -103,6 +109,8 @@ class SharedUiImgMessage(
 class SharedUiAudioMessage(
     override val sender: String,
     override val message: String,
+    override val displayname: String?,
+    override val message: String,
     override val id: String,
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
@@ -112,6 +120,8 @@ class SharedUiAudioMessage(
 class SharedUiVideoMessage(
     override val sender: String,
     override val message: String,
+    override val displayname: String?,
+    override val message: String,
     override val id: String,
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
@@ -120,6 +130,8 @@ class SharedUiVideoMessage(
 ) : SharedUiMessage()
 class SharedUiFileMessage(
     override val sender: String,
+    override val message: String,
+    override val displayname: String?,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
@@ -131,6 +143,8 @@ class SharedUiFileMessage(
 ) : SharedUiMessage()
 class SharedUiLocationMessage(
     override val sender: String,
+    override val message: String,
+    override val displayname: String?,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
