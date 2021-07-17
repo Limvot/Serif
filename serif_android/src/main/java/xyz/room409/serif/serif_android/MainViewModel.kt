@@ -102,51 +102,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
-    fun navigateToRoom(id: String) {
+    fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))
+    fun exitRoom() = pushDo(Action.ExitRoom())
+    fun bumpWindow(id: String?) =pushDo(Action.Refresh(20, id, 20))
+
+    private fun pushDo(_a: Action) {
         viewModelScope.launch(Dispatchers.IO) {
-            when (val _m = m) {
-                is MatrixChatRoom -> {
-                    m = _m.getRoom(id)
-                    refresh()
+            when (val a = _a) {
+                is Action.Refresh -> {
+                    //
                 }
-                is MatrixLogin -> {
-                    if (_m.getSessions().contains(id)) {
-                        m = _m.loginFromSession(id) {
-                            m = m.refresh()
-                            refresh()
-                        }
+            }
+        }
+    }
+    private fun execute(_a: Action) {
+        when (val a = _a) {
+            is Action.Refresh -> {
+                when (val _m = m) {
+                    is MatrixChatRoom -> {
+                        //m = _m.refresh(_m.window_back_length, id, _m.window_forward_length)
+                        m = _m.refresh(a.window_back, a.base_id, a.window_forward)
                         refresh()
                     }
-                }
-                else -> {
-                    status_message("Tried to navigate on not a chat room")
-                }
-            }
-        }
-    }
-    fun exitRoom() {
-        viewModelScope.launch(Dispatchers.IO) {
-            when (val _m = m) {
-                is MatrixChatRoom -> {
-                    m = _m.exitRoom()
-                    refresh()
-                }
-                else -> {
-                    status_message("Tried to exit on not a chat room")
+                    else -> {
+                        status_message("Tried to exit on not a chat room")
+                    }
                 }
             }
-        }
-    }
-    fun bumpWindow(id: String?) {
-        viewModelScope.launch(Dispatchers.IO) {
-            when (val _m = m) {
-                is MatrixChatRoom -> {
-                    //m = _m.refresh(_m.window_back_length, id, _m.window_forward_length)
-                    m = _m.refresh(20, id, 20)
-                    refresh()
+            is Action.ExitRoom -> {
+                when (val _m = m) {
+                    is MatrixChatRoom -> {
+                        m = _m.exitRoom()
+                        refresh()
+                    }
+                    else -> {
+                        status_message("Tried to exit on not a chat room")
+                    }
                 }
-                else -> {
-                    status_message("Tried to exit on not a chat room")
+            }
+            is Action.NavigateToRoom -> {
+                when (val _m = m) {
+                    is MatrixChatRoom -> {
+                        m = _m.getRoom(a.id)
+                        refresh()
+                    }
+                    is MatrixLogin -> {
+                        if (_m.getSessions().contains(a.id)) {
+                            m = _m.loginFromSession(a.id) {
+                                m = m.refresh()
+                                refresh()
+                            }
+                            refresh()
+                        }
+                    }
+                    else -> {
+                        status_message("Tried to navigate on not a chat room")
+                    }
                 }
             }
         }
@@ -159,5 +170,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun resetOpenDrawerAction() {
         _drawerShouldBeOpened.value = false
+    }
+
+    sealed class Action {
+        class Refresh(window_back: Int, baseId: String?, window_forward: Int): Action()
+        class ExitRoom(): Action()
+        class NavigateToRoom(id: String): Action()
     }
 }
