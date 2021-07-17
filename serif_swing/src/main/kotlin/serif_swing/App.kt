@@ -1078,7 +1078,6 @@ class App {
         if (partial) {
             when {
                 new_state is MatrixChatRoom && s is SwingChatRoom -> { s.update(new_state, frame.width); return; }
-                //new_state is MatrixRooms && s is SwingRooms -> { s.update(new_state); return; }
             }
         }
         sstate = constructStateView(new_state)
@@ -1093,7 +1092,6 @@ class App {
                 { javax.swing.SwingUtilities.invokeLater({ refresh_all() }) },
                 panel, mstate
             )
-            //is MatrixRooms -> SwingRooms(::transition, panel, mstate)
             is MatrixChatRoom -> SwingChatRoom(::transition, panel, mstate, frame.width)
         }
         frame.add(panel)
