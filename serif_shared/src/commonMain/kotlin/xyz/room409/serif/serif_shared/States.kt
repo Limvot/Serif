@@ -323,8 +323,12 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         }
         return this
     }
-    fun sendReply(msg: String, replied: String): MatrixState {
-        when (val sendMessageResult = msession.sendMessage(msg, room_id, replied)) {
+    fun sendReply(msg: String, in_reply_to_id: String): MatrixState {
+        val in_reply_to = toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0).first.firstOrNull()
+        val message = (in_reply_to?.let { event ->
+             event.message.lines().mapIndexed { i,line -> if (i == 0) { "> <${event.sender}> $line" } else { "> $line" } }.joinToString("\n")
+        } ?: "> in reply to $in_reply_to_id") + "\n$msg"
+        when (val sendMessageResult = msession.sendMessage(message, room_id, in_reply_to_id)) {
             is Success -> { println("${sendMessageResult.value}") }
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }
