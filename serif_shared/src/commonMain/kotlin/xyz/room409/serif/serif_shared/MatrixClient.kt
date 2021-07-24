@@ -471,10 +471,6 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             ?: "<no room name - $id>"
     }
     fun mergeInSync(new_sync_response: SyncResponse) {
-                        /*for(event in room.timeline.events)
-                            if(event is RoomMessageEvent && event.redacts != null) {
-                                getRedactEvent(room_id,event.redacts)
-                            }*/
         Database.transaction {
             for ((room_id, room) in new_sync_response.rooms.join) {
                 for (event in room.state.events + room.timeline.events) {
@@ -491,7 +487,6 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                             // so we can later backfill by picking the non-null prev_batch with smallest seqId
                             // for this room.
                             if(event is RoomMessageEvent && event.redacts != null){
-                                println("this is a redaction")
                                 redactedEvents.add(event.redacts)
                             } else {
                                 println("adding event from sync at $insertId")
@@ -511,7 +506,6 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 }
                 for (redactId in redactedEvents) {
                     val freshRedact = getRedactEvent(room_id,redactId)
-                    println(freshRedact.toString())
                     Database.replaceRoomEvent(freshRedact,room_id,session_id)
                 }
                 Database.setRoomSummary(
