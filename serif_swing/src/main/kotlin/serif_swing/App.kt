@@ -990,9 +990,9 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         if (m.room_type != "m.space") {
             send_button!!.addActionListener(onSend)
             attach_button!!.addActionListener(onAttach)
+            m.messages.lastOrNull()?.let { m.sendReceipt(it.id) }
         }
         back_button.addActionListener({ recycling_message_list.cleanup(); transition(m.exitRoom(), true) })
-        m.messages.lastOrNull()?.let { m.sendReceipt(it.id) }
     }
     override fun refresh() {
         transition(m.refresh(), true)
