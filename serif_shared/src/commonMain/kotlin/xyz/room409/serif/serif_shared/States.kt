@@ -14,10 +14,19 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         login_message = "Please enter your username and password\n",
         mclient = MatrixClient()
     )
+    fun removeRoomCache() {
+        synchronized(MatrixChatRoomCache) {
+            MatrixChatRoomCache.spaces = null
+            MatrixChatRoomCache.rooms = null
+            MatrixChatRoomCache.childrenSet = null
+            MatrixChatRoomCache.spaceChildren = null
+            MatrixChatRoomCache.liveMap = null
+        }
+    }
     // No need to refresh
     override fun refresh(): MatrixState = this
     fun login(username: String, password: String, onSync: () -> Unit): MatrixState {
-        when (val loginResult = mclient.login(username, password, onSync)) {
+        when (val loginResult = mclient.login(username, password, { removeRoomCache(); onSync })) {
             //is Success -> { return MatrixRooms(msession = loginResult.value, message = "Logged in! Waiting on sync...") }
             is Success -> { return MatrixChatRoom(
                                         msession = loginResult.value,
@@ -35,7 +44,7 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         }
     }
     fun loginFromSession(username: String, onSync: () -> Unit): MatrixState {
-        when (val loginResult = mclient.loginFromSavedSession(username, onSync)) {
+        when (val loginResult = mclient.loginFromSavedSession(username, { removeRoomCache(); onSync })) {
             //is Success -> { return MatrixRooms(msession = loginResult.value, message = "Logged in! Maybe try syncing?") }
             is Success -> { return MatrixChatRoom(
                                         msession = loginResult.value,
@@ -295,8 +304,23 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
     return Pair(messages, tracking_live)
 }
 
+// This is a dumb cache, figure out our
+// actual caching strategy (esp supporting
+// multiple windows, etc)
+object MatrixChatRoomCache {
+    var spaces: Map<String,SharedUiRoom>? = null
+    var rooms: List<Pair<String,SharedUiRoom>>? = null
+    var childrenSet: Set<String>? = null
+    var spaceChildren: Map<String, List<String>>? = null
+    var liveMap: Map<String,SharedUiRoom>? = null
+}
 class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<String>, val window_back_length: Int, message_window_base_in: String?, window_forward_length_in: Int) : MatrixState() {
     val room_id = room_ids.last()!!
+    val room_type = when (room_id) {
+        "Room List" -> "m.space"
+        "All Rooms" -> "m.space"
+        else        -> msession.getRoomType(room_id)
+    }
     val name =  msession.getRoomSummary(room_id)?.first ?: room_id
     val username = msession.user
 
@@ -307,66 +331,91 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
         messages = if (room_id == "Room List" || room_id == "All Rooms" || msession.getRoomType(room_id) == "m.space") {
             pinned = listOf()
             message_window_base = null
-            val (spaces, rooms) = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event_id ->
-                Pair(id, SharedUiRoom(
-                    id=id,
-                    message=name,
-                    unreadCount=unread_notif,
-                    highlightCount=unread_highlight,
-                    lastMessage=last_event_id?.let { toSharedUiMessageList(msession, username, id, 0, it, 0, false).first.firstOrNull() }
-                ))
-            }.sortedBy { (it.second.lastMessage?.timestamp ?: 0) }.partition { msession.getRoomType(it.second.id) == "m.space" }
-            if (room_id == "All Rooms") {
-                rooms.map { it.second }
-            } else {
-                val spaces = spaces.toMap()
-                val childrenSet: MutableSet<String> = mutableSetOf()
-                val spaceChildren: MutableMap<String, List<String>> = mutableMapOf()
-                val liveMap = rooms.toMap().toMutableMap()
+            // quick and dirrrty
+            var spaces: Map<String,SharedUiRoom>? = null
+            var rooms: List<Pair<String,SharedUiRoom>>? = null
+            var childrenSet: Set<String>? = null
+            var spaceChildren: Map<String, List<String>>? = null
+            var liveMap: Map<String,SharedUiRoom>? = null
+            synchronized(MatrixChatRoomCache) {
+                spaces = MatrixChatRoomCache.spaces
+                rooms = MatrixChatRoomCache.rooms
+                childrenSet = MatrixChatRoomCache.childrenSet
+                spaceChildren = MatrixChatRoomCache.spaceChildren
+                liveMap = MatrixChatRoomCache.liveMap
+            }
+            if (spaces == null) {
+                val (__spaces, _rooms) = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event_id ->
+                    Pair(id, SharedUiRoom(
+                        id=id,
+                        message=name,
+                        unreadCount=unread_notif,
+                        highlightCount=unread_highlight,
+                        lastMessage=last_event_id?.let { toSharedUiMessageList(msession, username, id, 0, it, 0, false).first.firstOrNull() }
+                    ))
+                }.sortedBy { -(it.second.lastMessage?.timestamp ?: 0) }.partition { msession.getRoomType(it.second.id) == "m.space" }
+                val _spaces = __spaces.toMap()
+                val _childrenSet: MutableSet<String> = mutableSetOf()
+                val _spaceChildren: MutableMap<String, List<String>> = mutableMapOf()
+                val _liveMap = _rooms.toMap().toMutableMap()
                 fun resolveSpace(id: String) {
-                    if (liveMap.containsKey(id)) {
+                    if (_liveMap.containsKey(id)) {
                         // already done or circular space, break the link
                         return
                     }
                     val children = msession.getSpaceChildren(id)
-                    spaceChildren.put(id, children)
+                    _spaceChildren.put(id, children)
                     for (child in children) {
-                        if (spaces.containsKey(child)) {
-                            childrenSet.add(child)
+                        if (_spaces.containsKey(child)) {
+                            _childrenSet.add(child)
                             resolveSpace(child)
                         }
                     }
                     var total_unread = 0
                     var total_highlight = 0
-                    val latest = children.map { liveMap[it] }.filterNotNull().minByOrNull {
+                    val latest = children.map { _liveMap[it] }.filterNotNull().minByOrNull {
                         total_unread += it.unreadCount
                         total_highlight += it.highlightCount
                         -(it.lastMessage?.timestamp ?: 0)
                     }
-                    liveMap[id] = SharedUiRoom(
+                    _liveMap[id] = SharedUiRoom(
                         id=id,
-                        message=spaces[id]!!.message,
+                        message=_spaces[id]!!.message,
                         unreadCount=total_unread,
                         highlightCount=total_highlight,
                         lastMessage=latest
                     )
                 }
-                for (space_id in spaces.keys) {
+                for (space_id in _spaces.keys) {
                     resolveSpace(space_id)
                 }
-                if (room_id == "Room List") {
-                    spaces.keys.filter { id -> !childrenSet.contains(id) }.map { liveMap[it]!! }.sortedBy { (it.lastMessage?.timestamp ?: 0) } + listOf(SharedUiRoom(
-                        id="All Rooms",
-                        message="All Rooms",
-                        unreadCount=0,
-                        highlightCount=0,
-                        lastMessage=null
-                    ))
-                } else {
-                    // it's a space! Grab this one from the liveMap and sort it
-                    // Note it can be null, we're not necessarily in every room in the space
-                    spaceChildren[room_id]!!.map { liveMap[it] }.filterNotNull().sortedBy { (it.lastMessage?.timestamp ?: 0) }
+                spaces = _spaces
+                rooms = _rooms
+                childrenSet = _childrenSet
+                spaceChildren = _spaceChildren
+                liveMap = _liveMap
+                synchronized(MatrixChatRoomCache) {
+                    MatrixChatRoomCache.spaces = spaces
+                    MatrixChatRoomCache.rooms = rooms
+                    MatrixChatRoomCache.childrenSet = childrenSet
+                    MatrixChatRoomCache.spaceChildren = spaceChildren
+                    MatrixChatRoomCache.liveMap = liveMap
                 }
+            }
+            if (room_id == "All Rooms") {
+                rooms!!.map { it.second }
+            } else if (room_id == "Room List") {
+                listOf(SharedUiRoom(
+                    id="All Rooms",
+                    message="All Rooms",
+                    unreadCount=0,
+                    highlightCount=0,
+                    lastMessage=null
+                )) + spaces!!.keys.filter { id -> !childrenSet!!.contains(id) }.map { liveMap!![it]!! }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
+            } else {
+                // it's a space! Grab this one from the liveMap and sort it
+                // Note it can be null, we're not necessarily in every room in the space
+                spaceChildren!![room_id]!!.map { liveMap!![it] }.filterNotNull().sortedBy { -(it.lastMessage?.timestamp ?: 0) }
             }
         } else {
             pinned = msession.getPinnedEvents(room_id)
