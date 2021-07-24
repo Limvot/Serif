@@ -258,7 +258,17 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
                         )
                     }
                     is ReactionRMEC -> null
-                    else -> SharedUiMessagePlain(it.sender, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
+                    is RedactionRMEC -> {
+                        SharedUiMessagePlain(it.sender, "A deletion was processed here",it.event_id, it.origin_server_ts, reactions)
+                    }
+                    else ->
+                        if(it.unsigned?.redacted_because!=null) {
+                            val details: RoomMessageEvent = it.unsigned.redacted_because as RoomMessageEvent
+                            val dcontent: RedactionRMEC = details.content as RedactionRMEC
+                                SharedUiMessagePlain(it.sender, "Deleted by ${details.sender} because ${dcontent.reason}", it.event_id, it.origin_server_ts, reactions)
+                        }
+                        else
+                            SharedUiMessagePlain(it.sender, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
                 }
             } else if (it as? RoomEvent != null) {
                 // This won't actually happen currently,

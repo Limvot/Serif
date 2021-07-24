@@ -125,8 +125,8 @@ object Database {
     fun addRoomEvent(seqId: String, sessionId: Long, roomId: String, event: RoomEvent, related_event: String?, prevBatch: String?) {
         this.db?.sessionDbQueries?.addRoomEvent(seqId, sessionId, roomId, event.event_id, event.raw_self.toString(), related_event, prevBatch)
     }
-    fun replaceRoomEvent(newEvent:RoomEvent, roomId: String,sessionId:String) {
-        this.db?.sessionDbQueries?.replaceRoomEvent(newEvent.raw_self,roomId,newEvent.event_id,newEvent,sessionId)
+    fun replaceRoomEvent(newEvent:RoomEvent, roomId: String,sessionId:Long) {
+        this.db?.sessionDbQueries?.replaceRoomEvent(newEvent.raw_self.toString(),roomId,newEvent.event_id,sessionId)
     }
     fun getRoomEventAndIdx(session_id: Long, roomId: String, eventId: String): Triple<RoomEvent, String, String?>? =
         this.db?.sessionDbQueries?.getRoomEventAndIdx(session_id, roomId, eventId)?.executeAsOneOrNull()?.let {

@@ -146,7 +146,7 @@ VALUES(?,?,?,?,?,?,?);
 replaceRoomEvent:
 UPDATE RoomEvents
 SET data = ?, relatedEvent = NULL
-WHERE (roomId = ? AND eventId = ? AND seqId = ?);
+WHERE (roomId = ? AND eventId = ? AND sessionId = ?);
 
 updatePrevBatch:
 UPDATE RoomEvents
