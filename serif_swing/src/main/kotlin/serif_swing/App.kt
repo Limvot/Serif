@@ -892,9 +892,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         val room_header_panel = JPanel()
         room_header_panel.layout = BorderLayout()
         room_header_panel.add(room_name, BorderLayout.LINE_START)
-        room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)
-        generatePinned(pinned_action_popup)
-        pinned_events_btn.addActionListener({ pinned_action_popup.show(pinned_events_btn,0,0) })
+        if (m.room_type != "m.space") {
+            room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)
+            generatePinned(pinned_action_popup)
+            pinned_events_btn.addActionListener({ pinned_action_popup.show(pinned_events_btn,0,0) })
+        }
 
         panel.add(
             room_header_panel,
@@ -919,14 +921,18 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         message_panel.layout = BorderLayout()
         var back_button = SmoothButton("Back")
         message_panel.add(back_button, BorderLayout.LINE_START)
-        message_panel.add(message_field, BorderLayout.CENTER)
-        val msg_panel_actions = JPanel()
-        msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
-        var attach_button = SmoothButton("+")
-        msg_panel_actions.add(attach_button)
-        var send_button = SmoothButton("Send")
-        msg_panel_actions.add(send_button)
-        message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
+        var attach_button: SmoothButton? = null
+        var send_button: SmoothButton? = null
+        if (m.room_type != "m.space") {
+            message_panel.add(message_field, BorderLayout.CENTER)
+            val msg_panel_actions = JPanel()
+            msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
+            attach_button = SmoothButton("+")
+            msg_panel_actions.add(attach_button)
+            send_button = SmoothButton("Send")
+            msg_panel_actions.add(send_button)
+            message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
+        }
         val cancel_msg_context_btn = SmoothButton("[x]")
         cancel_msg_context_btn.addActionListener({
             replied_event_id  = ""
@@ -981,8 +987,10 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             }
         }
         message_field.addActionListener(onSend)
-        send_button.addActionListener(onSend)
-        attach_button.addActionListener(onAttach)
+        if (m.room_type != "m.space") {
+            send_button!!.addActionListener(onSend)
+            attach_button!!.addActionListener(onAttach)
+        }
         back_button.addActionListener({ recycling_message_list.cleanup(); transition(m.exitRoom(), true) })
         m.messages.lastOrNull()?.let { m.sendReceipt(it.id) }
     }
@@ -1000,7 +1008,9 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         }
     }
     fun update(new_m: MatrixChatRoom, window_width: Int) {
-        if (m.messages != new_m.messages || last_window_width != window_width || !new_m.pinned.equals(m.pinned)) {
+        if (m.room_type != new_m.room_type) {
+            transition(new_m, false)
+        } else if (m.messages != new_m.messages || last_window_width != window_width || !new_m.pinned.equals(m.pinned)) {
             m = new_m
             recycling_message_list.reset(window_width, m.messages)
             last_window_width = window_width

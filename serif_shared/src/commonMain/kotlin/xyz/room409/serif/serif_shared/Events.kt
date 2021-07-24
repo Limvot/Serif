@@ -60,7 +60,7 @@ data class EventIdResponse(val event_id: String)
 @Serializable
 data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
 
-@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms)
+@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms? = null)
 
 @Serializable data class Rooms(val join: MutableMap<String, Room>)
 

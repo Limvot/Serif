@@ -297,6 +297,11 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
 
 class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<String>, val window_back_length: Int, message_window_base_in: String?, window_forward_length_in: Int) : MatrixState() {
     val room_id = room_ids.last()!!
+    val room_type = when (room_id) {
+        "Room List" -> "m.space"
+        "All Rooms" -> "m.space"
+        else        -> msession.getRoomType(room_id)
+    }
     val name =  msession.getRoomSummary(room_id)?.first ?: room_id
     val username = msession.user
 

@@ -456,7 +456,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     }
     fun mergeInSync(new_sync_response: SyncResponse) {
         Database.transaction {
-            for ((room_id, room) in new_sync_response.rooms.join) {
+            for ((room_id, room) in new_sync_response.rooms?.join ?: mapOf()) {
                 for (event in room.state.events + room.timeline.events) {
                     (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }
                 }
