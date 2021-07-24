@@ -55,7 +55,7 @@ WHERE mxcUrl = ?;
 
 CREATE TABLE IF NOT EXISTS ContactCache (
  sender TEXT NOT NULL PRIMARY KEY,
- displayName TEXT NOT NULL,
+ displayName TEXT,
  avatarUrl TEXT
 );
 

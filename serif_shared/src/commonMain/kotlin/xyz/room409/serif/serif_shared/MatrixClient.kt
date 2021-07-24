@@ -314,7 +314,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun getDiplayNameAndAvatarFilePath(sender: String, roomId: String?): Pair<String, String?> {
+    fun getDiplayNameAndAvatarFilePath(sender: String, roomId: String?): Pair<String?, String?> {
         val (displayname, avatar_url) =
                 if(roomId != null) { //Get info at the Room-Member level
                      when (val room_member_info = getLocalRoomMemberDetails(sender, roomId)) {
@@ -338,7 +338,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun getLocalUserProfileDetails(sender: String): Outcome<Pair<String, String?>> {
+    fun getLocalUserProfileDetails(sender: String): Outcome<Pair<String?, String?>> {
         try {
             val cached_user = Database.getUserProfileFromCache(sender)
             if (cached_user != null) {
@@ -376,7 +376,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             val roomMemberEventContent = Database.getStateEvent(session_id, roomId, "m.room.member", sender)
                     ?.castToStateEventWithContentOfType<RoomMemberEventContent>()
             if(roomMemberEventContent == null) {
-
+                //TODO
             } else {
                 Success(Pair(roomMemberEventContent?.displayname, roomMemberEventContent?.avatar_url))
             }
@@ -386,7 +386,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun getUserProfile(sender: String): Pair<String,String?> {
+    fun getUserProfile(sender: String): Pair<String?,String?> {
         return runBlocking {
             val user_profile_response =
                     client.get<ProfileResponse>("$server/_matrix/client/r0/profile/$sender?access_token=$access_token")
