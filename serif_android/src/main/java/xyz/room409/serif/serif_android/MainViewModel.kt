@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
 import java.util.*
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  * Used to communicate between screens.
@@ -43,6 +44,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val roomPath: StateFlow<List<String>> = _roomPath
     private val _roomName: MutableStateFlow<String> = MutableStateFlow("<>")
     val roomName: StateFlow<String> = _roomName
+    val lock = ReentrantLock()
+    val actions: MutableList<Action> = mutableListOf()
     init {
         // small hack
         if (Database.db == null) {
@@ -104,16 +107,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))
     fun exitRoom() = pushDo(Action.ExitRoom())
-    fun bumpWindow(id: String?) =pushDo(Action.Refresh(20, id, 20))
+    fun bumpWindow(id: String?) = pushDo(Action.Refresh(20, id, 20))
 
     private fun pushDo(_a: Action) {
-        viewModelScope.launch(Dispatchers.IO) {
-            when (val a = _a) {
-                is Action.Refresh -> {
-                    //
-                }
+        lock.lock()
+        try {
+            actions.add(_a)
+            if (actions.size > 1) {
+                return
             }
+        } finally { lock.unlock() }
+        lock.lock()
+        while (actions.size > 0) {
+            val this_action = actions.removeFirst()
+            lock.unlock()
+            execute(this_action)
+            lock.lock()
         }
+        lock.unlock()
     }
     private fun execute(_a: Action) {
         when (val a = _a) {
@@ -173,8 +184,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     sealed class Action {
-        class Refresh(window_back: Int, baseId: String?, window_forward: Int): Action()
+        class Refresh(val window_back: Int, val base_id: String?, val window_forward: Int): Action()
         class ExitRoom(): Action()
-        class NavigateToRoom(id: String): Action()
+        class NavigateToRoom(val id: String): Action()
     }
 }
