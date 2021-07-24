@@ -670,11 +670,12 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         menu_item.setText(pin_str)
     }
     val mk_sender = { msg: SharedUiMessage ->
+        val displayname = msg.displayname ?: msg.sender
         val render_text = { msg: SharedUiMessage ->
-            if (msg.reactions.size > 0) {
-                "${msg.sender}: ${msg.reactions} "
+            if (msg.reactions.size > 0 ) {
+                "${msg.displayname}: ${msg.reactions} "
             } else {
-                "${msg.sender}: "
+                "${msg.displayname}: "
             }
         }
         val sender = SerifText(render_text(msg))

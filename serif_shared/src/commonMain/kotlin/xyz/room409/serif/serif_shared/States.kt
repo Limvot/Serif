@@ -90,8 +90,8 @@ abstract class SharedUiMessage() {
 }
 data class SharedUiMessagePlain(
     override val sender: String,
-    override val displayname: String?,
-    override val avatar_file_path: String?,
+    override val displayname: String? = null,
+    override val avatar_file_path: String? = null,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
@@ -100,8 +100,8 @@ data class SharedUiMessagePlain(
 ) : SharedUiMessage()
 class SharedUiImgMessage(
     override val sender: String,
-    override val displayname: String?,
-    override val avatar_file_path: String?,
+    override val displayname: String? = null,
+    override val avatar_file_path: String? = null,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
@@ -111,8 +111,8 @@ class SharedUiImgMessage(
 ) : SharedUiMessage()
 class SharedUiAudioMessage(
     override val sender: String,
-    override val displayname: String?,
-    override val avatar_file_path: String?,
+    override val displayname: String? = null,
+    override val avatar_file_path: String? = null,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
@@ -122,8 +122,8 @@ class SharedUiAudioMessage(
 ) : SharedUiMessage()
 class SharedUiVideoMessage(
     override val sender: String,
-    override val displayname: String?,
-    override val avatar_file_path: String?,
+    override val displayname: String? = null,
+    override val avatar_file_path: String? = null,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
@@ -133,8 +133,8 @@ class SharedUiVideoMessage(
 ) : SharedUiMessage()
 class SharedUiFileMessage(
     override val sender: String,
-    override val displayname: String?,
-    override val avatar_file_path: String?,
+    override val displayname: String? = null,
+    override val avatar_file_path: String? = null,
     override val message: String,
     override val id: String,
     override val timestamp: Long,
@@ -146,8 +146,8 @@ class SharedUiFileMessage(
 ) : SharedUiMessage()
 class SharedUiLocationMessage(
     override val sender: String,
-    override val displayname: String?,
-    override val avatar_file_path: String?,
+    override val displayname: String? = null,
+    override val avatar_file_path: String? = null,
     override val message: String,
     override val id: String,
     override val timestamp: Long,

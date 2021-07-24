@@ -56,7 +56,7 @@ data class FileInfo(val mimetype: String, val size: Int)
 @Serializable
 data class MediaUploadResponse(val content_uri: String)
 @Serializable
-data class ProfileResponse(val displayname: String, val avatar_url: String?)
+data class ProfileResponse(val displayname: String? = null, val avatar_url: String? = null)
 @Serializable
 data class EventIdResponse(val event_id: String)
 @Serializable
@@ -137,7 +137,7 @@ class RoomCanonicalAliasContent(val alias: String? = null, val alt_aliases: List
 @Serializable
 class RoomPinnedEventContent(val pinned: List<String>? = null)
 @Serializable
-class RoomMemberEventContent(val displayname: String, val avatar_url: String?)
+class RoomMemberEventContent(val displayname: String? = null, val avatar_url: String? = null)
 
 // RoomMessageEvent and RoomMessageEventContent should eventually be generic on message type
 @Serializable
