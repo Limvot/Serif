@@ -112,7 +112,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun pushDo(_a: Action) {
         lock.lock()
         try {
-            actions.add(_a)
+            if (actions.size == 0 || !(_a is Action.Refresh)) {
+                actions.add(_a)
+            }
             if (actions.size > 1) {
                 return
             }

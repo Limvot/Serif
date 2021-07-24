@@ -502,7 +502,10 @@ object JsonFormatHolder {
 class MatrixClient {
     // 35 seconds, to comfortably handle the 30 second sync
     // timeout we send to the server (recommended Matrix default)
-    fun makeClient() = HttpClient(CIO.create { requestTimeout = 35000 }) {
+    fun makeClient() = HttpClient(CIO) {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 35000
+        }
         install(JsonFeature) {
             serializer = KotlinxSerializer(
                 kotlinx.serialization.json.Json {
