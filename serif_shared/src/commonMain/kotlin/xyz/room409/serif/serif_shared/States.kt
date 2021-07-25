@@ -26,7 +26,7 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
     // No need to refresh
     override fun refresh(): MatrixState = this
     fun login(username: String, password: String, onSync: () -> Unit): MatrixState {
-        when (val loginResult = mclient.login(username, password, { removeRoomCache(); onSync })) {
+        when (val loginResult = mclient.login(username, password, { removeRoomCache(); onSync() })) {
             is Success -> { return MatrixChatRoom(
                                         msession = loginResult.value,
                                         listOf("Room List"),
@@ -43,7 +43,7 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         }
     }
     fun loginFromSession(username: String, onSync: () -> Unit): MatrixState {
-        when (val loginResult = mclient.loginFromSavedSession(username, { removeRoomCache(); onSync })) {
+        when (val loginResult = mclient.loginFromSavedSession(username, { removeRoomCache(); onSync() })) {
             is Success -> { return MatrixChatRoom(
                                         msession = loginResult.value,
                                         listOf("Room List"),
