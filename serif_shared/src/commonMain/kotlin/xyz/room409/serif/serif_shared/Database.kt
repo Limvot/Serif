@@ -73,6 +73,20 @@ object Database {
         return local
     }
 
+    fun getUserProfileFromCache(sender: String): Pair<String?,String?>? {
+        return this.db?.sessionDbQueries?.selectCachedContact(sender) { _: String, displayName: String?, avatarUrl: String?  ->
+            Pair(displayName, avatarUrl)
+        }?.executeAsOneOrNull()
+    }
+
+    fun addUserProfileToCache(sender: String, displayname: String?, avatar_url: String?, update: Boolean) {
+        if (update) {
+            this.db?.sessionDbQueries?.updateContact(displayname, avatar_url, sender)
+        } else {
+            this.db?.sessionDbQueries?.insertContact(sender, displayname, avatar_url)
+        }
+    }
+
     fun <T> mapRooms(session_id: Long, f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = (this.db?.sessionDbQueries?.getRooms(session_id)?.executeAsList() ?: listOf()).map { r ->
         f(r.id, r.name, r.unread_notif_count.toInt(), r.unread_highlight_count.toInt(), r.last_event?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) as? RoomMessageEvent })
     }
