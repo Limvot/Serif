@@ -386,7 +386,7 @@ private fun AuthorNameTimestamp(msg: SharedUiMessage) {
     // Combine author and timestamp for a11y.
     Row(modifier = Modifier.semantics(mergeDescendants = true) {}) {
         Text(
-            text = msg.sender,
+            text = msg.displayname ?: msg.sender,
             style = MaterialTheme.typography.subtitle1,
             modifier = Modifier
                 .alignBy(LastBaseline)

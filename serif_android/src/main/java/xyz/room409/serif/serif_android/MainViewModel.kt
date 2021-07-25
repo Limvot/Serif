@@ -59,13 +59,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         when (val _m = m) {
             is MatrixLogin -> {
                 val milli = Date().getTime()
-                var fake_messages: List<SharedUiMessage> = listOf(SharedUiMessagePlain("System Status",_m.login_message,"a",milli,mapOf(),null))
-                fake_messages += _m.getSessions().map { SharedUiRoom("System Status", "Session: $it",it,milli,mapOf(),null, 0, 0, null) }
+                var fake_messages: List<SharedUiMessage> = listOf(SharedUiMessagePlain("System Status", "System Status", null, _m.login_message,"a", milli, mapOf(),null))
+                fake_messages += _m.getSessions().map { SharedUiRoom("System Status", "System Status", null, "Session: $it",it,milli,mapOf(),null, 0, 0, null) }
                 if (username != null) {
-                    fake_messages += listOf(SharedUiMessagePlain("You", username!!,"b",milli,mapOf(),null))
+                    fake_messages += listOf(SharedUiMessagePlain("You", "You", null, username!!,"b",milli,mapOf(),null))
                 }
                 if (password != null) {
-                    fake_messages += listOf(SharedUiMessagePlain("You", password!!,"c",milli,mapOf(),null))
+                    fake_messages += listOf(SharedUiMessagePlain("You", "You", null, password!!,"c",milli,mapOf(),null))
                 }
                 _messages.value = fake_messages
                 _roomPath.value = listOf()
@@ -80,7 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun status_message(message: String) {
-        _messages.value = listOf(SharedUiMessagePlain("System Status",message,"c",Date().getTime(),mapOf(),null))
+        _messages.value = listOf(SharedUiMessagePlain("System Status", "System Status", null,message,"c",Date().getTime(),mapOf(),null))
     }
     fun sendMessage(message: String) {
         viewModelScope.launch(Dispatchers.IO) {

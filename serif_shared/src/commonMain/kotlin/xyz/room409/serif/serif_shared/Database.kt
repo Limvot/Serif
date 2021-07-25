@@ -75,6 +75,20 @@ object Database {
         f(r.id, r.name, r.unread_notif_count.toInt(), r.unread_highlight_count.toInt(), r.last_event)
     }
 
+    fun getUserProfileFromCache(sender: String): Pair<String?,String?>? {
+        return this.db?.sessionDbQueries?.selectCachedContact(sender) { _: String, displayName: String?, avatarUrl: String?  ->
+            Pair(displayName, avatarUrl)
+        }?.executeAsOneOrNull()
+    }
+
+    fun addUserProfileToCache(sender: String, displayname: String?, avatar_url: String?, update: Boolean) {
+        if (update) {
+            this.db?.sessionDbQueries?.updateContact(displayname, avatar_url, sender)
+        } else {
+            this.db?.sessionDbQueries?.insertContact(sender, displayname, avatar_url)
+        }
+    }
+
     // setter that doesn't overwrite if passed null, if doesn't exist using default
     fun setRoomSummary(session_id: Long, id: String, name: String?, unread_notif_count: Int?, unread_highlight_count: Int?, last_event: String?) {
         val old = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()
@@ -124,6 +138,9 @@ object Database {
 
     fun addRoomEvent(seqId: String, sessionId: Long, roomId: String, event: RoomEvent, related_event: String?, prevBatch: String?) {
         this.db?.sessionDbQueries?.addRoomEvent(seqId, sessionId, roomId, event.event_id, event.raw_self.toString(), related_event, prevBatch)
+    }
+    fun replaceRoomEvent(newEvent:RoomEvent, roomId: String,sessionId:Long) {
+        this.db?.sessionDbQueries?.replaceRoomEvent(newEvent.raw_self.toString(),roomId,newEvent.event_id,sessionId)
     }
     fun getRoomEventAndIdx(session_id: Long, roomId: String, eventId: String): Triple<RoomEvent, String, String?>? =
         this.db?.sessionDbQueries?.getRoomEventAndIdx(session_id, roomId, eventId)?.executeAsOneOrNull()?.let {
