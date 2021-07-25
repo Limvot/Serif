@@ -14,11 +14,26 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         login_message = "Please enter your username and password\n",
         mclient = MatrixClient()
     )
+    fun removeRoomCache() {
+        synchronized(MatrixChatRoomCache) {
+            MatrixChatRoomCache.spaces = null
+            MatrixChatRoomCache.rooms = null
+            MatrixChatRoomCache.childrenSet = null
+            MatrixChatRoomCache.spaceChildren = null
+            MatrixChatRoomCache.liveMap = null
+        }
+    }
     // No need to refresh
     override fun refresh(): MatrixState = this
     fun login(username: String, password: String, onSync: () -> Unit): MatrixState {
-        when (val loginResult = mclient.login(username, password, onSync)) {
-            is Success -> { return MatrixRooms(msession = loginResult.value, message = "Logged in! Waiting on sync...") }
+        when (val loginResult = mclient.login(username, password, { removeRoomCache(); onSync() })) {
+            is Success -> { return MatrixChatRoom(
+                                        msession = loginResult.value,
+                                        listOf("Room List"),
+                                        20,
+                                        null,
+                                        0) }
+
             is Error -> {
                 return MatrixLogin(
                     login_message = "${loginResult.message} - exception was ${loginResult.cause}, please login again...\n",
@@ -28,8 +43,13 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         }
     }
     fun loginFromSession(username: String, onSync: () -> Unit): MatrixState {
-        when (val loginResult = mclient.loginFromSavedSession(username, onSync)) {
-            is Success -> { return MatrixRooms(msession = loginResult.value, message = "Logged in! Maybe try syncing?") }
+        when (val loginResult = mclient.loginFromSavedSession(username, { removeRoomCache(); onSync() })) {
+            is Success -> { return MatrixChatRoom(
+                                        msession = loginResult.value,
+                                        listOf("Room List"),
+                                        20,
+                                        null,
+                                        0) }
             is Error -> {
                 return MatrixLogin(
                     login_message = "${loginResult.message} - exception was ${loginResult.cause}, please login again...\n",
@@ -43,41 +63,6 @@ class MatrixLogin(val login_message: String, val mclient: MatrixClient) : Matrix
         return mclient.getStoredSessions()
     }
 }
-data class SharedUiRoom(val id: String, val name: String, val unreadCount: Int, val highlightCount: Int, val lastMessage: SharedUiMessage?)
-class MatrixRooms(private val msession: MatrixSession, val message: String) : MatrixState() {
-    val rooms: List<SharedUiRoom> = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event ->
-        SharedUiRoom(
-            id,
-            name,
-            unread_notif,
-            unread_highlight,
-            last_event?.let {
-                val (displayname, avatar_file_path) = msession.getDiplayNameAndAvatarFilePath(it.sender, id)
-                SharedUiMessagePlain(it.sender, displayname, avatar_file_path, it.content.body, it.event_id, it.origin_server_ts, mapOf())
-            }
-        )
-    }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
-    override fun refresh(): MatrixState = MatrixRooms(
-        msession = msession,
-        message = "updated...\n"
-    )
-    fun createRoom(name: String, room_alias_name: String, topic: String) = msession.createRoom(name, room_alias_name, topic)
-
-    fun getRoom(id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): MatrixState {
-        return MatrixChatRoom(
-            msession,
-            id,
-            this.rooms.find({ room -> room.id == id })!!.name,
-            window_back_length,
-            message_window_base,
-            window_forward_length
-        )
-    }
-    fun fake_logout(): MatrixState {
-        msession.closeSession()
-        return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
-    }
-}
 abstract class SharedUiMessage() {
     abstract val sender: String
     abstract val displayname: String?
@@ -88,6 +73,22 @@ abstract class SharedUiMessage() {
     abstract val replied_event: SharedUiMessage?
     abstract val reactions: Map<String, Set<String>>
 }
+
+data class SharedUiRoom(
+    override val sender: String = "<system>",
+    override val displayname: String = "<system>",
+    override val avatar_file_path: String? = null,
+    override val message: String,
+    override val id: String,
+    override val timestamp: Long = 0,
+    override val reactions: Map<String, Set<String>> = mapOf(),
+    override val replied_event: SharedUiMessage? = null,
+
+    val unreadCount: Int,
+    val highlightCount: Int,
+    val lastMessage: SharedUiMessage?
+) : SharedUiMessage()
+
 data class SharedUiMessagePlain(
     override val sender: String,
     override val displayname: String? = null,
@@ -156,11 +157,11 @@ class SharedUiLocationMessage(
     override val replied_event: SharedUiMessage? = null,
 ) : SharedUiMessage()
 
-fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): Pair<List<SharedUiMessage>, Boolean> {
+fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int, force_event: Boolean): Pair<List<SharedUiMessage>, Boolean> {
     val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
     val reaction_maps: MutableMap<String, MutableMap<String, MutableSet<String>>> = mutableMapOf()
 
-    val (event_range, tracking_live) = msession.getReleventRoomEventsForWindow(room_id, window_back_length, message_window_base, window_forward_length)
+    val (event_range, tracking_live) = msession.getReleventRoomEventsForWindow(room_id, window_back_length, message_window_base, window_forward_length, force_event)
 
     event_range.forEach {
         if (it as? RoomMessageEvent != null) {
@@ -204,7 +205,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                 is VideoRMEC -> msg_content.relates_to
                 else -> null
             }?.in_reply_to?.event_id?.let { in_reply_to_id ->
-                toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0).first.firstOrNull()
+                toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0, true).first.firstOrNull()
             }
 
             var generate_media_msg = { url: String, func: (String, String?, String?, String,String,Long,Map<String,Set<String>>,SharedUiMessage?,String) -> SharedUiMessage ->
@@ -265,8 +266,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                                         edited.id,
                                         it.origin_server_ts,
                                         reactions,
-                                        in_reply_to
-                                        )
+                                        in_reply_to)
                                 } else {
                                     normal_msg_builder()
                                 }
@@ -309,6 +309,16 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                     else
                         SharedUiMessagePlain(it.sender, null, null, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
             }
+        } else if (it.castToStateEventWithContentOfType<SpaceChildContent>() != null) {
+            val event = it as StateEvent<SpaceChildContent>
+            val summary = msession.getRoomSummary(event.state_key)
+            SharedUiRoom(
+                id=event.state_key,
+                message=summary?.first ?: event.state_key,
+                unreadCount=summary?.second?.first ?: 0,
+                highlightCount=summary?.second?.first ?: 0,
+                lastMessage=summary?.third?.let { toSharedUiMessageList(msession, username, event.state_key, 0, it, 0, true).first.firstOrNull() }
+            )
         } else if (it as? RoomEvent != null) {
             // This won't actually happen currently,
             // as all non RoomMessageEvents will be filtered out by the
@@ -327,22 +337,129 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
     return Pair(messages, tracking_live)
 }
 
-class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, val name: String, val window_back_length: Int, message_window_base_in: String?, window_forward_length_in: Int) : MatrixState() {
+// This is a dumb cache, figure out our
+// actual caching strategy (esp supporting
+// multiple windows, etc)
+object MatrixChatRoomCache {
+    var spaces: Map<String,SharedUiRoom>? = null
+    var rooms: List<Pair<String,SharedUiRoom>>? = null
+    var childrenSet: Set<String>? = null
+    var spaceChildren: Map<String, List<String>>? = null
+    var liveMap: Map<String,SharedUiRoom>? = null
+}
+class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<String>, val window_back_length: Int, message_window_base_in: String?, window_forward_length_in: Int) : MatrixState() {
+    val room_id = room_ids.last()!!
+    val room_type = when (room_id) {
+        "Room List" -> "m.space"
+        "All Rooms" -> "m.space"
+        else        -> msession.getRoomType(room_id)
+    }
+    val name =  msession.getRoomSummary(room_id)?.first ?: room_id
     val username = msession.user
 
     val messages: List<SharedUiMessage>
     val message_window_base: String?
     val pinned: List<String>
     init {
-        pinned = msession.getPinnedEvents(room_id)
-        val (got_messages, tracking_live) = toSharedUiMessageList(msession, username, room_id, window_back_length, message_window_base_in, window_forward_length_in)
-        messages = got_messages
-        if (tracking_live) {
+        messages = if (room_id == "Room List" || room_id == "All Rooms" || msession.getRoomType(room_id) == "m.space") {
+            pinned = listOf()
             message_window_base = null
+            // quick and dirrrty
+            var spaces: Map<String,SharedUiRoom>? = null
+            var rooms: List<Pair<String,SharedUiRoom>>? = null
+            var childrenSet: Set<String>? = null
+            var spaceChildren: Map<String, List<String>>? = null
+            var liveMap: Map<String,SharedUiRoom>? = null
+            synchronized(MatrixChatRoomCache) {
+                spaces = MatrixChatRoomCache.spaces
+                rooms = MatrixChatRoomCache.rooms
+                childrenSet = MatrixChatRoomCache.childrenSet
+                spaceChildren = MatrixChatRoomCache.spaceChildren
+                liveMap = MatrixChatRoomCache.liveMap
+            }
+            if (spaces == null) {
+                val (__spaces, _rooms) = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event_id ->
+                    Pair(id, SharedUiRoom(
+                        id=id,
+                        message=name,
+                        unreadCount=unread_notif,
+                        highlightCount=unread_highlight,
+                        lastMessage=last_event_id?.let { toSharedUiMessageList(msession, username, id, 0, it, 0, false).first.firstOrNull() }
+                    ))
+                }.sortedBy { -(it.second.lastMessage?.timestamp ?: 0) }.partition { msession.getRoomType(it.second.id) == "m.space" }
+                val _spaces = __spaces.toMap()
+                val _childrenSet: MutableSet<String> = mutableSetOf()
+                val _spaceChildren: MutableMap<String, List<String>> = mutableMapOf()
+                val _liveMap = _rooms.toMap().toMutableMap()
+                fun resolveSpace(id: String) {
+                    if (_liveMap.containsKey(id)) {
+                        // already done or circular space, break the link
+                        return
+                    }
+                    val children = msession.getSpaceChildren(id)
+                    _spaceChildren.put(id, children)
+                    for (child in children) {
+                        if (_spaces.containsKey(child)) {
+                            _childrenSet.add(child)
+                            resolveSpace(child)
+                        }
+                    }
+                    var total_unread = 0
+                    var total_highlight = 0
+                    val latest = children.map { _liveMap[it] }.filterNotNull().minByOrNull {
+                        total_unread += it.unreadCount
+                        total_highlight += it.highlightCount
+                        -(it.lastMessage?.timestamp ?: 0)
+                    }
+                    _liveMap[id] = SharedUiRoom(
+                        id=id,
+                        message=_spaces[id]!!.message,
+                        unreadCount=total_unread,
+                        highlightCount=total_highlight,
+                        lastMessage=latest
+                    )
+                }
+                for (space_id in _spaces.keys) {
+                    resolveSpace(space_id)
+                }
+                spaces = _spaces
+                rooms = _rooms
+                childrenSet = _childrenSet
+                spaceChildren = _spaceChildren
+                liveMap = _liveMap
+                synchronized(MatrixChatRoomCache) {
+                    MatrixChatRoomCache.spaces = spaces
+                    MatrixChatRoomCache.rooms = rooms
+                    MatrixChatRoomCache.childrenSet = childrenSet
+                    MatrixChatRoomCache.spaceChildren = spaceChildren
+                    MatrixChatRoomCache.liveMap = liveMap
+                }
+            }
+            if (room_id == "All Rooms") {
+                rooms!!.map { it.second }
+            } else if (room_id == "Room List") {
+                listOf(SharedUiRoom(
+                    id="All Rooms",
+                    message="All Rooms",
+                    unreadCount=0,
+                    highlightCount=0,
+                    lastMessage=null
+                )) + spaces!!.keys.filter { id -> !childrenSet!!.contains(id) }.map { liveMap!![it]!! }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
+            } else {
+                // it's a space! Grab this one from the liveMap and sort it
+                // Note it can be null, we're not necessarily in every room in the space
+                spaceChildren!![room_id]!!.map { liveMap!![it] }.filterNotNull().sortedBy { -(it.lastMessage?.timestamp ?: 0) }
+            }
         } else {
-            message_window_base = message_window_base_in
+            pinned = msession.getPinnedEvents(room_id)
+            val (got_messages, tracking_live) = toSharedUiMessageList(msession, username, room_id, window_back_length, message_window_base_in, window_forward_length_in, false)
+            if (tracking_live) {
+                message_window_base = null
+            } else {
+                message_window_base = message_window_base_in
+            }
+            got_messages
         }
-
     }
     val window_forward_length: Int = if (message_window_base != null) { window_forward_length_in } else { 0 }
     fun sendMessage(msg: String): MatrixState {
@@ -360,7 +477,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
         return this
     }
     fun sendReply(msg: String, in_reply_to_id: String): MatrixState {
-        val in_reply_to = toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0).first.firstOrNull()
+        val in_reply_to = toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0, true).first.firstOrNull()
         val message = (in_reply_to?.let { event ->
              event.message.lines().mapIndexed { i,line -> if (i == 0) { "> <${event.sender}> $line" } else { "> $line" } }.joinToString("\n")
         } ?: "> in reply to $in_reply_to_id") + "\n$msg"
@@ -445,13 +562,32 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
     override fun refresh(): MatrixState = refresh(window_back_length, message_window_base, window_forward_length)
     fun refresh(new_window_back_length: Int, new_message_window_base: String?, new_window_forward_length: Int): MatrixState = MatrixChatRoom(
         msession,
-        room_id,
-        msession.getRoomName(room_id) ?: room_id,
+        room_ids,
         new_window_back_length,
         new_message_window_base,
         new_window_forward_length,
     )
     fun exitRoom(): MatrixState {
-        return MatrixRooms(msession, "Back to rooms.")
+        if (room_ids.size > 1) {
+            return MatrixChatRoom(
+                msession,
+                room_ids.dropLast(1),
+                window_back_length,
+                message_window_base,
+                window_forward_length,
+            )
+        } else {
+            msession.closeSession()
+            return MatrixLogin("Closing session, returning to the login prompt for now\n", MatrixClient())
+        }
+    }
+    fun getRoom(new_id: String): MatrixState {
+        return MatrixChatRoom(
+            msession,
+            room_ids.plusElement(new_id),
+            window_back_length,
+            message_window_base,
+            window_forward_length
+        )
     }
 }

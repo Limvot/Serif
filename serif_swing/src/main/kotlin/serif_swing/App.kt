@@ -225,96 +225,6 @@ class SwingLogin(val transition: (MatrixState, Boolean) -> Unit, val onSync: () 
         transition(m.refresh(), true)
     }
 }
-class SwingRooms(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixRooms) : SwingState() {
-    var message_label = SerifText(m.message)
-    var inner_scroll_pane = JPanel()
-    init {
-        panel.layout = BorderLayout()
-        var topPanel = JPanel()
-        topPanel.layout = BoxLayout(topPanel, BoxLayout.LINE_AXIS)
-        topPanel.add(message_label)
-        var newRoomButton = SmoothButton("New Room")
-        topPanel.add(newRoomButton)
-        newRoomButton.addActionListener({
-
-            val window = SwingUtilities.getWindowAncestor(panel)
-            val dim = window.getSize()
-            val h = dim.height
-            val w = dim.width
-            val dialog = JDialog(window, "Create Room")
-
-            val dpanel = JPanel()
-            dpanel.layout = BoxLayout(dpanel, BoxLayout.PAGE_AXIS)
-            // name, room_alias_name, topic
-            var roomname_field = SmoothTextField(20)
-            var roomname_label = SmoothLabel("Room Name: ")
-            var alias_field = SmoothTextField(20)
-            var alias_label = SmoothLabel("Alias: ")
-            var topic_field = SmoothTextField(20)
-            var topic_label = SmoothLabel("Topic: ")
-
-            val create_btn = SmoothButton("Create")
-            create_btn.addActionListener({
-                println(m.createRoom(roomname_field.text, alias_field.text, topic_field.text))
-                dialog.setVisible(false)
-                dialog.dispose()
-            })
-
-            val close_btn = SmoothButton("Close")
-            close_btn.addActionListener({
-                dialog.setVisible(false)
-                dialog.dispose()
-            })
-            dpanel.add(roomname_label)
-            dpanel.add(roomname_field)
-            dpanel.add(alias_label)
-            dpanel.add(alias_field)
-            dpanel.add(topic_label)
-            dpanel.add(topic_field)
-            dpanel.add(create_btn)
-            dpanel.add(close_btn)
-            dialog.add(dpanel)
-
-            dialog.setSize(w, h / 2)
-            dialog.setVisible(true)
-            dialog.setResizable(false)
-            dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
-        })
-        panel.add(topPanel, BorderLayout.PAGE_START)
-
-        inner_scroll_pane.layout = GridLayout(0, 1)
-        for ((id, name, unreadCount, highlightCount, lastMessage) in m.rooms) {
-            var button = JButton()
-            button.layout = BoxLayout(button, BoxLayout.PAGE_AXIS)
-
-            val room_name = SerifText("$name ($unreadCount unread / $highlightCount mentions)")
-            val last_message = SerifText(lastMessage?.message?.take(80) ?: "")
-
-            button.add(room_name)
-            button.add(last_message)
-
-            button.addActionListener({ transition(m.getRoom(id, 20, null, 0), true) })
-            inner_scroll_pane.add(button)
-        }
-        panel.add(JScrollPane(inner_scroll_pane), BorderLayout.CENTER)
-
-        var back_button = SmoothButton("(Fake) Logout")
-        panel.add(back_button, BorderLayout.PAGE_END)
-        back_button.addActionListener({ transition(m.fake_logout(), true) })
-    }
-    override fun refresh() {
-        transition(m.refresh(), true)
-    }
-    fun update(new_m: MatrixRooms) {
-        if (m.rooms != new_m.rooms) {
-            println("Having to transition, rooms !=")
-            transition(new_m, false)
-        } else {
-            message_label.setText(new_m.message)
-            m = new_m
-        }
-    }
-}
 class ImageFileFilter : FileFilter() {
     override fun accept(f: File): Boolean {
         if (f.isDirectory()) { return true }
@@ -691,8 +601,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         attString
     }
     val room_name = SmoothLabel("")
-    fun setRoomName(name: String) {
-        room_name.setText("Room Name: $name")
+    fun setRoomName(path: List<String>, name: String) {
+        room_name.setText("Path: ${path}, Room Name: $name")
     }
     fun updatePinOptionText(event_id: String, menu_item: JMenuItem) {
         val pin_str = if(m.pinned.contains(event_id)) { "Unpin" } else { "Pin" }
@@ -816,6 +726,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     }
     val recycling_message_list = RecyclingList<SharedUiMessage>(last_window_width,
         { when (it) {
+                is SharedUiRoom -> "room"
                 is SharedUiImgMessage -> "img"
                 is SharedUiAudioMessage -> "audio"
                 is SharedUiVideoMessage -> "video"
@@ -825,6 +736,25 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         } },
         { it.sender == m.username },
         mapOf(
+            "room" to { msg: SharedUiMessage, repaint_cell ->
+                var transition_room_id: String = ""
+                val room_btn = SmoothButton("")
+                val set_click = { msgi: SharedUiRoom ->
+                    transition_room_id = msgi.id
+                    room_btn.setText("${msgi.message} (${msgi.unreadCount} unread / ${msgi.highlightCount} mentions)")
+                }
+                set_click(msg as SharedUiRoom)
+                room_btn.addActionListener({
+                    transition(m.getRoom(transition_room_id), false)
+                })
+                RecyclableItemGeneratorResult(
+                    listOf(),
+                    listOf(room_btn, JLabel(" ")),
+                    msg.lastMessage?.let { listOf(it) } ?: listOf(),
+                    { Unit },
+                    { msg, repaint_cell -> set_click(msg as SharedUiRoom); Pair(listOf(), msg.lastMessage?.let { listOf(it) } ?: listOf()) }
+                )
+            },
             "img" to { msg: SharedUiMessage, repaint_cell ->
                 msg as SharedUiImgMessage
                 val set_icon_image = { icon: ImageIcon, msg: SharedUiImgMessage, repaint_cell: ()->Unit ->
@@ -1011,19 +941,22 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val pinned_action_popup = JPopupMenu()
     val msg_context_label = SmoothLabel("Reply")
     val msg_context_panel = JPanel()
+
     var replied_event_id = ""
     var reacted_event_id = ""
     var edited_event_id = ""
     init {
         msg_context_panel.setVisible(false)
         panel.layout = BorderLayout()
-        setRoomName(m.name)
+        setRoomName(m.room_ids, m.name)
         val room_header_panel = JPanel()
         room_header_panel.layout = BorderLayout()
         room_header_panel.add(room_name, BorderLayout.LINE_START)
-        room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)
-        generatePinned(pinned_action_popup)
-        pinned_events_btn.addActionListener({ pinned_action_popup.show(pinned_events_btn,0,0) })
+        if (m.room_type != "m.space") {
+            room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)
+            generatePinned(pinned_action_popup)
+            pinned_events_btn.addActionListener({ pinned_action_popup.show(pinned_events_btn,0,0) })
+        }
 
         panel.add(
             room_header_panel,
@@ -1048,14 +981,18 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         message_panel.layout = BorderLayout()
         var back_button = SmoothButton("Back")
         message_panel.add(back_button, BorderLayout.LINE_START)
-        message_panel.add(message_field, BorderLayout.CENTER)
-        val msg_panel_actions = JPanel()
-        msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
-        var attach_button = SmoothButton("+")
-        msg_panel_actions.add(attach_button)
-        var send_button = SmoothButton("Send")
-        msg_panel_actions.add(send_button)
-        message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
+        var attach_button: SmoothButton? = null
+        var send_button: SmoothButton? = null
+        if (m.room_type != "m.space") {
+            message_panel.add(message_field, BorderLayout.CENTER)
+            val msg_panel_actions = JPanel()
+            msg_panel_actions.layout = BoxLayout(msg_panel_actions, BoxLayout.LINE_AXIS)
+            attach_button = SmoothButton("+")
+            msg_panel_actions.add(attach_button)
+            send_button = SmoothButton("Send")
+            msg_panel_actions.add(send_button)
+            message_panel.add(msg_panel_actions, BorderLayout.LINE_END)
+        }
         val cancel_msg_context_btn = SmoothButton("[x]")
         cancel_msg_context_btn.addActionListener({
             replied_event_id  = ""
@@ -1110,10 +1047,12 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             }
         }
         message_field.addActionListener(onSend)
-        send_button.addActionListener(onSend)
-        attach_button.addActionListener(onAttach)
+        if (m.room_type != "m.space") {
+            send_button!!.addActionListener(onSend)
+            attach_button!!.addActionListener(onAttach)
+            m.messages.lastOrNull()?.let { m.sendReceipt(it.id) }
+        }
         back_button.addActionListener({ recycling_message_list.cleanup(); transition(m.exitRoom(), true) })
-        m.messages.lastOrNull()?.let { m.sendReceipt(it.id) }
     }
     override fun refresh() {
         transition(m.refresh(), true)
@@ -1129,7 +1068,9 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         }
     }
     fun update(new_m: MatrixChatRoom, window_width: Int) {
-        if (m.messages != new_m.messages || last_window_width != window_width || !new_m.pinned.equals(m.pinned)) {
+        if (m.room_type != new_m.room_type) {
+            transition(new_m, false)
+        } else if (m.messages != new_m.messages || last_window_width != window_width || !new_m.pinned.equals(m.pinned)) {
             m = new_m
             recycling_message_list.reset(window_width, m.messages)
             last_window_width = window_width
@@ -1137,7 +1078,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         } else {
             m = new_m
         }
-        setRoomName(m.name)
+        setRoomName(m.room_ids, m.name)
     }
     private fun openUrl(href: String) {
         // In the background, so that GUI doesn't freeze
@@ -1207,7 +1148,6 @@ class App {
         if (partial) {
             when {
                 new_state is MatrixChatRoom && s is SwingChatRoom -> { s.update(new_state, frame.width); return; }
-                new_state is MatrixRooms && s is SwingRooms -> { s.update(new_state); return; }
             }
         }
         sstate = constructStateView(new_state)
@@ -1222,7 +1162,6 @@ class App {
                 { javax.swing.SwingUtilities.invokeLater({ refresh_all() }) },
                 panel, mstate
             )
-            is MatrixRooms -> SwingRooms(::transition, panel, mstate)
             is MatrixChatRoom -> SwingChatRoom(::transition, panel, mstate, frame.width)
         }
         frame.add(panel)

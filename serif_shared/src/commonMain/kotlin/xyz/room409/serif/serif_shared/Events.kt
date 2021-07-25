@@ -62,7 +62,7 @@ data class EventIdResponse(val event_id: String)
 @Serializable
 data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
 
-@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms)
+@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms? = null)
 
 @Serializable data class Rooms(val join: MutableMap<String, Room>)
 
@@ -127,9 +127,24 @@ class StateEvent<T>(
     /*val prev_content: EventContent?*/
     val content: T,
 ) : RoomEvent() {
-    override fun toString() = "RoomNameEvent(" + raw_self.toString() + ")"
+    override fun toString() = "StateEvent(" + raw_self.toString() + " (content: $content))"
 }
 
+@Serializable class PreviousRoom(
+    val room_id: String,
+    val event_id: String,
+)
+@Serializable class RoomCreationContent(
+    val creator: String,
+    @SerialName("m.federate") val federate: Boolean? = null,
+    val room_version: String? = null,
+    val predecessor: PreviousRoom? = null,
+    val type: String? = null,
+)
+@Serializable class SpaceChildContent(
+    val via: List<String>? = null,
+    val order: String? = null
+)
 @Serializable class RoomNameContent(val name: String)
 @Serializable class FallbackContent()
 
@@ -280,9 +295,11 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     override fun selectDeserializer(element: JsonElement) =
         element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
             when {
+                type == "m.room.create" -> RoomCreationEventSerializer
                 type == "m.room.message" || type == "m.reaction" || type =="m.room.redaction"-> RoomMessageEventSerializer
                 type == "m.room.name" -> RoomNameStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
+                type == "m.space.child" -> SpaceChildStateEventSerializer
                 type == "m.room.pinned_events" -> RoomPinnedEventSerializer
                 type == "m.room.member" -> RoomMemberEventSerializer //TODO: Make a member serializer
                 element.jsonObject["state_key"] != null -> StateEventFallbackSerializer
@@ -311,10 +328,12 @@ object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<Room
 object EventFallbackSerializer : GenericJsonEventSerializer<EventFallback>(EventFallback.serializer())
 object RoomEventFallbackSerializer : GenericJsonEventSerializer<RoomEventFallback>(RoomEventFallback.serializer())
 object RoomMessageEventSerializer : GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
+object RoomCreationEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCreationContent>>(StateEvent.serializer(RoomCreationContent.serializer()))
 object RoomPinnedEventSerializer : GenericJsonEventSerializer<StateEvent<RoomPinnedEventContent>>(StateEvent.serializer(RoomPinnedEventContent.serializer()))
 object RoomMemberEventSerializer : GenericJsonEventSerializer<StateEvent<RoomMemberEventContent>>(StateEvent.serializer(RoomMemberEventContent.serializer()))
 object RoomNameStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomNameContent>>(StateEvent.serializer(RoomNameContent.serializer()))
 object RoomCanonicalAliasStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
+object SpaceChildStateEventSerializer : GenericJsonEventSerializer<StateEvent<SpaceChildContent>>(StateEvent.serializer(SpaceChildContent.serializer()))
 object StateEventFallbackSerializer : GenericJsonEventSerializer<StateEvent<FallbackContent>>(StateEvent.serializer(FallbackContent.serializer()))
 
 open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) : JsonTransformingSerializer<T>(clazz) {
