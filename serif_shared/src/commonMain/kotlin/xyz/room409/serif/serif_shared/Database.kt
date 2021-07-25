@@ -73,19 +73,33 @@ object Database {
         return local
     }
 
-    fun <T> mapRooms(session_id: Long, f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = (this.db?.sessionDbQueries?.getRooms(session_id)?.executeAsList() ?: listOf()).map { r ->
-        f(r.id, r.name, r.unread_notif_count.toInt(), r.unread_highlight_count.toInt(), r.last_event?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) as? RoomMessageEvent })
+    fun <T> mapRooms(session_id: Long, f: (String,String,Int,Int,String?) -> T): List<T> = (this.db?.sessionDbQueries?.getRooms(session_id)?.executeAsList() ?: listOf()).map { r ->
+        f(r.id, r.name, r.unread_notif_count.toInt(), r.unread_highlight_count.toInt(), r.last_event)
+    }
+
+    fun getUserProfileFromCache(sender: String): Pair<String?,String?>? {
+        return this.db?.sessionDbQueries?.selectCachedContact(sender) { _: String, displayName: String?, avatarUrl: String?  ->
+            Pair(displayName, avatarUrl)
+        }?.executeAsOneOrNull()
+    }
+
+    fun addUserProfileToCache(sender: String, displayname: String?, avatar_url: String?, update: Boolean) {
+        if (update) {
+            this.db?.sessionDbQueries?.updateContact(displayname, avatar_url, sender)
+        } else {
+            this.db?.sessionDbQueries?.insertContact(sender, displayname, avatar_url)
+        }
     }
 
     // setter that doesn't overwrite if passed null, if doesn't exist using default
-    fun setRoomSummary(session_id: Long, id: String, name: String?, unread_notif_count: Int?, unread_highlight_count: Int?, last_event: RoomMessageEvent?) {
+    fun setRoomSummary(session_id: Long, id: String, name: String?, unread_notif_count: Int?, unread_highlight_count: Int?, last_event: String?) {
         val old = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()
         if (old != null) {
             this.db?.sessionDbQueries?.updateRoomSummary(
                 name ?: old.name,
                 unread_notif_count?.toLong() ?: old?.unread_notif_count ?: 0,
                 unread_highlight_count?.toLong() ?: old?.unread_highlight_count ?: 0,
-                last_event?.raw_self?.toString() ?: old?.last_event,
+                last_event ?: old?.last_event,
                 session_id,
                 id
             )
@@ -96,11 +110,13 @@ object Database {
                 name ?: id,
                 unread_notif_count?.toLong() ?: 0,
                 unread_highlight_count?.toLong() ?: 0,
-                last_event?.raw_self?.toString()
+                last_event
             )
         }
     }
-    fun getRoomName(session_id: Long, id: String) = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()?.name
+    fun getRoomSummary(session_id: Long, id: String) = this.db?.sessionDbQueries?.getRoom(session_id, id)?.executeAsOneOrNull()?.let {
+        Triple(it.name,Pair(it.unread_notif_count.toInt(), it.unread_highlight_count.toInt()), it.last_event)
+    }
 
     fun setStateEvent(session_id: Long, roomId: String, event: StateEvent<*>) {
         if (getStateEvent(session_id, roomId, event.type, event.state_key) != null) {
@@ -111,8 +127,8 @@ object Database {
     }
     fun getStateEvent(session_id: Long, roomId: String, type: String, stateKey: String): Event? =
         this.db?.sessionDbQueries?.getStateEvent(session_id, roomId, type, stateKey)?.executeAsOneOrNull()?.let { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) }
-    fun getStateEvents(session_id: Long, roomId: String): List<Event> =
-        this.db?.sessionDbQueries?.getStateEvents(session_id, roomId)?.executeAsList()?.map { JsonFormatHolder.jsonFormat.decodeFromString<Event>(it) } ?: listOf()
+    fun getStateEvents(session_id: Long, roomId: String, type: String): List<Pair<String,Event>> =
+        this.db?.sessionDbQueries?.getStateEvents(session_id, roomId, type)?.executeAsList()?.map { Pair(it.stateKey, JsonFormatHolder.jsonFormat.decodeFromString<Event>(it.data)) } ?: listOf()
 
     fun updatePrevBatch(session_id: Long, roomId: String, eventId: String, prevBatch: String?) {
         this.db!!.sessionDbQueries!!.updatePrevBatch(prevBatch, session_id, roomId, eventId)
@@ -124,6 +140,9 @@ object Database {
 
     fun addRoomEvent(seqId: String, sessionId: Long, roomId: String, event: RoomEvent, related_event: String?, prevBatch: String?) {
         this.db?.sessionDbQueries?.addRoomEvent(seqId, sessionId, roomId, event.event_id, event.raw_self.toString(), related_event, prevBatch)
+    }
+    fun replaceRoomEvent(newEvent:RoomEvent, roomId: String,sessionId:Long) {
+        this.db?.sessionDbQueries?.replaceRoomEvent(newEvent.raw_self.toString(),roomId,newEvent.event_id,sessionId)
     }
     fun getRoomEventAndIdx(session_id: Long, roomId: String, eventId: String): Triple<RoomEvent, String, String?>? =
         this.db?.sessionDbQueries?.getRoomEventAndIdx(session_id, roomId, eventId)?.executeAsOneOrNull()?.let {

@@ -74,7 +74,7 @@ fun isStandaloneEvent(e: Event): Boolean {
     if (e as? RoomMessageEvent != null) {
         return !(e.content is ReactionRMEC || (e.content is TextRMEC && is_edit_content(e.content)))
     } else {
-        return false
+        return e.castToStateEventWithContentOfType<SpaceChildContent>() != null
     }
 }
 fun getRelatedEvent(e: Event): String? {
@@ -83,7 +83,8 @@ fun getRelatedEvent(e: Event): String? {
             return e.content.relates_to.event_id!!
         } else if (e.content is TextRMEC && is_edit_content(e.content)) {
             return e.content.relates_to!!.event_id!!
-        }
+        } else if (e.content is RedactionRMEC)
+            return e.redacts!!
     }
     return null
 }
@@ -96,6 +97,7 @@ inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as
 class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
     private var in_flight_media_requests: MutableSet<String> = mutableSetOf()
+    private var in_flight_user_requests: MutableSet<String> = mutableSetOf()
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
         // 30 seconds is Matrix recommended, afaik
@@ -121,12 +123,12 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
 
-    fun <T> mapRooms(f: (String,String,Int,Int,RoomMessageEvent?) -> T): List<T> = Database.mapRooms(session_id, f)
-    fun getReleventRoomEventsForWindow(room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): Pair<List<Event>, Boolean> {
+    fun <T> mapRooms(f: (String,String,Int,Int,String?) -> T): List<T> = Database.mapRooms(session_id, f)
+    fun getReleventRoomEventsForWindow(room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int, force_event: Boolean): Pair<List<Event>, Boolean> {
         // if message_window_base is null, than no matter what
         // we are following live.
         val overrideCurrent = message_window_base == null
-        val base_and_seqId_and_prevBatch = message_window_base?.let { Database.getRoomEventAndIdx(session_id, room_id, it) } ?: Database.getMostRecentRoomEventAndIdx(session_id, room_id)
+        val base_and_seqId_and_prevBatch = message_window_base?.let { Database.getRoomEventAndIdx(session_id, room_id, it) } ?: if (!force_event) { Database.getMostRecentRoomEventAndIdx(session_id, room_id) } else { null }
         // completely empty room!!
         if (base_and_seqId_and_prevBatch == null) {
             return Pair(listOf(), true)
@@ -182,7 +184,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         return Pair(total_events, overrideCurrent || fore_events.size < window_forward_length)
     }
     fun getRoomEvent(room_id: String, event_id: String): Event? = Database.getRoomEventAndIdx(session_id, room_id, event_id)?.first
-    fun getRoomName(id: String) = Database.getRoomName(session_id, id)
+    fun getRoomSummary(id: String) = Database.getRoomSummary(session_id, id)
     fun createRoom(name:String, room_alias_name: String, topic: String): Outcome<String> {
         try {
             val result = runBlocking {
@@ -224,11 +226,10 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         }
     }
     fun sendMessage(msg: String, room_id: String, reply_id: String = ""): Outcome<String> {
-        val (msg, relation) = if(reply_id != "") {
-            Pair("> in reply to $reply_id\n\n$msg",
-                 RelationBlock(ReplyToRelation(reply_id)))
+        val relation = if(reply_id != "") {
+            RelationBlock(ReplyToRelation(reply_id))
         } else {
-            Pair(msg, null)
+            null
         }
         val body = TextRMEC(msg, relation)
         return sendMessageImpl(body, room_id)
@@ -310,6 +311,108 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             return sendMessageImpl(body, room_id)
         } catch (e: Exception) {
             return Error("Image Upload Failed", e)
+        }
+    }
+    fun getRedactEvent(roomID: String, eventID: String) : RoomEvent {
+        return runBlocking {
+            client.get<Event>("$server/_matrix/client/r0/rooms/$roomID/event/$eventID?access_token=$access_token")
+        } as RoomEvent
+    }
+
+    fun sendRedactEvent(roomID: String, eventID: String):  Outcome<String> {
+        try {
+            val result = runBlocking {
+                val redaction_confirmation =
+                    client.put<EventIdResponse>("$server/_matrix/client/r0/rooms/$roomID/redact/$eventID/$transactionId?access_token=$access_token") {
+                        contentType(ContentType.Application.Json)
+                        body = RedactionBody(reason = "User Sent")
+                    }
+                transactionId++
+                Database.updateSessionTransactionId(session_id, transactionId)
+                redaction_confirmation
+            }
+            return Success("Our redaction event id is: $result")
+        } catch (e: Exception) {
+            return Error("Redaction Failed", e)
+        }
+    }
+    fun getDiplayNameAndAvatarFilePath(sender: String, roomId: String?): Pair<String?, String?> {
+        val (displayname, avatar_url) =
+                if(roomId != null) { //Get info at the Room-Member level
+                     when (val room_member_info = getLocalRoomMemberDetails(sender, roomId)) {
+                        is Success -> Pair(room_member_info.value.first, room_member_info.value.second)
+                        is Error -> Pair(sender, null)
+                    }
+                } else { //Get info at the User-Profile level
+                    when (val user_profile_info = getLocalUserProfileDetails(sender)) {
+                        is Success -> Pair(user_profile_info.value.first, user_profile_info.value.second)
+                        is Error -> Pair(sender, null)
+                    }
+                }
+
+        return if (avatar_url != null) {
+            when (val avatar_file_path = getLocalMediaPathFromUrl(avatar_url)) {
+                is Success -> Pair(displayname, avatar_file_path.value)
+                is Error -> Pair(displayname, null)
+            }
+        } else {
+            Pair(displayname, null)
+        }
+    }
+
+    fun getLocalUserProfileDetails(sender: String): Outcome<Pair<String?, String?>> {
+        try {
+            val cached_user = Database.getUserProfileFromCache(sender)
+            if (cached_user != null) {
+                return Success(cached_user)
+            }
+
+            synchronized(this) {
+                if (in_flight_user_requests.contains(sender)) {
+                    return Error("User request already in flight");
+                }
+                in_flight_user_requests.add(sender)
+            }
+            thread(start = true) {
+                //No valid cache hit
+                println("Background thread request for $sender")
+                val (displayname, avatar_url) = getUserProfile(sender)
+                val result = Database.addUserProfileToCache(sender, displayname, avatar_url, false)
+                println("Finished downloading $sender in the background with $result")
+                synchronized(this) {
+                    in_flight_user_requests.remove(sender)
+                }
+                onUpdate()
+            }
+
+            println("Returning early, downloading $sender in the background")
+            return Error("Downloading user profile in the background")
+        } catch (e: Exception) {
+            println("Error with user profile retrieval $e")
+            return Error("User Profile Retrieval Failed", e)
+        }
+    }
+
+    fun getLocalRoomMemberDetails(sender: String, roomId: String): Outcome<Pair<String?, String?>> {
+        return try {
+            val roomMemberEventContent = Database.getStateEvent(session_id, roomId, "m.room.member", sender)
+                    ?.castToStateEventWithContentOfType<RoomMemberEventContent>()
+            if(roomMemberEventContent == null) {
+                Error("Room Member Event not found", null)
+            } else {
+                Success(Pair(roomMemberEventContent?.displayname, roomMemberEventContent?.avatar_url))
+            }
+        } catch (e: Exception) {
+            println("Error with room member details retrieval $e")
+            Error("Room Member details Retrieval Failed", e)
+        }
+    }
+
+    fun getUserProfile(sender: String): Pair<String?,String?> {
+        return runBlocking {
+            val user_profile_response =
+                    client.get<ProfileResponse>("$server/_matrix/client/r0/profile/$sender?access_token=$access_token")
+            Pair(user_profile_response.displayname, user_profile_response.avatar_url)
         }
     }
 
@@ -448,6 +551,12 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             } else { null }
         }).filterNotNull()
     }
+    fun getSpaceChildren(id: String): List<String> = Database.getStateEvents(session_id, id, "m.space.child").map { (id,event) ->
+        if (event.castToStateEventWithContentOfType<SpaceChildContent>() != null) {
+            id
+        } else { null }
+    }.filterNotNull()
+    fun getRoomType(id: String) = Database.getStateEvent(session_id, id, "m.room.create", "")?.castToStateEventWithContentOfType<RoomCreationContent>()?.type
     fun getPinnedEvents(id: String): List<String> {
         return Database.getStateEvent(session_id, id, "m.room.pinned_events", "")?.castToStateEventWithContentOfType<RoomPinnedEventContent>()?.pinned
             ?: listOf()
@@ -459,11 +568,12 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     }
     fun mergeInSync(new_sync_response: SyncResponse) {
         Database.transaction {
-            for ((room_id, room) in new_sync_response.rooms.join) {
+            for ((room_id, room) in new_sync_response.rooms?.join ?: mapOf()) {
                 for (event in room.state.events + room.timeline.events) {
                     (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }
                 }
                 val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
+                val redactedEvents : MutableList<String> = mutableListOf()
                 synchronized(this) {
                     val max = Database.maxId()
                     var insertId = idBetween(max, "z", true)
@@ -472,14 +582,27 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                             // Note that if this is the first event of this chunk, we record prev_batch for it
                             // so we can later backfill by picking the non-null prev_batch with smallest seqId
                             // for this room.
-                            println("adding event from sync at $insertId")
-                            Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event), if (index == 0 && room.timeline.limited) { room.timeline.prev_batch } else { null })
-                            insertId = idBetween(insertId, "z", true)
+                            if(event is RoomMessageEvent && event.redacts != null){
+                                redactedEvents.add(event.redacts)
+                            } else {
+                                println("adding event from sync at $insertId")
+                                Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event),
+                                    if (index == 0 && room.timeline.limited) {
+                                        room.timeline.prev_batch
+                                    } else {
+                                        null
+                                    }
+                                )
+                                insertId = idBetween(insertId, "z", true)
+                            }
                         } catch (e: Exception) {
                             println("while trying to insert (from mergeInSync) ${event} got exception $e")
-
                         }
                     }
+                }
+                for (redactId in redactedEvents) {
+                    val freshRedact = getRedactEvent(room_id,redactId)
+                    Database.replaceRoomEvent(freshRedact,room_id,session_id)
                 }
                 Database.setRoomSummary(
                     session_id,
@@ -487,7 +610,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                     determineRoomName(room_id),
                     room.unread_notifications?.notification_count,
                     room.unread_notifications?.highlight_count,
-                    room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent
+                    (room.timeline.events.findLast { it as? RoomMessageEvent != null } as? RoomMessageEvent)?.event_id
                 )
             }
             Database.updateSessionNextBatch(session_id, new_sync_response.next_batch)

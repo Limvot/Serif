@@ -53,6 +53,25 @@ selectCachedMedia:
 SELECT * FROM MediaCache
 WHERE mxcUrl = ?;
 
+CREATE TABLE IF NOT EXISTS ContactCache (
+ sender TEXT NOT NULL PRIMARY KEY,
+ displayName TEXT,
+ avatarUrl TEXT
+);
+
+insertContact:
+INSERT INTO ContactCache(sender, displayName, avatarUrl)
+VALUES(?,?,?);
+
+updateContact:
+UPDATE ContactCache
+SET displayName = ?, avatarUrl =?
+WHERE sender = ?;
+
+selectCachedContact:
+SELECT * FROM ContactCache
+WHERE sender = ?;
+
 deleteAllCache:
 DELETE FROM MediaCache;
 
@@ -111,8 +130,8 @@ SELECT data FROM RoomState
 WHERE (sessionId = ? AND roomId = ? AND type = ? AND stateKey = ?);
 
 getStateEvents:
-SELECT data FROM RoomState
-WHERE (sessionId = ? AND roomId = ?);
+SELECT stateKey, data FROM RoomState
+WHERE (sessionId = ? AND roomId = ? AND type = ?);
 
 
 
@@ -141,6 +160,12 @@ WHERE (seqId < ?);
 addRoomEvent:
 INSERT INTO RoomEvents(seqId, sessionId, roomId, eventId, data, relatedEvent, prevBatch)
 VALUES(?,?,?,?,?,?,?);
+
+--I am setting relatedEvent to null, because it it a deletion. For other replacements, will need to be fixed
+replaceRoomEvent:
+UPDATE RoomEvents
+SET data = ?, relatedEvent = NULL
+WHERE (roomId = ? AND eventId = ? AND sessionId = ?);
 
 updatePrevBatch:
 UPDATE RoomEvents

@@ -56,11 +56,13 @@ data class FileInfo(val mimetype: String, val size: Int)
 @Serializable
 data class MediaUploadResponse(val content_uri: String)
 @Serializable
+data class ProfileResponse(val displayname: String? = null, val avatar_url: String? = null)
+@Serializable
 data class EventIdResponse(val event_id: String)
 @Serializable
 data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
 
-@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms)
+@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms? = null)
 
 @Serializable data class Rooms(val join: MutableMap<String, Room>)
 
@@ -107,7 +109,8 @@ abstract class RoomEvent : Event() {
 
 @Serializable
 data class UnsignedData(
-    val age: Long? = null, /*redacted_because: Event?,*/
+    val age: Long? = null,
+    val redacted_because: Event? =null,
     val transaction_id: String? = null
 )
 
@@ -124,9 +127,24 @@ class StateEvent<T>(
     /*val prev_content: EventContent?*/
     val content: T,
 ) : RoomEvent() {
-    override fun toString() = "RoomNameEvent(" + raw_self.toString() + ")"
+    override fun toString() = "StateEvent(" + raw_self.toString() + " (content: $content))"
 }
 
+@Serializable class PreviousRoom(
+    val room_id: String,
+    val event_id: String,
+)
+@Serializable class RoomCreationContent(
+    val creator: String,
+    @SerialName("m.federate") val federate: Boolean? = null,
+    val room_version: String? = null,
+    val predecessor: PreviousRoom? = null,
+    val type: String? = null,
+)
+@Serializable class SpaceChildContent(
+    val via: List<String>? = null,
+    val order: String? = null
+)
 @Serializable class RoomNameContent(val name: String)
 @Serializable class FallbackContent()
 
@@ -134,12 +152,15 @@ class StateEvent<T>(
 class RoomCanonicalAliasContent(val alias: String? = null, val alt_aliases: List<String>? = null)
 @Serializable
 class RoomPinnedEventContent(val pinned: List<String>? = null)
+@Serializable
+class RoomMemberEventContent(val displayname: String? = null, val avatar_url: String? = null)
 
 // RoomMessageEvent and RoomMessageEventContent should eventually be generic on message type
 @Serializable
 class RoomMessageEvent(
     override val raw_self: JsonObject,
     override val raw_content: JsonElement,
+    val redacts: String?=null,
     override val type: String,
     override val event_id: String,
     override val sender: String,
@@ -167,6 +188,16 @@ class ReactionRMEC(
     override val msgtype: String
         get() = "m.reaction"
 }
+@Serializable
+class RedactionRMEC(
+        override val body: String = "<missing message body, likely redacted>",
+        override val msgtype: String = "<missing type, likely redacted>",
+        val reason: String = "no reason given"
+) : RoomMessageEventContent()
+@Serializable
+class RedactionBody(
+    val reason : String
+)
 @Serializable
 class TextRMEC(
     override val body: String = "<missing message body, likely redacted>",
@@ -264,11 +295,13 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     override fun selectDeserializer(element: JsonElement) =
         element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
             when {
-                type == "m.room.message" || type == "m.reaction" -> RoomMessageEventSerializer
+                type == "m.room.create" -> RoomCreationEventSerializer
+                type == "m.room.message" || type == "m.reaction" || type =="m.room.redaction"-> RoomMessageEventSerializer
                 type == "m.room.name" -> RoomNameStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
+                type == "m.space.child" -> SpaceChildStateEventSerializer
                 type == "m.room.pinned_events" -> RoomPinnedEventSerializer
-                type == "m.room.member" -> RoomEventFallbackSerializer
+                type == "m.room.member" -> RoomMemberEventSerializer //TODO: Make a member serializer
                 element.jsonObject["state_key"] != null -> StateEventFallbackSerializer
                 type.startsWith("m.room") -> RoomEventFallbackSerializer
                 else -> EventFallbackSerializer
@@ -286,6 +319,7 @@ object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<Room
             type == "m.file" -> FileRMEC.serializer()
             type == "m.location" -> LocationRMEC.serializer()
             type == null && element.jsonObject["m.relates_to"]?.jsonObject?.get("rel_type")?.jsonPrimitive?.content == "m.annotation" -> ReactionRMEC.serializer()
+            type == null && element.jsonObject["reason"] !=null -> RedactionRMEC.serializer()
             else -> FallbackRMEC.serializer()
         }
     }
@@ -294,9 +328,12 @@ object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<Room
 object EventFallbackSerializer : GenericJsonEventSerializer<EventFallback>(EventFallback.serializer())
 object RoomEventFallbackSerializer : GenericJsonEventSerializer<RoomEventFallback>(RoomEventFallback.serializer())
 object RoomMessageEventSerializer : GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
+object RoomCreationEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCreationContent>>(StateEvent.serializer(RoomCreationContent.serializer()))
 object RoomPinnedEventSerializer : GenericJsonEventSerializer<StateEvent<RoomPinnedEventContent>>(StateEvent.serializer(RoomPinnedEventContent.serializer()))
+object RoomMemberEventSerializer : GenericJsonEventSerializer<StateEvent<RoomMemberEventContent>>(StateEvent.serializer(RoomMemberEventContent.serializer()))
 object RoomNameStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomNameContent>>(StateEvent.serializer(RoomNameContent.serializer()))
 object RoomCanonicalAliasStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
+object SpaceChildStateEventSerializer : GenericJsonEventSerializer<StateEvent<SpaceChildContent>>(StateEvent.serializer(SpaceChildContent.serializer()))
 object StateEventFallbackSerializer : GenericJsonEventSerializer<StateEvent<FallbackContent>>(StateEvent.serializer(FallbackContent.serializer()))
 
 open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) : JsonTransformingSerializer<T>(clazz) {
