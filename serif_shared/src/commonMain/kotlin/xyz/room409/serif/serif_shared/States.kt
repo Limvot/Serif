@@ -297,7 +297,17 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                     )
                 }
                 is ReactionRMEC -> null
-                else -> SharedUiMessagePlain(it.sender, null, null, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
+                is RedactionRMEC -> {
+                    SharedUiMessagePlain(it.sender, null, null, "A deletion was processed here",it.event_id, it.origin_server_ts, reactions)
+                }
+                else ->
+                    if(it.unsigned?.redacted_because!=null) {
+                        val details: RoomMessageEvent = it.unsigned.redacted_because as RoomMessageEvent
+                        val dcontent: RedactionRMEC = details.content as RedactionRMEC
+                        SharedUiMessagePlain(it.sender, null, null, "Deleted by ${details.sender} because ${dcontent.reason}", it.event_id, it.origin_server_ts, reactions)
+                    }
+                    else
+                        SharedUiMessagePlain(it.sender, null, null, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
             }
         } else if (it as? RoomEvent != null) {
             // This won't actually happen currently,
@@ -424,6 +434,13 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_id: String, v
             is Success -> println("read receipt sent")
             is Error -> println("read receipt failed because ${readReceiptResult.cause}")
         }
+    }
+    fun sendRedaction(eventID:String): MatrixState {
+        when (val sendMessageResult = msession.sendRedactEvent(room_id,eventID)) {
+            is Success -> { println("${sendMessageResult.value}") }
+            is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
+        }
+        return this
     }
     override fun refresh(): MatrixState = refresh(window_back_length, message_window_base, window_forward_length)
     fun refresh(new_window_back_length: Int, new_message_window_base: String?, new_window_forward_length: Int): MatrixState = MatrixChatRoom(

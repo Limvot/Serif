@@ -718,6 +718,34 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             pin_option.addActionListener({
                 m.togglePinnedEvent(msg.id)
             })
+            val delete_option = JMenuItem("Delete")
+            delete_option.addActionListener({
+                val window = SwingUtilities.getWindowAncestor(panel)
+                val dim = window.getSize()
+                val h = dim.height
+                val w = dim.width
+                val dialog = JDialog(window, "Are you sure you want to delete this message?")
+                val confirm_btn = JButton("Yes")
+                confirm_btn.addActionListener({
+                    m.sendRedaction(msg.id)
+                    dialog.setVisible(false)
+                    dialog.dispose()
+                })
+                val cancel_btn = JButton("No")
+                cancel_btn.addActionListener({
+                    dialog.setVisible(false)
+                    dialog.dispose()
+                })
+                val dpanel = JPanel(FlowLayout())
+                dpanel.add(confirm_btn)
+                dpanel.add(cancel_btn)
+                dialog.add(dpanel)
+
+                dialog.setSize(w / 2, h / 2)
+                dialog.setVisible(true)
+                dialog.setResizable(false)
+                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+            })
             val show_src_option = JMenuItem("Show Source")
             show_src_option.addActionListener({
                 val json_str = m.getEventSrc(msg.id)
@@ -756,6 +784,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             if(msg.sender.contains(m.username)) {
                 msg_action_popup.add(edit_option)
             }
+            msg_action_popup.add(delete_option)
             msg_action_popup.add(pin_option)
             msg_action_popup.add(show_src_option)
             msg_action_popup.show(msg_action_button,0,0)

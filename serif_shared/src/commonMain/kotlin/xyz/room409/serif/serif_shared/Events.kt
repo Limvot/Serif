@@ -109,7 +109,8 @@ abstract class RoomEvent : Event() {
 
 @Serializable
 data class UnsignedData(
-    val age: Long? = null, /*redacted_because: Event?,*/
+    val age: Long? = null,
+    val redacted_because: Event? =null,
     val transaction_id: String? = null
 )
 
@@ -144,6 +145,7 @@ class RoomMemberEventContent(val displayname: String? = null, val avatar_url: St
 class RoomMessageEvent(
     override val raw_self: JsonObject,
     override val raw_content: JsonElement,
+    val redacts: String?=null,
     override val type: String,
     override val event_id: String,
     override val sender: String,
@@ -171,6 +173,16 @@ class ReactionRMEC(
     override val msgtype: String
         get() = "m.reaction"
 }
+@Serializable
+class RedactionRMEC(
+        override val body: String = "<missing message body, likely redacted>",
+        override val msgtype: String = "<missing type, likely redacted>",
+        val reason: String = "no reason given"
+) : RoomMessageEventContent()
+@Serializable
+class RedactionBody(
+    val reason : String
+)
 @Serializable
 class TextRMEC(
     override val body: String = "<missing message body, likely redacted>",
@@ -268,7 +280,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
     override fun selectDeserializer(element: JsonElement) =
         element.jsonObject["type"]!!.jsonPrimitive.content.let { type ->
             when {
-                type == "m.room.message" || type == "m.reaction" -> RoomMessageEventSerializer
+                type == "m.room.message" || type == "m.reaction" || type =="m.room.redaction"-> RoomMessageEventSerializer
                 type == "m.room.name" -> RoomNameStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
                 type == "m.room.pinned_events" -> RoomPinnedEventSerializer
@@ -290,6 +302,7 @@ object RoomMessageEventContentSerializer : JsonContentPolymorphicSerializer<Room
             type == "m.file" -> FileRMEC.serializer()
             type == "m.location" -> LocationRMEC.serializer()
             type == null && element.jsonObject["m.relates_to"]?.jsonObject?.get("rel_type")?.jsonPrimitive?.content == "m.annotation" -> ReactionRMEC.serializer()
+            type == null && element.jsonObject["reason"] !=null -> RedactionRMEC.serializer()
             else -> FallbackRMEC.serializer()
         }
     }

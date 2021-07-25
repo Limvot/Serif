@@ -83,7 +83,8 @@ fun getRelatedEvent(e: Event): String? {
             return e.content.relates_to.event_id!!
         } else if (e.content is TextRMEC && is_edit_content(e.content)) {
             return e.content.relates_to!!.event_id!!
-        }
+        } else if (e.content is RedactionRMEC)
+            return e.redacts!!
     }
     return null
 }
@@ -312,7 +313,29 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             return Error("Image Upload Failed", e)
         }
     }
+    fun getRedactEvent(roomID: String, eventID: String) : RoomEvent {
+        return runBlocking {
+            client.get<Event>("$server/_matrix/client/r0/rooms/$roomID/event/$eventID?access_token=$access_token")
+        } as RoomEvent
+    }
 
+    fun sendRedactEvent(roomID: String, eventID: String):  Outcome<String> {
+        try {
+            val result = runBlocking {
+                val redaction_confirmation =
+                    client.put<EventIdResponse>("$server/_matrix/client/r0/rooms/$roomID/redact/$eventID/$transactionId?access_token=$access_token") {
+                        contentType(ContentType.Application.Json)
+                        body = RedactionBody(reason = "User Sent")
+                    }
+                transactionId++
+                Database.updateSessionTransactionId(session_id, transactionId)
+                redaction_confirmation
+            }
+            return Success("Our redaction event id is: $result")
+        } catch (e: Exception) {
+            return Error("Redaction Failed", e)
+        }
+    }
     fun getDiplayNameAndAvatarFilePath(sender: String, roomId: String?): Pair<String?, String?> {
         val (displayname, avatar_url) =
                 if(roomId != null) { //Get info at the Room-Member level
@@ -535,6 +558,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                     (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }
                 }
                 val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
+                val redactedEvents : MutableList<String> = mutableListOf()
                 synchronized(this) {
                     val max = Database.maxId()
                     var insertId = idBetween(max, "z", true)
@@ -543,14 +567,27 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                             // Note that if this is the first event of this chunk, we record prev_batch for it
                             // so we can later backfill by picking the non-null prev_batch with smallest seqId
                             // for this room.
-                            println("adding event from sync at $insertId")
-                            Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event), if (index == 0 && room.timeline.limited) { room.timeline.prev_batch } else { null })
-                            insertId = idBetween(insertId, "z", true)
+                            if(event is RoomMessageEvent && event.redacts != null){
+                                redactedEvents.add(event.redacts)
+                            } else {
+                                println("adding event from sync at $insertId")
+                                Database.addRoomEvent(insertId, session_id, room_id, event, getRelatedEvent(event),
+                                    if (index == 0 && room.timeline.limited) {
+                                        room.timeline.prev_batch
+                                    } else {
+                                        null
+                                    }
+                                )
+                                insertId = idBetween(insertId, "z", true)
+                            }
                         } catch (e: Exception) {
                             println("while trying to insert (from mergeInSync) ${event} got exception $e")
-
                         }
                     }
+                }
+                for (redactId in redactedEvents) {
+                    val freshRedact = getRedactEvent(room_id,redactId)
+                    Database.replaceRoomEvent(freshRedact,room_id,session_id)
                 }
                 Database.setRoomSummary(
                     session_id,
