@@ -159,12 +159,12 @@ class SharedUiLocationMessage(
 fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int): Pair<List<SharedUiMessage>, Boolean> {
     val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
     val reaction_maps: MutableMap<String, MutableMap<String, MutableSet<String>>> = mutableMapOf()
-    val (displayname, avatar_file_path) = msession.getDiplayNameAndAvatarFilePath(it.sender, room_id)
 
     val (event_range, tracking_live) = msession.getReleventRoomEventsForWindow(room_id, window_back_length, message_window_base, window_forward_length)
 
     event_range.forEach {
         if (it as? RoomMessageEvent != null) {
+            val (displayname, avatar_file_path) = msession.getDiplayNameAndAvatarFilePath(it.sender, room_id)
             val msg_content = it.content
             if (msg_content is ReactionRMEC) {
                 val relates_to = msg_content!!.relates_to!!.event_id!!

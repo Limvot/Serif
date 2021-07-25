@@ -375,7 +375,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             val roomMemberEventContent = Database.getStateEvent(session_id, roomId, "m.room.member", sender)
                     ?.castToStateEventWithContentOfType<RoomMemberEventContent>()
             if(roomMemberEventContent == null) {
-                Error("Room Member Event not found", e)
+                Error("Room Member Event not found", null)
             } else {
                 Success(Pair(roomMemberEventContent?.displayname, roomMemberEventContent?.avatar_url))
             }
