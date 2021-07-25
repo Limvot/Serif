@@ -372,6 +372,7 @@ class SerifText(private var text: AttributedString) : JComponent() {
         text = new_text
         if (text.iterator.endIndex != 0) {
             text.addAttribute(TextAttribute.SIZE, 16.0)
+            text.addAttribute(TextAttribute.FONT, javax.swing.UIManager.getLookAndFeelDefaults().getFont("Label.font"))
         }
         lines = calculateLines(text, size.width / (max_char_width+1))
         max_line_length = lines.map { it.second - it.first }.max() ?: 1
@@ -385,9 +386,15 @@ class SerifText(private var text: AttributedString) : JComponent() {
     override fun getPreferredSize() = Dimension(max_char_width * max_line_length,line_height * (lines.size + 1))
     override fun paintComponent(g: Graphics) {
         val g2d = g as Graphics2D
+        if(this.isOpaque()) {
+            g2d.setColor(this.getBackground())
+            g2d.fillRoundRect(-max_char_width,0,this.getPreferredSize().width+max_char_width*2,this.getSize().height,20,20)
+            g2d.setColor(Color.BLACK)
+        }
         g2d.setRenderingHint(
             RenderingHints.KEY_TEXT_ANTIALIASING,
             RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        g2d.setFont(javax.swing.UIManager.getLookAndFeelDefaults().getFont("Label.font"));
         lines.forEachIndexed { i, line ->
             g2d.drawString(text.getIterator(null, line.first, line.second), 0, (i+1) * line_height)
         }
@@ -395,8 +402,8 @@ class SerifText(private var text: AttributedString) : JComponent() {
 }
 
 data class RecyclableItemGeneratorResult<T>(val pre_items: List<T>, val sub_components: List<Component>, val post_items: List<T>, val deactivate: () -> Unit, val recycle: (T,() -> Unit) -> Pair<List<T>,List<T>>)
-class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val make: Map<String, (T,()->Unit) -> RecyclableItemGeneratorResult<T>>, val render_report: (Int,Int)-> Unit) : JComponent(), Scrollable {
-    data class RecyclableItem<T>(var start: Int, var end: Int, var indent: Int, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,() -> Unit) -> Pair<List<T>,List<T>>)
+class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, val rhsDecider: (T) -> Boolean, val make: Map<String, (T,()->Unit) -> RecyclableItemGeneratorResult<T>>, val render_report: (Int,Int)-> Unit) : JComponent(), Scrollable {
+    data class RecyclableItem<T>(var start: Int, var end: Int, var indent: Int, var righthand: Boolean, val sub_components: List<Component>, val deactivate: ()-> Unit, val recycle: (T,() -> Unit) -> Pair<List<T>,List<T>>)
     val recycle_map: MutableMap<String, ArrayDeque<RecyclableItem<T>>> = mutableMapOf()
     val subs: MutableList<Pair<String, RecyclableItem<T>>> = mutableListOf()
     var current_items: List<T> = listOf()
@@ -409,13 +416,14 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         addMouseListener(object : MouseListener, MouseMotionListener {
             fun dispatchEvent(e: MouseEvent) {
                 for ((_typ, recycleable) in subs) {
-                    val (sy, ey, indent, sub_components, _deactivate, _recycle) = recycleable
+                    val (sy, ey, indent, right_adjust, sub_components, _deactivate, _recycle) = recycleable
                     if ( (sy <= e.point.y)
                        &&(ey >= e.point.y) ) {
                         var sub_offset = sy
                         for (c in sub_components) {
                             if (e.point.y < sub_offset + c.height) {
-                                val new_e = MouseEvent(c, e.id, e.getWhen(), e.modifiers, e.x-indent, e.y-sub_offset, e.xOnScreen, e.yOnScreen, e.clickCount, e.isPopupTrigger(), e.button)
+                                val x_pos = e.x - if(!right_adjust) { indent } else { (our_width - (c.getPreferredSize().width + indent + 50)) }
+                                val new_e = MouseEvent(c, e.id, e.getWhen(), e.modifiers, x_pos, e.y-sub_offset, e.xOnScreen, e.yOnScreen, e.clickCount, e.isPopupTrigger(), e.button)
                                 // a hack so that stuff like buttons have a proper parent when the reply/edit menu pops up and uses it
                                 add(c)
                                 c.dispatchEvent(new_e)
@@ -471,8 +479,9 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         }
         subs.clear()
         val indent_incr = 100
-        fun flatten_into_recyclables(items: List<T>, indent: Int) {
+        fun flatten_into_recyclables(items: List<T>, indent: Int, right_adjust: Boolean) {
             for (i in items) {
+                var righthand = if(indent == 0) { rhsDecider(i) } else { right_adjust }
                 var height_delta = 0
                 val typ = choose(i)
                 val our_height_copy = our_height
@@ -481,7 +490,7 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
                 val (recycleable, post_items) = if (possible_recycleable != null) {
                     // TODO
                     val (pre_items, post_items) = possible_recycleable.recycle(i, repaint_lambda)
-                    flatten_into_recyclables(pre_items, indent + indent_incr)
+                    flatten_into_recyclables(pre_items, indent + indent_incr, righthand)
                     possible_recycleable.start = our_height
                     possible_recycleable.indent = indent
                     Pair(possible_recycleable, post_items)
@@ -489,28 +498,33 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
                     println("Creating a new $typ")
                     // TODO
                     val (pre_items, sub_components, post_items, deactivate, recycle) = make[typ]!!(i, repaint_lambda)
-                    flatten_into_recyclables(pre_items, indent + indent_incr)
-                    Pair(RecyclableItem<T>(our_height, -1, indent, sub_components, deactivate, recycle), post_items)
+                    flatten_into_recyclables(pre_items, indent + indent_incr, righthand)
+                    Pair(RecyclableItem<T>(our_height, -1, indent, righthand, sub_components, deactivate, recycle), post_items)
                 }
                 for (c in recycleable.sub_components) {
                     c.setSize(our_width, 1000)
                     val d = c.getPreferredSize()
                     if(c is JButton && (c as JButton).getText() == "...") {
                         c.setSize(d.width, d.height)
-                        c.setBounds(indent, our_height, d.width, d.height)
+                        if(righthand) {
+                            c.setBounds(our_width-d.width-indent-50, our_height, d.width, d.height)
+                        } else {
+                            c.setBounds(indent, our_height, d.width, d.height)
+                        }
                     } else {
                         c.setSize(our_width-indent, d.height)
                         c.setBounds(indent, our_height, our_width-indent, d.height)
                     }
                     height_delta += c.height
                 }
+                recycleable.righthand = righthand
                 recycleable.end = our_height + height_delta
                 subs.add(Pair(typ, recycleable))
                 our_height += height_delta
-                flatten_into_recyclables(post_items, indent + indent_incr)
+                flatten_into_recyclables(post_items, indent + indent_incr, righthand)
             }
         }
-        flatten_into_recyclables(items, 0)
+        flatten_into_recyclables(items, 0, false)
         current_items = items
 
         if (new_idx != -1) {
@@ -538,7 +552,7 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         began = null
         ended = null
         for ((i, typ_recycleable) in subs.withIndex()) {
-            val (sy, ey, indent, sub_components, _refresh) = typ_recycleable.second
+            var (sy, ey, indent, right_adjust, sub_components, _refresh) = typ_recycleable.second
             if ( (sy <= clip_bounds_ey)
                &&(ey >= clip_bounds.y) ) {
                 if (began == null) {
@@ -547,13 +561,21 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
                 }
                 ended = i
                 ended_pix = ey - clip_bounds_ey
-                g.translate(indent, 0)
+                val x_translation = if(!right_adjust) {
+                    indent
+                } else {
+                    our_width - indent
+                }
+                g.translate(x_translation, 0)
                 for (c in sub_components) {
+                    val pref_w = c.getPreferredSize().width + 50
+                    if(right_adjust) { g.translate(-pref_w,0) }
                     c.paint(g)
                     count += 1
                     g.translate(0, c.height)
+                    if(right_adjust) { g.translate(pref_w,0) }
                 }
-                g.translate(-indent, 0)
+                g.translate(-x_translation, 0)
                 sets += 1
             } else {
                 g.translate(0, ey-sy)
@@ -587,11 +609,12 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         menu_item.setText(pin_str)
     }
     val mk_sender = { msg: SharedUiMessage ->
+        val displayname = msg.displayname ?: msg.sender
         val render_text = { msg: SharedUiMessage ->
-            if (msg.reactions.size > 0) {
-                "${msg.sender}: ${msg.reactions} "
+            if (msg.reactions.size > 0 ) {
+                "${displayname}: ${msg.reactions} "
             } else {
-                "${msg.sender}: "
+                "${displayname}: "
             }
         }
         val sender = SerifText(render_text(msg))
@@ -626,6 +649,34 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             updatePinOptionText(msg.id,pin_option)
             pin_option.addActionListener({
                 m.togglePinnedEvent(msg.id)
+            })
+            val delete_option = JMenuItem("Delete")
+            delete_option.addActionListener({
+                val window = SwingUtilities.getWindowAncestor(panel)
+                val dim = window.getSize()
+                val h = dim.height
+                val w = dim.width
+                val dialog = JDialog(window, "Are you sure you want to delete this message?")
+                val confirm_btn = JButton("Yes")
+                confirm_btn.addActionListener({
+                    m.sendRedaction(msg.id)
+                    dialog.setVisible(false)
+                    dialog.dispose()
+                })
+                val cancel_btn = JButton("No")
+                cancel_btn.addActionListener({
+                    dialog.setVisible(false)
+                    dialog.dispose()
+                })
+                val dpanel = JPanel(FlowLayout())
+                dpanel.add(confirm_btn)
+                dpanel.add(cancel_btn)
+                dialog.add(dpanel)
+
+                dialog.setSize(w / 2, h / 2)
+                dialog.setVisible(true)
+                dialog.setResizable(false)
+                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
             })
             val show_src_option = JMenuItem("Show Source")
             show_src_option.addActionListener({
@@ -665,6 +716,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             if(msg.sender.contains(m.username)) {
                 msg_action_popup.add(edit_option)
             }
+            msg_action_popup.add(delete_option)
             msg_action_popup.add(pin_option)
             msg_action_popup.add(show_src_option)
             msg_action_popup.show(msg_action_button,0,0)
@@ -682,6 +734,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 is SharedUiLocationMessage -> "location"
                 else -> "text"
         } },
+        { it.sender == m.username },
         mapOf(
             "room" to { msg: SharedUiMessage, repaint_cell ->
                 var transition_room_id: String = ""
@@ -845,12 +898,19 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 message.addMouseListener(URLMouseListener(message))
                 val (sender, set_sender) = mk_sender(msg)
                 val (menu, set_menu) = mk_menu(msg)
+                message.setOpaque(true)
+                message.setBackground(Color(msg.sender.hashCode()))
                 RecyclableItemGeneratorResult(
                     msg.replied_event?.let { listOf(it) } ?: listOf(),
                     listOf(sender, message, menu),
                     listOf(),
                     { Unit },
-                    { msg, repaint_cell -> message.setText(stringToAttributedURLString(msg.message)); set_sender(msg); set_menu(msg); Pair(msg.replied_event?.let { listOf(it) } ?: listOf(),listOf()) }
+                    { msg, repaint_cell ->
+                        message.setText(stringToAttributedURLString(msg.message));
+                        message.setBackground(Color(msg.sender.hashCode()));
+                        set_sender(msg);
+                        set_menu(msg);
+                        Pair(msg.replied_event?.let { listOf(it) } ?: listOf(),listOf()) }
                 )
             }
         ),
@@ -1116,6 +1176,12 @@ fun main(args: Array<String>) {
 
     val fontStream = object {}.javaClass.getResourceAsStream("iosevka-fixed-extended.ttf")
     val font = Font.createFont(Font.TRUETYPE_FONT, fontStream).deriveFont(16f)
-    UIManager.getLookAndFeelDefaults().put("defaultFont", font)
+    val keys = UIManager.getLookAndFeelDefaults().keys();
+    while (keys.hasMoreElements()) {
+      val key = keys.nextElement();
+      val value = UIManager.get (key);
+      if (value is javax.swing.plaf.FontUIResource)
+        UIManager.put (key, font);
+      }
     javax.swing.SwingUtilities.invokeLater({ App() })
 }
