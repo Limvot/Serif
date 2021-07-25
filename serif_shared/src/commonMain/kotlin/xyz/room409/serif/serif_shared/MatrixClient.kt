@@ -96,6 +96,7 @@ inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as
 class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
     private var in_flight_media_requests: MutableSet<String> = mutableSetOf()
+    private var in_flight_user_requests: MutableSet<String> = mutableSetOf()
     private var sync_should_run = true
     private var sync_thread: Thread? = thread(start = true) {
         // 30 seconds is Matrix recommended, afaik
@@ -309,6 +310,86 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             return sendMessageImpl(body, room_id)
         } catch (e: Exception) {
             return Error("Image Upload Failed", e)
+        }
+    }
+
+    fun getDiplayNameAndAvatarFilePath(sender: String, roomId: String?): Pair<String?, String?> {
+        val (displayname, avatar_url) =
+                if(roomId != null) { //Get info at the Room-Member level
+                     when (val room_member_info = getLocalRoomMemberDetails(sender, roomId)) {
+                        is Success -> Pair(room_member_info.value.first, room_member_info.value.second)
+                        is Error -> Pair(sender, null)
+                    }
+                } else { //Get info at the User-Profile level
+                    when (val user_profile_info = getLocalUserProfileDetails(sender)) {
+                        is Success -> Pair(user_profile_info.value.first, user_profile_info.value.second)
+                        is Error -> Pair(sender, null)
+                    }
+                }
+
+        return if (avatar_url != null) {
+            when (val avatar_file_path = getLocalMediaPathFromUrl(avatar_url)) {
+                is Success -> Pair(displayname, avatar_file_path.value)
+                is Error -> Pair(displayname, null)
+            }
+        } else {
+            Pair(displayname, null)
+        }
+    }
+
+    fun getLocalUserProfileDetails(sender: String): Outcome<Pair<String?, String?>> {
+        try {
+            val cached_user = Database.getUserProfileFromCache(sender)
+            if (cached_user != null) {
+                return Success(cached_user)
+            }
+
+            synchronized(this) {
+                if (in_flight_user_requests.contains(sender)) {
+                    return Error("User request already in flight");
+                }
+                in_flight_user_requests.add(sender)
+            }
+            thread(start = true) {
+                //No valid cache hit
+                println("Background thread request for $sender")
+                val (displayname, avatar_url) = getUserProfile(sender)
+                val result = Database.addUserProfileToCache(sender, displayname, avatar_url, false)
+                println("Finished downloading $sender in the background with $result")
+                synchronized(this) {
+                    in_flight_user_requests.remove(sender)
+                }
+                onUpdate()
+            }
+
+            println("Returning early, downloading $sender in the background")
+            return Error("Downloading user profile in the background")
+        } catch (e: Exception) {
+            println("Error with user profile retrieval $e")
+            return Error("User Profile Retrieval Failed", e)
+        }
+    }
+
+    fun getLocalRoomMemberDetails(sender: String, roomId: String): Outcome<Pair<String?, String?>> {
+        return try {
+            val roomMemberEventContent = Database.getStateEvent(session_id, roomId, "m.room.member", sender)
+                    ?.castToStateEventWithContentOfType<RoomMemberEventContent>()
+            if(roomMemberEventContent == null) {
+                Error("Room Member Event not found", null)
+            } else {
+                Success(Pair(roomMemberEventContent?.displayname, roomMemberEventContent?.avatar_url))
+            }
+        } catch (e: Exception) {
+            println("Error with room member details retrieval $e")
+            Error("Room Member details Retrieval Failed", e)
+        }
+    }
+
+    fun getUserProfile(sender: String): Pair<String?,String?> {
+        return runBlocking {
+            val user_profile_response =
+                    client.get<ProfileResponse>("$server/_matrix/client/r0/profile/$sender?access_token=$access_token")
+            Pair(user_profile_response.displayname, user_profile_response.avatar_url)
         }
     }
 

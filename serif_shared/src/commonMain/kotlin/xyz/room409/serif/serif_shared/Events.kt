@@ -56,6 +56,8 @@ data class FileInfo(val mimetype: String, val size: Int)
 @Serializable
 data class MediaUploadResponse(val content_uri: String)
 @Serializable
+data class ProfileResponse(val displayname: String? = null, val avatar_url: String? = null)
+@Serializable
 data class EventIdResponse(val event_id: String)
 @Serializable
 data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
@@ -134,6 +136,8 @@ class StateEvent<T>(
 class RoomCanonicalAliasContent(val alias: String? = null, val alt_aliases: List<String>? = null)
 @Serializable
 class RoomPinnedEventContent(val pinned: List<String>? = null)
+@Serializable
+class RoomMemberEventContent(val displayname: String? = null, val avatar_url: String? = null)
 
 // RoomMessageEvent and RoomMessageEventContent should eventually be generic on message type
 @Serializable
@@ -268,6 +272,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
                 type == "m.room.name" -> RoomNameStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
                 type == "m.room.pinned_events" -> RoomPinnedEventSerializer
+                type == "m.room.member" -> RoomMemberEventSerializer //TODO: Make a member serializer
                 element.jsonObject["state_key"] != null -> StateEventFallbackSerializer
                 type.startsWith("m.room") -> RoomEventFallbackSerializer
                 else -> EventFallbackSerializer
@@ -294,6 +299,7 @@ object EventFallbackSerializer : GenericJsonEventSerializer<EventFallback>(Event
 object RoomEventFallbackSerializer : GenericJsonEventSerializer<RoomEventFallback>(RoomEventFallback.serializer())
 object RoomMessageEventSerializer : GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
 object RoomPinnedEventSerializer : GenericJsonEventSerializer<StateEvent<RoomPinnedEventContent>>(StateEvent.serializer(RoomPinnedEventContent.serializer()))
+object RoomMemberEventSerializer : GenericJsonEventSerializer<StateEvent<RoomMemberEventContent>>(StateEvent.serializer(RoomMemberEventContent.serializer()))
 object RoomNameStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomNameContent>>(StateEvent.serializer(RoomNameContent.serializer()))
 object RoomCanonicalAliasStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
 object StateEventFallbackSerializer : GenericJsonEventSerializer<StateEvent<FallbackContent>>(StateEvent.serializer(FallbackContent.serializer()))
