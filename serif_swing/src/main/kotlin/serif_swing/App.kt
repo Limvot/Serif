@@ -973,17 +973,22 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var edited_event_id = ""
     init {
         val mention_listener = MentionListener(message_field, { mention_txt: String ->
-            val members = m.members
+            val members = m.members.map { user: String -> Pair(user, m.getDisplayNameForUser(user)) }
             val text = mention_txt.split("@").lastOrNull()?.split(" ")?.firstOrNull() ?: ""
-            val suggestions = if(text == "") { members } else { members.filter({it.contains(text)}) }
+            println("Showing mentions matching \'$text\'")
+            val suggestions = if(text == "") {
+                members
+            } else {
+                members.filter({ (user,display) -> user.contains(text) || display.contains(text) })
+            }
             mentions_popup.setVisible(false)
             mentions_popup.removeAll()
             for(acct in suggestions) {
-                val autocomp_opt = JMenuItem(acct)
+                val autocomp_opt = JMenuItem("${acct.first} | ${acct.second}")
                 autocomp_opt.addActionListener({
                     val cursor_pos = message_field.getCaretPosition()
                     val start_pos = message_field.text.indexOfLast({ (it == '@') })
-                    val new_str = message_field.text.replaceRange(start_pos, cursor_pos, acct.drop(1))
+                    val new_str = message_field.text.replaceRange(start_pos, cursor_pos, acct.first.drop(1))
                     message_field.text = new_str
                 })
                 mentions_popup.add(autocomp_opt)
@@ -993,7 +998,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             message_field.grabFocus()
 
             val h = SwingUtilities.getWindowAncestor(panel).getSize().height - mentions_popup.getHeight()
-            mentions_popup.setLocation(0,h)
+            mentions_popup.setLocation(0,h+20)
         },
         {
             mentions_popup.setVisible(false)

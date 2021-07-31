@@ -464,6 +464,10 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
             got_messages
         }
     }
+    fun getDisplayNameForUser(sender: String) : String {
+        val (displayname, _) = msession.getDiplayNameAndAvatarFilePath(sender, room_id)
+        return displayname ?: ""
+    }
     val window_forward_length: Int = if (message_window_base != null) { window_forward_length_in } else { 0 }
     fun sendMessage(msg: String): MatrixState {
         when (val sendMessageResult = msession.sendMessage(msg, room_id)) {

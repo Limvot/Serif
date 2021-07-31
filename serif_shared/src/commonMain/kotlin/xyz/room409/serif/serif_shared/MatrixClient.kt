@@ -543,13 +543,8 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         sync_should_run = false
     }
     fun getRoomMembers(id: String): List<String> {
-        val events = Database.getStateEvents(session_id, id)
-        return events.map({ it : Event ->
-            if(it as? RoomEventFallback != null) {
-                if(it.type == "m.room.member") { it.sender }
-                else { null }
-            } else { null }
-        }).filterNotNull()
+        val events = Database.getStateEvents(session_id, id, "m.room.member")
+        return events.map({ (id,event) ->  (event as RoomEvent).sender })
     }
     fun getSpaceChildren(id: String): List<String> = Database.getStateEvents(session_id, id, "m.space.child").map { (id,event) ->
         if (event.castToStateEventWithContentOfType<SpaceChildContent>() != null) {
