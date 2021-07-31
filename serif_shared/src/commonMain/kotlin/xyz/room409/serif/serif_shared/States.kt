@@ -474,7 +474,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
     }
     val window_forward_length: Int = if (message_window_base != null) { window_forward_length_in } else { 0 }
     fun sendMessage(msg: String, format: String = ""): MatrixState {
-        var formatted_body = if(format == "") { "" } else { formatted_body = msg }
+        var formatted_body = if(format == "") { "" } else { msg }
         var body = getUnformattedBody(msg)
         when (val sendMessageResult = msession.sendMessage(body, room_id, "", format, formatted_body)) {
             is Success -> { println("${sendMessageResult.value}") }
@@ -491,15 +491,13 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
     }
     fun sendReply(msg: String, in_reply_to_id: String, format: String = ""): MatrixState {
         val in_reply_to = toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0, true).first.firstOrNull()
-        var formatted_body = ""
+        var formatted_body = msg
         var body = getUnformattedBody(msg)
         val message = (in_reply_to?.let { event ->
-            if(format != "") {
-                val server = msession.server
-                val prev_sender = event.sender
-                val prev_content = event.message
-                formatted_body = "<mx-reply><blockquote><a href=\"https://matrix.to/#/$room_id:$server/$in_reply_to_id?via=$server\">In reply to</a> <a href=\"https://matrix.to/#/$prev_sender\">$prev_sender</a><br />$prev_content</blockquote></mx-reply>$msg"
-            }
+            val server = msession.server
+            val prev_sender = event.sender
+            val prev_content = event.message
+            formatted_body = "<mx-reply><blockquote><a href=\"https://matrix.to/#/$room_id:$server/$in_reply_to_id?via=$server\">In reply to</a> <a href=\"https://matrix.to/#/$prev_sender\">$prev_sender</a><br />$prev_content</blockquote></mx-reply>$msg"
              event.message.lines().mapIndexed { i,line -> if (i == 0) { "> <${event.sender}> $line" } else { "> $line" } }.joinToString("\n")
         } ?: "> in reply to $in_reply_to_id") + "\n$body"
         when (val sendMessageResult = msession.sendMessage(message, room_id, in_reply_to_id, format, formatted_body)) {

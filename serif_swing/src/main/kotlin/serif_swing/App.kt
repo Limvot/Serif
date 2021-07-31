@@ -1087,7 +1087,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     replied_event_id != "" -> {
                         val eventid = replied_event_id
                         replied_event_id = ""
-                        m.sendReply(text, eventid, format)
+                        m.sendReply(text, eventid, "org.matrix.custom.html")
                     }
                     reacted_event_id != "" -> {
                         val eventid = reacted_event_id
