@@ -225,13 +225,14 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             return Error("Message Send Failed", e)
         }
     }
-    fun sendMessage(msg: String, room_id: String, reply_id: String = "", format: String = "", formatted_body: String = ""): Outcome<String> {
+    fun sendMessage(msg: String, room_id: String, reply_id: String = "", formatted: String = ""): Outcome<String> {
         val relation = if(reply_id != "") {
             RelationBlock(ReplyToRelation(reply_id))
         } else {
             null
         }
-        val body = if(format == "") { TextRMEC(msg, relation) } else { TextRMEC(msg,relation,format,formatted_body) }
+        val formatted_body = if(msg == formatted) { formatted } else { null }
+        val body = TextRMEC(msg,relation,formatted_body)
         return sendMessageImpl(body, room_id)
     }
     fun sendReaction(msg: String, room_id: String, reacted_id: String): Outcome<String> {

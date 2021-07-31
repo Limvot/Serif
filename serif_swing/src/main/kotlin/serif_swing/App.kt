@@ -971,7 +971,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var replied_event_id = ""
     var reacted_event_id = ""
     var edited_event_id = ""
-    var formatted = false
     init {
         val mention_listener = MentionListener(message_field, { mention_txt: String ->
             val members = m.members.map { user: String -> Pair(user, m.getDisplayNameForUser(user)) }
@@ -992,7 +991,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     val user_matrix_dot_to = "<a href=\"https://matrix.to/#/${acct.first}\">${acct.second}</a>"
                     val new_str = message_field.text.replaceRange(start_pos, cursor_pos, user_matrix_dot_to)
                     message_field.text = new_str
-                    formatted = true
                 })
                 mentions_popup.add(autocomp_opt)
             }
@@ -1004,11 +1002,6 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             mentions_popup.setLocation(0,h+20)
         },
         {
-            //If we were containing formatted text but we don't have any links in the text
-            //then unset formatted
-            if(formatted && !message_field.text.contains("<a href=\"")) {
-                formatted = false
-            }
             mentions_popup.setVisible(false)
             message_field.grabFocus()
         })
@@ -1075,19 +1068,15 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         val onSend: (ActionEvent) -> Unit = {
             val text = message_field.text
             msg_context_panel.setVisible(false)
-            val format = if(!formatted) { "" } else { "org.matrix.custom.html" }
-            formatted = false
-            // message_field must be cleared after formatting is handled
-            // otherwise the listener will unset the formatted flag
             message_field.text = ""
 
             val res =
                 when {
-                    replied_event_id == "" && edited_event_id == "" && reacted_event_id == "" -> { m.sendMessage(text, format) }
+                    replied_event_id == "" && edited_event_id == "" && reacted_event_id == "" -> { m.sendMessage(text) }
                     replied_event_id != "" -> {
                         val eventid = replied_event_id
                         replied_event_id = ""
-                        m.sendReply(text, eventid, "org.matrix.custom.html")
+                        m.sendReply(text, eventid)
                     }
                     reacted_event_id != "" -> {
                         val eventid = reacted_event_id

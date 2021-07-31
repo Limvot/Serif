@@ -208,11 +208,11 @@ class TextRMEC(
     val formatted_body: String? = null
 ) : RoomMessageEventContent() {
     constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, relates_to = rel_to)
-    constructor(body: String, rel_to: RelationBlock?, format: String, formatted_body: String) : this(
+    constructor(body: String, rel_to: RelationBlock?, formatted_body: String?) : this(
         msgtype = "m.text",
         body = body,
         relates_to = rel_to,
-        format = format,
+        format = if(formatted_body != null) { "org.matrix.custom.html" } else { null },
         formatted_body = formatted_body
     )
     constructor(msg: String, fallback: String, original_event: String) : this(
