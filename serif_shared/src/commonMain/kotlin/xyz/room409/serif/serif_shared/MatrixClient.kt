@@ -558,10 +558,10 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                val (displayname, _) = getDiplayNameAndAvatarFilePath(sender, id)
                displayname ?: sender
            })
-        var tmp = ""
+        var tmp : String? = null
         val max_name_length = 80
         members.forEachIndexed {idx, member ->
-            if(tmp.length+member.length+3 > max_name_length) {
+            if((tmp?.length ?: 0)+member.length+2 > max_name_length) {
                 val remaining = members.size - idx
                 val rem_str = if(remaining == 1) { "other" } else { "others" }
                 tmp = "$tmp and $remaining $rem_str"
@@ -570,7 +570,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 tmp = if(tmp == "") { "$member" } else { "$tmp, $member" }
             }
         }
-        return if(tmp != "") { tmp } else { null }
+        return tmp
     }
     fun determineRoomName(id: String): String {
         return Database.getStateEvent(session_id, id, "m.room.name", "")?.castToStateEventWithContentOfType<RoomNameContent>()?.name
