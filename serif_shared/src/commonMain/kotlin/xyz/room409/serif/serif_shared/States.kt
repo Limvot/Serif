@@ -468,9 +468,15 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
         val (displayname, _) = msession.getDiplayNameAndAvatarFilePath(sender, room_id)
         return displayname ?: ""
     }
+    fun getUnformattedBody(formatted_body: String) : String {
+        val link_regex = Regex("<a href=\"https://matrix.to/#/[^:]*:[^>]*\">(.*)</a>")
+        return formatted_body.replace(link_regex,"$1")
+    }
     val window_forward_length: Int = if (message_window_base != null) { window_forward_length_in } else { 0 }
-    fun sendMessage(msg: String): MatrixState {
-        when (val sendMessageResult = msession.sendMessage(msg, room_id)) {
+    fun sendMessage(msg: String, format: String = ""): MatrixState {
+        var formatted_body = if(format == "") { "" } else { formatted_body = msg }
+        var body = getUnformattedBody(msg)
+        when (val sendMessageResult = msession.sendMessage(body, room_id, "", format, formatted_body)) {
             is Success -> { println("${sendMessageResult.value}") }
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }
@@ -483,12 +489,20 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
         }
         return this
     }
-    fun sendReply(msg: String, in_reply_to_id: String): MatrixState {
+    fun sendReply(msg: String, in_reply_to_id: String, format: String = ""): MatrixState {
         val in_reply_to = toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0, true).first.firstOrNull()
+        var formatted_body = ""
+        var body = getUnformattedBody(msg)
         val message = (in_reply_to?.let { event ->
+            if(format != "") {
+                val server = msession.server
+                val prev_sender = event.sender
+                val prev_content = event.message
+                formatted_body = "<mx-reply><blockquote><a href=\"https://matrix.to/#/$room_id:$server/$in_reply_to_id?via=$server\">In reply to</a> <a href=\"https://matrix.to/#/$prev_sender\">$prev_sender</a><br />$prev_content</blockquote></mx-reply>$msg"
+            }
              event.message.lines().mapIndexed { i,line -> if (i == 0) { "> <${event.sender}> $line" } else { "> $line" } }.joinToString("\n")
-        } ?: "> in reply to $in_reply_to_id") + "\n$msg"
-        when (val sendMessageResult = msession.sendMessage(message, room_id, in_reply_to_id)) {
+        } ?: "> in reply to $in_reply_to_id") + "\n$body"
+        when (val sendMessageResult = msession.sendMessage(message, room_id, in_reply_to_id, format, formatted_body)) {
             is Success -> { println("${sendMessageResult.value}") }
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }

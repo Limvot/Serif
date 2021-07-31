@@ -203,9 +203,18 @@ class TextRMEC(
     override val body: String = "<missing message body, likely redacted>",
     override val msgtype: String = "<missing type, likely redacted>",
     @SerialName("m.new_content") val new_content: TextRMEC? = null,
-    @SerialName("m.relates_to") val relates_to: RelationBlock? = null
+    @SerialName("m.relates_to") val relates_to: RelationBlock? = null,
+    val format: String? = null,
+    val formatted_body: String? = null
 ) : RoomMessageEventContent() {
     constructor(body: String, rel_to: RelationBlock?) : this(msgtype = "m.text", body = body, relates_to = rel_to)
+    constructor(body: String, rel_to: RelationBlock?, format: String, formatted_body: String) : this(
+        msgtype = "m.text",
+        body = body,
+        relates_to = rel_to,
+        format = format,
+        formatted_body = formatted_body
+    )
     constructor(msg: String, fallback: String, original_event: String) : this(
         msgtype = "m.text",
         body = fallback,
