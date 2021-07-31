@@ -570,7 +570,6 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 tmp = if(tmp == "") { "$member" } else { "$tmp, $member" }
             }
         }
-        println("Room name is determined to be: $tmp")
         return if(tmp != "") { tmp } else { null }
     }
     fun determineRoomName(id: String): String {
