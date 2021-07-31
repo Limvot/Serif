@@ -552,9 +552,30 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         return Database.getStateEvent(session_id, id, "m.room.pinned_events", "")?.castToStateEventWithContentOfType<RoomPinnedEventContent>()?.pinned
             ?: listOf()
     }
+    private fun constructRoomNameFromMembers(id: String): String? {
+        val members = Database.getStateEvents(session_id, id, "m.room.member").map({
+           (id,event) -> (event as RoomEvent).sender }).filter({it != this.user}).map({ sender ->
+               val (displayname, _) = getDiplayNameAndAvatarFilePath(sender, id)
+               displayname ?: sender
+           })
+        var tmp : String? = null
+        val max_name_length = 80
+        members.forEachIndexed {idx, member ->
+            if((tmp?.length ?: 0)+member.length+2 > max_name_length) {
+                val remaining = members.size - idx
+                val rem_str = if(remaining == 1) { "other" } else { "others" }
+                tmp = "$tmp and $remaining $rem_str"
+                return@forEachIndexed
+            } else {
+                tmp = if(tmp == "") { "$member" } else { "$tmp, $member" }
+            }
+        }
+        return tmp
+    }
     fun determineRoomName(id: String): String {
         return Database.getStateEvent(session_id, id, "m.room.name", "")?.castToStateEventWithContentOfType<RoomNameContent>()?.name
             ?: Database.getStateEvent(session_id, id, "m.room.canonical_alias", "")?.castToStateEventWithContentOfType<RoomCanonicalAliasContent>()?.alias
+            ?: constructRoomNameFromMembers(id)
             ?: "<no room name - $id>"
     }
     fun mergeInSync(new_sync_response: SyncResponse) {
