@@ -50,7 +50,6 @@ dependencies {
 
     // My new
     implementation("com.google.accompanist:accompanist-coil:0.13.0")
-
 }
 
 android {

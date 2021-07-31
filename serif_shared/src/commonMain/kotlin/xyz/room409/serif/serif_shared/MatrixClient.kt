@@ -1,6 +1,5 @@
 package xyz.room409.serif.serif_shared
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.features.*
 import io.ktor.client.features.json.*
 import io.ktor.client.features.json.serializer.KotlinxSerializer
@@ -617,22 +616,8 @@ object JsonFormatHolder {
 }
 
 class MatrixClient {
-    // 35 seconds, to comfortably handle the 30 second sync
-    // timeout we send to the server (recommended Matrix default)
-    fun makeClient() = HttpClient(CIO) {
-        install(HttpTimeout) {
-            requestTimeoutMillis = 35000
-        }
-        install(JsonFeature) {
-            serializer = KotlinxSerializer(
-                kotlinx.serialization.json.Json {
-                    ignoreUnknownKeys = true
-                }
-            )
-        }
-    }
     fun login(username: String, password: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
-        val client = makeClient()
+        val client = Platform.makeHttpClient()
         val server = "https://synapse.room409.xyz"
         try {
             val loginResponse = runBlocking {
@@ -654,7 +639,7 @@ class MatrixClient {
         }
     }
     fun loginFromSavedSession(username: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
-        val client = makeClient()
+        val client = Platform.makeHttpClient()
         val server = "https://synapse.room409.xyz"
         // Load from DB
         println("loading specific session from db")
