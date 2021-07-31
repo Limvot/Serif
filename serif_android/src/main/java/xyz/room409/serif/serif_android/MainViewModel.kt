@@ -119,14 +119,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return
             }
         } finally { lock.unlock() }
-        lock.lock()
-        while (actions.size > 0) {
-            val this_action = actions.removeFirst()
-            lock.unlock()
-            execute(this_action)
+        viewModelScope.launch(Dispatchers.IO) {
             lock.lock()
+            while (actions.size > 0) {
+                val this_action = actions.removeFirst()
+                lock.unlock()
+                execute(this_action)
+                lock.lock()
+            }
+            lock.unlock()
         }
-        lock.unlock()
     }
     private fun execute(_a: Action) {
         when (val a = _a) {
