@@ -112,9 +112,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun pushDo(_a: Action) {
         lock.lock()
         try {
-            if (actions.size == 0 || !(_a is Action.Refresh)) {
-                actions.add(_a)
+            when (_a) {
+                is Action.NavigateToRoom -> { actions.clear(); }
+                is Action.ExitRoom -> { actions.clear(); }
+                is Action.Refresh -> {
+                    if (actions.size != 0) {
+                        return
+                    }
+                }
             }
+            actions.add(_a)
             if (actions.size > 1) {
                 return
             }
