@@ -176,17 +176,17 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
             val (displayname, avatar_file_path) = msession.getDiplayNameAndAvatarFilePath(it.sender, room_id)
             val msg_content = it.content
             if (msg_content is ReactionRMEC) {
-                val relates_to = msg_content!!.relates_to!!.event_id!!
-                val key = msg_content!!.relates_to!!.key!!
+                val relates_to = msg_content.relates_to.event_id!!
+                val key = msg_content.relates_to.key!!
                 val reactions_for_msg = reaction_maps.getOrPut(relates_to, { mutableMapOf() })
                 reactions_for_msg.getOrPut(key, { mutableSetOf() }).add(it.sender)
             } else if (msg_content is TextRMEC) {
                 if (is_edit_content(msg_content)) {
                     // This is an edit
-                    val replaced_id = msg_content!!.relates_to!!.event_id!!
+                    val replaced_id = msg_content.relates_to!!.event_id!!
                     val reactions = reaction_maps.get(replaced_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
                     val edit_msg = SharedUiMessagePlain(it.sender, displayname, avatar_file_path,
-                    msg_content!!.new_content!!.body, msg_content!!.new_content!!.formatted_body,
+                    msg_content.new_content!!.body, msg_content.new_content!!.formatted_body,
                         it.event_id, it.origin_server_ts, reactions)
 
                     if (edit_maps.contains(replaced_id)) {
@@ -236,7 +236,6 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
 
             when (msg_content) {
                 is TextRMEC -> {
-                    val (displayname, avatar_file_path) = msession.getDiplayNameAndAvatarFilePath(it.sender, room_id)
                     val transform_body = { body_message: String ->
                         if (in_reply_to != null) {
                             var stripping = true
@@ -292,7 +291,6 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                 is AudioRMEC -> generate_media_msg(msg_content.url, ::SharedUiAudioMessage)
                 is VideoRMEC -> generate_media_msg(msg_content.url, ::SharedUiVideoMessage)
                 is FileRMEC -> {
-                    val (displayname, avatar_file_path) = msession.getDiplayNameAndAvatarFilePath(it.sender, room_id)
                     SharedUiFileMessage(
                         it.sender, displayname, avatar_file_path, it.content.body, it.event_id,
                         it.origin_server_ts, reactions, msg_content.filename,
@@ -300,7 +298,6 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                     )
                 }
                 is LocationRMEC -> {
-                    val (displayname, avatar_file_path) = msession.getDiplayNameAndAvatarFilePath(it.sender, room_id)
                     SharedUiLocationMessage(
                         it.sender, displayname, avatar_file_path, it.content.body, it.event_id,
                         it.origin_server_ts, reactions, msg_content.geo_uri
