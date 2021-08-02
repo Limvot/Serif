@@ -502,7 +502,8 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
         val message = (in_reply_to?.let { event ->
             val server = msession.server
             val prev_sender = event.sender
-            val prev_content = event.message
+            val prev_formatted_content = event.formatted_message
+            val prev_content = if(prev_formatted_content != null) { prev_formatted_content.split("</mx-reply>")[1] } else { event.message }
             formatted_body = "<mx-reply><blockquote><a href=\"https://matrix.to/#/$room_id:$server/$in_reply_to_id?via=$server\">In reply to</a> <a href=\"https://matrix.to/#/$prev_sender\">$prev_sender</a><br />$prev_content</blockquote></mx-reply>$msg"
              event.message.lines().mapIndexed { i,line -> if (i == 0) { "> <${event.sender}> $line" } else { "> $line" } }.joinToString("\n")
         } ?: "> in reply to $in_reply_to_id") + "\n$body"
