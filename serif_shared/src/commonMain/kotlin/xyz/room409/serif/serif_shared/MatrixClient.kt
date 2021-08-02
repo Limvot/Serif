@@ -558,8 +558,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             ?: listOf()
     }
     private fun constructRoomNameFromMembers(id: String): String? {
-        val members = Database.getStateEvents(session_id, id, "m.room.member").map({
-           (id,event) -> (event as RoomEvent).sender }).filter({it != this.user}).map({ sender ->
+        val members = getRoomMembers(id).filter({it != this.user}).map({ sender ->
                val (displayname, _) = getDiplayNameAndAvatarFilePath(sender, id)
                displayname ?: sender
            })
