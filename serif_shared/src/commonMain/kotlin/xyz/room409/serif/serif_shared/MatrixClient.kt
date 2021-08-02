@@ -231,7 +231,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         } else {
             null
         }
-        val formatted_body = if(msg == formatted) { formatted } else { null }
+        val formatted_body = if(msg != formatted) { formatted } else { null }
         val body = TextRMEC(msg,relation,formatted_body)
         return sendMessageImpl(body, room_id)
     }
