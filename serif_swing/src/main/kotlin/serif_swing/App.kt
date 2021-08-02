@@ -18,6 +18,8 @@ import java.io.InputStreamReader
 import java.text.AttributedString
 import javax.sound.sampled.AudioSystem
 import javax.swing.*
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 import javax.swing.filechooser.*
 import javax.swing.text.*
 import javax.swing.text.html.HTML
@@ -587,6 +589,29 @@ class RecyclingList<T>(private var our_width: Int, val choose: (T) -> String, va
         }
     }
 }
+class MentionListener(val tf: SmoothTextField, val autocompl: (String) -> Unit, val deactivate: () -> Unit) : DocumentListener {
+    override fun changedUpdate(ev: DocumentEvent) { }
+    override fun removeUpdate(ev: DocumentEvent) { checkDisplayMentionList() }
+    override fun insertUpdate(ev: DocumentEvent) { checkDisplayMentionList() }
+    fun checkDisplayMentionList() {
+        val caret_pos = tf.getCaretPosition()
+        val substr_end_idx = min(tf.text.count(), caret_pos+1)
+        val substr = tf.text.substring(0,substr_end_idx)
+        val closest_mention_start_index = substr.indexOfLast({it == '@'})
+        if(closest_mention_start_index != -1) {
+            val mention_str = tf.text.substring(closest_mention_start_index)
+            if(mention_str.find({ it -> it.isWhitespace() }) != null) {
+                //user has hit space since typing @
+                deactivate()
+            } else {
+                autocompl(mention_str)
+            }
+        } else {
+            deactivate()
+        }
+    }
+
+}
 
 class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom, var last_window_width: Int) : SwingState() {
     // From @stephenhay via https://mathiasbynens.be/demo/url-regex
@@ -939,6 +964,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val message_field = SmoothTextField(20)
     val pinned_events_btn = SmoothButton("Pinned Events")
     val pinned_action_popup = JPopupMenu()
+    val mentions_popup = JPopupMenu()
     val msg_context_label = SmoothLabel("Reply")
     val msg_context_panel = JPanel()
 
@@ -946,6 +972,40 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     var reacted_event_id = ""
     var edited_event_id = ""
     init {
+        val mention_listener = MentionListener(message_field, { mention_txt: String ->
+            val members = m.members.map { user: String -> Pair(user, m.getDisplayNameForUser(user)) }
+            val text = mention_txt.split("@").lastOrNull()?.split(" ")?.firstOrNull() ?: ""
+            println("Showing mentions matching \'$text\'")
+            val suggestions = if(text == "") {
+                members
+            } else {
+                members.filter({ (user,display) -> user.contains(text) || display.contains(text) })
+            }
+            mentions_popup.setVisible(false)
+            mentions_popup.removeAll()
+            for(acct in suggestions) {
+                val autocomp_opt = JMenuItem("${acct.first} | ${acct.second}")
+                autocomp_opt.addActionListener({
+                    val cursor_pos = message_field.getCaretPosition()
+                    val start_pos = message_field.text.indexOfLast({ (it == '@') })
+                    val user_matrix_dot_to = "<a href=\"https://matrix.to/#/${acct.first}\">${acct.second}</a>"
+                    val new_str = message_field.text.replaceRange(start_pos, cursor_pos, user_matrix_dot_to)
+                    message_field.text = new_str
+                })
+                mentions_popup.add(autocomp_opt)
+            }
+            mentions_popup.setRequestFocusEnabled(false)
+            mentions_popup.show(message_field,0,0)
+            message_field.grabFocus()
+
+            val h = SwingUtilities.getWindowAncestor(panel).getSize().height - mentions_popup.getHeight()
+            mentions_popup.setLocation(0,h+20)
+        },
+        {
+            mentions_popup.setVisible(false)
+            message_field.grabFocus()
+        })
+        message_field.getDocument().addDocumentListener(mention_listener)
         msg_context_panel.setVisible(false)
         panel.layout = BorderLayout()
         setRoomName(m.room_ids, m.name)
@@ -1007,15 +1067,15 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         panel.add(room_footer_panel, BorderLayout.PAGE_END)
         val onSend: (ActionEvent) -> Unit = {
             val text = message_field.text
-            message_field.text = ""
             msg_context_panel.setVisible(false)
+            message_field.text = ""
+
             val res =
                 when {
-                    replied_event_id == "" && edited_event_id == "" && reacted_event_id == "" -> m.sendMessage(text)
+                    replied_event_id == "" && edited_event_id == "" && reacted_event_id == "" -> { m.sendMessage(text) }
                     replied_event_id != "" -> {
                         val eventid = replied_event_id
                         replied_event_id = ""
-                        println("Replying to $eventid")
                         m.sendReply(text, eventid)
                     }
                     reacted_event_id != "" -> {

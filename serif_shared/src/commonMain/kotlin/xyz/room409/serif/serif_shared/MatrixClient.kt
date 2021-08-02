@@ -225,13 +225,14 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             return Error("Message Send Failed", e)
         }
     }
-    fun sendMessage(msg: String, room_id: String, reply_id: String = ""): Outcome<String> {
+    fun sendMessage(msg: String, room_id: String, reply_id: String = "", formatted: String = ""): Outcome<String> {
         val relation = if(reply_id != "") {
             RelationBlock(ReplyToRelation(reply_id))
         } else {
             null
         }
-        val body = TextRMEC(msg, relation)
+        val formatted_body = if(msg != formatted) { formatted } else { null }
+        val body = TextRMEC(msg,relation,formatted_body)
         return sendMessageImpl(body, room_id)
     }
     fun sendReaction(msg: String, room_id: String, reacted_id: String): Outcome<String> {
@@ -542,6 +543,10 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         client.close()
         sync_should_run = false
     }
+    fun getRoomMembers(id: String): List<String> {
+        val events = Database.getStateEvents(session_id, id, "m.room.member")
+        return events.map({ (id,event) ->  (event as RoomEvent).sender })
+    }
     fun getSpaceChildren(id: String): List<String> = Database.getStateEvents(session_id, id, "m.space.child").map { (id,event) ->
         if (event.castToStateEventWithContentOfType<SpaceChildContent>() != null) {
             id
@@ -553,8 +558,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             ?: listOf()
     }
     private fun constructRoomNameFromMembers(id: String): String? {
-        val members = Database.getStateEvents(session_id, id, "m.room.member").map({
-           (id,event) -> (event as RoomEvent).sender }).filter({it != this.user}).map({ sender ->
+        val members = getRoomMembers(id).filter({it != this.user}).map({ sender ->
                val (displayname, _) = getDiplayNameAndAvatarFilePath(sender, id)
                displayname ?: sender
            })
