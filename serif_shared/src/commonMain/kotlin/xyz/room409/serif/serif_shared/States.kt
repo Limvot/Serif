@@ -68,6 +68,7 @@ abstract class SharedUiMessage() {
     abstract val displayname: String?
     abstract val avatar_file_path: String?
     abstract val message: String
+    abstract val formatted_message: String?
     abstract val id: String
     abstract val timestamp: Long
     abstract val replied_event: SharedUiMessage?
@@ -79,6 +80,7 @@ data class SharedUiRoom(
     override val displayname: String = "<system>",
     override val avatar_file_path: String? = null,
     override val message: String,
+    override val formatted_message: String? = null,
     override val id: String,
     override val timestamp: Long = 0,
     override val reactions: Map<String, Set<String>> = mapOf(),
@@ -94,6 +96,7 @@ data class SharedUiMessagePlain(
     override val displayname: String? = null,
     override val avatar_file_path: String? = null,
     override val message: String,
+    override val formatted_message: String? = null,
     override val id: String,
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
@@ -108,7 +111,8 @@ class SharedUiImgMessage(
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
     override val replied_event: SharedUiMessage? = null,
-    val url: String
+    val url: String,
+    override val formatted_message: String? = null
 ) : SharedUiMessage()
 class SharedUiAudioMessage(
     override val sender: String,
@@ -119,7 +123,8 @@ class SharedUiAudioMessage(
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
     override val replied_event: SharedUiMessage? = null,
-    val url: String
+    val url: String,
+    override val formatted_message: String? = null
 ) : SharedUiMessage()
 class SharedUiVideoMessage(
     override val sender: String,
@@ -130,7 +135,8 @@ class SharedUiVideoMessage(
     override val timestamp: Long,
     override val reactions: Map<String, Set<String>>,
     override val replied_event: SharedUiMessage? = null,
-    val url: String
+    val url: String,
+    override val formatted_message: String? = null
 ) : SharedUiMessage()
 class SharedUiFileMessage(
     override val sender: String,
@@ -144,6 +150,7 @@ class SharedUiFileMessage(
     val mimetype: String,
     val url: String,
     override val replied_event: SharedUiMessage? = null,
+    override val formatted_message: String? = null
 ) : SharedUiMessage()
 class SharedUiLocationMessage(
     override val sender: String,
@@ -155,6 +162,7 @@ class SharedUiLocationMessage(
     override val reactions: Map<String, Set<String>>,
     val location: String,
     override val replied_event: SharedUiMessage? = null,
+    override val formatted_message: String? = null
 ) : SharedUiMessage()
 
 fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int, force_event: Boolean): Pair<List<SharedUiMessage>, Boolean> {
@@ -177,7 +185,8 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                     // This is an edit
                     val replaced_id = msg_content!!.relates_to!!.event_id!!
                     val reactions = reaction_maps.get(replaced_id)?.entries?.map { (key, senders) -> Pair(key, senders?.toSet() ?: setOf())}?.toMap() ?: mapOf()
-                    val edit_msg = SharedUiMessagePlain(it.sender, displayname, avatar_file_path, msg_content!!.new_content!!.body,
+                    val edit_msg = SharedUiMessagePlain(it.sender, displayname, avatar_file_path,
+                    msg_content!!.new_content!!.body, msg_content!!.new_content!!.formatted_body,
                         it.event_id, it.origin_server_ts, reactions)
 
                     if (edit_maps.contains(replaced_id)) {
@@ -218,7 +227,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                     }
                     is Error -> {
                         SharedUiMessagePlain(
-                            it.sender, null, null, "Failed to load media ${url}",
+                            it.sender, null, null, "Failed to load media ${url}", null,
                             it.event_id, it.origin_server_ts, reactions, in_reply_to
                         )
                     }
@@ -242,12 +251,12 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                         } else { body_message }
                     }
                     val normal_msg_builder = {
-                        SharedUiMessagePlain(it.sender, displayname, avatar_file_path, transform_body(it.content.body), it.event_id, it.origin_server_ts, reactions, in_reply_to)
+                        SharedUiMessagePlain(it.sender, displayname, avatar_file_path, transform_body(it.content.body), msg_content.formatted_body, it.event_id, it.origin_server_ts, reactions, in_reply_to)
                     }
                     if((msg_content.new_content != null) && (msg_content.relates_to?.event_id == null)) {
                         //This is a poorly formed edit
                         //No idea which event this edit is editing, just display fallback msg
-                        SharedUiMessagePlain(it.sender, displayname, avatar_file_path, transform_body(it.content.body), it.event_id, it.origin_server_ts, reactions, in_reply_to)
+                        normal_msg_builder()
                     } else {
                         if(is_edit_content(msg_content)) {
                             //Don't display edits
@@ -263,6 +272,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                                         displayname, 
                                         avatar_file_path,
                                         transform_body("${edited.message} (edited)"),
+                                        edited.formatted_message,
                                         edited.id,
                                         it.origin_server_ts,
                                         reactions,
@@ -298,16 +308,16 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                 }
                 is ReactionRMEC -> null
                 is RedactionRMEC -> {
-                    SharedUiMessagePlain(it.sender, null, null, "A deletion was processed here",it.event_id, it.origin_server_ts, reactions)
+                    SharedUiMessagePlain(it.sender, null, null, "A deletion was processed here", null,it.event_id, it.origin_server_ts, reactions)
                 }
                 else ->
                     if(it.unsigned?.redacted_because!=null) {
                         val details: RoomMessageEvent = it.unsigned.redacted_because as RoomMessageEvent
                         val dcontent: RedactionRMEC = details.content as RedactionRMEC
-                        SharedUiMessagePlain(it.sender, null, null, "Deleted by ${details.sender} because ${dcontent.reason}", it.event_id, it.origin_server_ts, reactions)
+                        SharedUiMessagePlain(it.sender, null, null, "Deleted by ${details.sender} because ${dcontent.reason}", null, it.event_id, it.origin_server_ts, reactions)
                     }
                     else
-                        SharedUiMessagePlain(it.sender, null, null, "UNHANDLED ROOM MESSAGE EVENT!!! ${it.content.body}", it.event_id, it.origin_server_ts, reactions)
+                        SharedUiMessagePlain(it.sender, null, null, "UNHANDLED ROOM MESSAGE EVENT!!!  ${it.content.body}", null, it.event_id, it.origin_server_ts, reactions)
             }
         } else if (it.castToStateEventWithContentOfType<SpaceChildContent>() != null) {
             val event = it as StateEvent<SpaceChildContent>
@@ -327,11 +337,11 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
             // some effort.
             // TODO: something else? Either always show, or always hide?
             println("unhandled room event $it")
-            SharedUiMessagePlain(it.sender, null, null, "UNHANDLED ROOM EVENT!!! $it", it.event_id, it.origin_server_ts, mapOf())
+            SharedUiMessagePlain(it.sender, null, null, "UNHANDLED ROOM EVENT!!! $it", null, it.event_id, it.origin_server_ts, mapOf())
         } else {
             println("IMPOSSIBLE unhandled non room event $it")
             throw Exception("IMPOSSIBLE unhandled non room event $it")
-            SharedUiMessagePlain("impossible", null, null, "impossible", "impossible", 0, mapOf())
+            SharedUiMessagePlain("impossible", null, null, "impossible", null, "impossible", 0, mapOf())
         }
     }.filterNotNull()
     return Pair(messages, tracking_live)
