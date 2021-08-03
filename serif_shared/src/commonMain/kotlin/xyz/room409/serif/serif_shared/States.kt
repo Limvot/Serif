@@ -389,9 +389,12 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
             }
             if (spaces == null) {
                 val (__spaces, _rooms) = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event_id ->
+                    val typing = msession.getTypingStatusForRoom(id)
+                    val ts = typing.size
+                    val name_typing = if(ts > 0) { "$name ${typing} are typing" } else { name }
                     Pair(id, SharedUiRoom(
                         id=id,
-                        message=name,
+                        message=name_typing,
                         unreadCount=unread_notif,
                         highlightCount=unread_highlight,
                         lastMessage=last_event_id?.let { toSharedUiMessageList(msession, username, id, 0, it, 0, false).first.firstOrNull() }
