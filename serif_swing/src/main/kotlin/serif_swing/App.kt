@@ -967,6 +967,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val mentions_popup = JPopupMenu()
     val msg_context_label = SmoothLabel("Reply")
     val msg_context_panel = JPanel()
+    var typing_timer = Timer()
 
     var replied_event_id = ""
     var reacted_event_id = ""
@@ -1016,6 +1017,18 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)
             generatePinned(pinned_action_popup)
             pinned_events_btn.addActionListener({ pinned_action_popup.show(pinned_events_btn,0,0) })
+            //uncomment bellow block for sending out typing notifications
+            //Commented out right now to avoid being too spammy until we
+            //get it properly sending in the compose gui.
+            /*
+            typing_timer = fixedRateTimer("typing_notifier", false, 0L, 5000) {
+                if(message_field.isFocusOwner() && message_field.text != "") {
+                    m.sendTypingStatus(true)
+                } else {
+                    m.sendTypingStatus(false)
+                }
+            }
+            */
         }
 
         panel.add(
