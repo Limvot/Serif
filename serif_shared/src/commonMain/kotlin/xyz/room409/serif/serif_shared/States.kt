@@ -560,6 +560,12 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
             }
         }.filterNotNull()
     }
+    fun sendTypingStatus(typing: Boolean) {
+        when (val res = msession.sendTypingStatus(room_id, typing)) {
+            is Success -> println("Server Notified of typing status")
+            is Error -> println("Failed send typing status because ${res.cause}")
+        }
+    }
     fun getEventSrc(msg_id: String): String {
         val event = msession.getRoomEvent(room_id, msg_id)
         if (event as? RoomMessageEvent != null) {

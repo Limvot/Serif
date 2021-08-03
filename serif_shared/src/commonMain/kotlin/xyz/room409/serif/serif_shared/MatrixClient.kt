@@ -586,6 +586,21 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     fun getTypingStatusForRoom(room_id: String): List<String> {
         return roomTypingNotifications.get(room_id) ?: listOf()
     }
+    fun sendTypingStatus(room_id: String, is_typing: Boolean): Outcome<String> {
+        try {
+            val url = "$server/_matrix/client/r0/rooms/$room_id/typing/$user?access_token=$access_token"
+            val timeout = if(is_typing) { 10000 } else { null }
+            val res = runBlocking {
+                client.put<String>(url) {
+                    contentType(ContentType.Application.Json)
+                    body = TypingStatusNotify(is_typing, timeout)
+                }
+            }
+            return Success(res)
+        } catch (e: Exception) {
+            return Error("Sending Typing Status failed", e)
+        }
+    }
     fun mergeInSync(new_sync_response: SyncResponse) {
         Database.transaction {
             for ((room_id, room) in new_sync_response.rooms?.join ?: mapOf()) {

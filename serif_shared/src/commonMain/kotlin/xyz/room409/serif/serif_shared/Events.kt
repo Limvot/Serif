@@ -95,6 +95,8 @@ data class EphemeralEvent(
 )
 @Serializable
 data class EphemeralEventContent(val user_ids: List<String>? = null)
+@Serializable
+data class TypingStatusNotify(val typing: Boolean, val timeout: Int? = null)
 
 @Serializable
 data class BackfillResponse(
