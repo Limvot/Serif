@@ -12,6 +12,8 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/serif_android" />
+            <option value="$PROJECT_DIR$/serif_compose" />
+            <option value="$PROJECT_DIR$/serif_compose_desktop" />
             <option value="$PROJECT_DIR$/serif_shared" />
             <option value="$PROJECT_DIR$/serif_swing" />
           </set>

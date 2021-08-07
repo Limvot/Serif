@@ -84,6 +84,8 @@ import java.io.File
 import java.text.DateFormat
 import java.util.*
 
+import xyz.room409.serif.serif_compose.*
+
 /**
  * Entry point for a conversation screen.
  *
@@ -117,6 +119,7 @@ fun ConversationContent(
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
+                SerifItem()
                 UserInput(
                     uiState.channelName,
                     onMessageSent = sendMessage,

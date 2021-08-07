@@ -2,6 +2,10 @@
 <project version="4">
   <component name="CompilerConfiguration">
     <bytecodeTargetLevel target="11">
+      <module name="Serif.serif_compose.commonMain" target="1.8" />
+      <module name="Serif.serif_compose.commonTest" target="1.8" />
+      <module name="Serif.serif_compose.jvmMain" target="1.8" />
+      <module name="Serif.serif_compose.jvmTest" target="1.8" />
       <module name="Serif.serif_shared.commonMain" target="1.8" />
       <module name="Serif.serif_shared.commonTest" target="1.8" />
       <module name="Serif.serif_shared.jvmMain" target="1.8" />

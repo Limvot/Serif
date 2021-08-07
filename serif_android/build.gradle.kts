@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     //kotlin("android")
     id("org.jetbrains.kotlin.android") //version "1.5.10"
+    id("org.jetbrains.compose") version "1.0.0-alpha1"
 
     id("kotlin-android-extensions")
     id("kotlin-android")
@@ -13,10 +14,12 @@ repositories {
     gradlePluginPortal()
     google()
     jcenter()
+    maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
     mavenCentral()
 }
 dependencies {
     implementation(project(":serif_shared"))
+    implementation(project(":serif_compose"))
     implementation("com.google.android.material:material:1.2.0")
     implementation("androidx.appcompat:appcompat:1.2.0")
     implementation("androidx.constraintlayout:constraintlayout:1.1.3")
