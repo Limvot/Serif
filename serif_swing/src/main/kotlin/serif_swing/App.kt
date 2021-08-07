@@ -626,8 +626,13 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         attString
     }
     val room_name = SmoothLabel("")
-    fun setRoomName(path: List<String>, name: String) {
-        room_name.setText("Path: ${path}, Room Name: $name")
+    fun setRoomName(path: List<String>, name: String, typing: List<String> = listOf()) {
+        val room_bar_txt = if(typing.size == 0) {
+            "Path: ${path}, Room Name: $name"
+        } else {
+            "Path: ${path}, Room Name: $name, ${typing} are typing"
+        }
+        room_name.setText(room_bar_txt)
     }
     fun updatePinOptionText(event_id: String, menu_item: JMenuItem) {
         val pin_str = if(m.pinned.contains(event_id)) { "Unpin" } else { "Pin" }
@@ -766,7 +771,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 val room_btn = SmoothButton("")
                 val set_click = { msgi: SharedUiRoom ->
                     transition_room_id = msgi.id
-                    room_btn.setText("${msgi.message} (${msgi.unreadCount} unread / ${msgi.highlightCount} mentions)")
+                    val typing_str = if(msgi.typing.size == 0) { "" } else { ", ${msgi.typing} are typing" }
+                    room_btn.setText("${msgi.message} (${msgi.unreadCount} unread / ${msgi.highlightCount} mentions)$typing_str")
                 }
                 set_click(msg as SharedUiRoom)
                 room_btn.addActionListener({
@@ -1009,7 +1015,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         message_field.getDocument().addDocumentListener(mention_listener)
         msg_context_panel.setVisible(false)
         panel.layout = BorderLayout()
-        setRoomName(m.room_ids, m.name)
+        setRoomName(m.room_ids, m.name, m.typing)
         val room_header_panel = JPanel()
         room_header_panel.layout = BorderLayout()
         room_header_panel.add(room_name, BorderLayout.LINE_START)
@@ -1151,7 +1157,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         } else {
             m = new_m
         }
-        setRoomName(m.room_ids, m.name)
+        setRoomName(m.room_ids, m.name, m.typing)
     }
     private fun openUrl(href: String) {
         // In the background, so that GUI doesn't freeze
