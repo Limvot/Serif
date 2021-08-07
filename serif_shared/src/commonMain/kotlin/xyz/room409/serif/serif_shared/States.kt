@@ -370,6 +370,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
     val members: List<String>
     val avatar: String
     val roomName: String = msession.getRoomName(room_id)
+    val roomTopic: String = msession.getRoomTopic(room_id)
     val link_regex = Regex("<a href=\"https://matrix.to/#/[^:]*:[^>]*\">(.*)</a>")
     init {
         messages = if (room_id == "Room List" || room_id == "All Rooms" || msession.getRoomType(room_id) == "m.space") {
@@ -597,6 +598,15 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }
         return this
+    }
+    fun setRoomTopic(topic: String) {
+        msession.setRoomTopic(room_id,topic)
+    }
+    fun setRoomName(name: String) {
+        msession.setRoomName(room_id,name)
+    }
+    fun setRoomAvatar(local_path: String) {
+        msession.setRoomAvatar(room_id,local_path)
     }
     override fun refresh(): MatrixState = refresh(window_back_length, message_window_base, window_forward_length)
     fun refresh(new_window_back_length: Int, new_message_window_base: String?, new_window_forward_length: Int): MatrixState = MatrixChatRoom(

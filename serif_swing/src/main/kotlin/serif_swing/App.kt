@@ -1037,6 +1037,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val room_cnfg_screen = { event: ActionEvent ->
                 val create : (JDialog) -> Unit = { dialog->
                     val room_name = m.roomName
+                    val room_topic = m.roomTopic
                     val room_members = m.members
                     val avatar_url = m.avatar
 
@@ -1056,7 +1057,18 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     sub_panel.layout = GridBagLayout()
 
                     val icon = if(avatar_url != "") { ImageIcon(avatar_url) } else { null }
-                    val avatar_icon = if(icon != null) { JLabel(icon) } else { SmoothLabel("No Room Avatar") }
+                    val avatar_icon = if(icon != null) { JButton(icon) } else { JButton("Upload Image") }
+                    avatar_icon.addActionListener({
+                        val fc = JFileChooser()
+                        val iff = ImageFileFilter()
+                        fc.addChoosableFileFilter(iff)
+                        fc.setFileFilter(iff)
+                        val ret = fc.showDialog(panel, "Attach")
+                        if (ret == JFileChooser.APPROVE_OPTION) {
+                            val file = fc.getSelectedFile()
+                            m.setRoomAvatar(file.toPath().toString())
+                        }
+                    })
 
                     sub_panel.add(avatar_icon, c_right)
 
@@ -1064,14 +1076,17 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                     room_name_field.text = room_name
                     sub_panel.add(SmoothLabel("Room Name:"), c_left)
                     sub_panel.add(room_name_field, c_right)
-                    sub_panel.add(SmoothButton("Save"), c_left)
-                    sub_panel.add(JLabel(), c_right)
-
                     var room_topic_field = SmoothTextField(40)
-                    room_topic_field.text = "!! no topic !!"
+                    room_topic_field.text = room_topic
                     sub_panel.add(SmoothLabel("Room Topic:"), c_left)
                     sub_panel.add(room_topic_field, c_right)
-                    sub_panel.add(SmoothButton("Save"), c_left)
+
+                    val name_save = SmoothButton("Save")
+                    name_save.addActionListener({
+                        m.setRoomName(room_name_field.text)
+                        m.setRoomTopic(room_topic_field.text)
+                    })
+                    sub_panel.add(name_save, c_left)
                     sub_panel.add(JLabel(), c_right)
 
                     for(rm in room_members) {
