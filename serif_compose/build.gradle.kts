@@ -24,6 +24,7 @@ kotlin {
                 api(compose.foundation)
                 api(compose.material)
                 api(compose.materialIconsExtended)
+                implementation(project(":serif_shared"))
             }
         }
         val androidMain by getting {
