@@ -146,6 +146,7 @@ class StateEvent<T>(
     val order: String? = null
 )
 @Serializable class RoomNameContent(val name: String)
+@Serializable class RoomAvatarContent(val url: String)
 @Serializable class FallbackContent()
 
 @Serializable
@@ -307,6 +308,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
                 type == "m.room.create" -> RoomCreationEventSerializer
                 type == "m.room.message" || type == "m.reaction" || type =="m.room.redaction"-> RoomMessageEventSerializer
                 type == "m.room.name" -> RoomNameStateEventSerializer
+                type == "m.room.avatar" -> RoomAvatarStateEventSerializer
                 type == "m.room.canonical_alias" -> RoomCanonicalAliasStateEventSerializer
                 type == "m.space.child" -> SpaceChildStateEventSerializer
                 type == "m.room.pinned_events" -> RoomPinnedEventSerializer
@@ -341,6 +343,7 @@ object RoomCreationEventSerializer : GenericJsonEventSerializer<StateEvent<RoomC
 object RoomPinnedEventSerializer : GenericJsonEventSerializer<StateEvent<RoomPinnedEventContent>>(StateEvent.serializer(RoomPinnedEventContent.serializer()))
 object RoomMemberEventSerializer : GenericJsonEventSerializer<StateEvent<RoomMemberEventContent>>(StateEvent.serializer(RoomMemberEventContent.serializer()))
 object RoomNameStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomNameContent>>(StateEvent.serializer(RoomNameContent.serializer()))
+object RoomAvatarStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomAvatarContent>>(StateEvent.serializer(RoomAvatarContent.serializer()))
 object RoomCanonicalAliasStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
 object SpaceChildStateEventSerializer : GenericJsonEventSerializer<StateEvent<SpaceChildContent>>(StateEvent.serializer(SpaceChildContent.serializer()))
 object StateEventFallbackSerializer : GenericJsonEventSerializer<StateEvent<FallbackContent>>(StateEvent.serializer(FallbackContent.serializer()))

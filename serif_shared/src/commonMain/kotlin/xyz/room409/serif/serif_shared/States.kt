@@ -368,6 +368,8 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
     val message_window_base: String?
     val pinned: List<String>
     val members: List<String>
+    val avatar: String
+    val roomName: String = msession.getRoomName(room_id)
     val link_regex = Regex("<a href=\"https://matrix.to/#/[^:]*:[^>]*\">(.*)</a>")
     init {
         messages = if (room_id == "Room List" || room_id == "All Rooms" || msession.getRoomType(room_id) == "m.space") {
@@ -471,10 +473,21 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
             }
             got_messages
         }
+        val avatar_mxc_url = msession.getRoomAvatar(room_id)
+        avatar = if(avatar_mxc_url != "") {
+            when (val url_local = msession.getLocalMediaPathFromUrl(avatar_mxc_url)) {
+                is Success -> { url_local.value }
+                is Error -> { "" }
+            }
+        } else { "" }
     }
     fun getDisplayNameForUser(sender: String) : String {
         val (displayname, _) = msession.getDiplayNameAndAvatarFilePath(sender, room_id)
         return displayname ?: ""
+    }
+    fun getAvatarFilePathForUser(sender: String) : String {
+        val (_, afp) = msession.getDiplayNameAndAvatarFilePath(sender, room_id)
+        return afp ?: ""
     }
     fun getUnformattedBody(formatted_body: String) : String {
         return formatted_body.replace(link_regex,"$1")

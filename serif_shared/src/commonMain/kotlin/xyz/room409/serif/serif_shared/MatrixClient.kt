@@ -543,6 +543,25 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         client.close()
         sync_should_run = false
     }
+    fun sendStateEvent(id: String, type: String, content: Any) {
+        //NOTE(marcus): We don't send a state key
+        return runBlocking {
+            client.put<String>("$server/_matrix/client/r0/rooms/$id/state/$type/?access_token=$access_token")
+            {
+                contentType(ContentType.Application.Json)
+                body = content
+            }
+        }
+    }
+    fun setRoomName(id: String, name: String) {
+        return sendStateEvent(id, "m.room.name", RoomNameContent(name))
+    }
+    fun getRoomAvatar(id: String): String {
+        return Database.getStateEvent(session_id, id, "m.room.avatar", "")?.castToStateEventWithContentOfType<RoomAvatarContent>()?.url ?: ""
+    }
+    fun getRoomName(id: String): String {
+        return Database.getStateEvent(session_id, id, "m.room.name", "")?.castToStateEventWithContentOfType<RoomNameContent>()?.name ?: ""
+    }
     fun getRoomMembers(id: String): List<String> {
         val events = Database.getStateEvents(session_id, id, "m.room.member")
         return events.map({ (id,event) ->  (event as RoomEvent).sender })
