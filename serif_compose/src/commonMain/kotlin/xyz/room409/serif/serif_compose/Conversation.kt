@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xyz.room409.serif.serif_android.conversation
+package xyz.room409.serif.serif_compose
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
@@ -60,18 +60,18 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
+//import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
-import xyz.room409.serif.serif_android.R
-import xyz.room409.serif.serif_android.components.JetchatAppBar
-import xyz.room409.serif.serif_android.theme.elevatedSurface
-import com.google.accompanist.insets.LocalWindowInsets
-import com.google.accompanist.insets.navigationBarsWithImePadding
-import com.google.accompanist.insets.rememberInsetsPaddingValues
-import com.google.accompanist.insets.statusBarsPadding
-import com.google.accompanist.coil.rememberCoilPainter
+//import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
+//import xyz.room409.serif.serif_android.R
+//import xyz.room409.serif.serif_android.components.JetchatAppBar
+//import xyz.room409.serif.serif_android.theme.elevatedSurface
+//import com.google.accompanist.insets.LocalWindowInsets
+//import com.google.accompanist.insets.navigationBarsWithImePadding
+//import com.google.accompanist.insets.rememberInsetsPaddingValues
+//import com.google.accompanist.insets.statusBarsPadding
+//import com.google.accompanist.coil.rememberCoilPainter
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -83,8 +83,6 @@ import xyz.room409.serif.serif_shared.SharedUiRoom
 import java.io.File
 import java.text.DateFormat
 import java.util.*
-
-import xyz.room409.serif.serif_compose.*
 
 /**
  * Entry point for a conversation screen.
@@ -102,7 +100,8 @@ fun ConversationContent(
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
     modifier: Modifier = Modifier,
-    onNavIconPressed: () -> Unit = { }
+    uiInputModifier: Modifier = Modifier,
+    onNavIconPressed: () -> Unit = { },
 ) {
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -119,18 +118,15 @@ fun ConversationContent(
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
-                SerifItem()
                 UserInput(
                     uiState.channelName,
-                    onMessageSent = sendMessage,
-                    resetScroll = {
+                    sendMessage,
+                    {
                         scope.launch {
                             scrollState.scrollToItem(0)
                         }
                     },
-                    // Use navigationBarsWithImePadding(), to move the input panel above both the
-                    // navigation bar, and on-screen keyboard (IME)
-                    modifier = Modifier.navigationBarsWithImePadding(),
+                    modifier = uiInputModifier
                 )
             }
             // Channel name bar floats above the messages
@@ -139,7 +135,7 @@ fun ConversationContent(
                 channelMembers = uiState.channelMembers,
                 onNavIconPressed = onNavIconPressed,
                 // Use statusBarsPadding() to move the app bar content below the status bar
-                modifier = Modifier.statusBarsPadding(),
+                //modifier = Modifier.statusBarsPadding(),
             )
         }
     }
@@ -166,8 +162,9 @@ fun ChannelNameBar(
 ) {
     var functionalityNotAvailablePopupShown by remember { mutableStateOf(false) }
     if (functionalityNotAvailablePopupShown) {
-        FunctionalityNotAvailablePopup { functionalityNotAvailablePopupShown = false }
+        //FunctionalityNotAvailablePopup { functionalityNotAvailablePopupShown = false }
     }
+    /*
     JetchatAppBar(
         modifier = modifier,
         onNavIconPressed = onNavIconPressed,
@@ -213,6 +210,7 @@ fun ChannelNameBar(
             }
         }
     )
+    */
 }
 
 const val ConversationTestTag = "ConversationTestTag"
@@ -236,10 +234,12 @@ fun Messages(
             // Add content padding so that the content can be scrolled (y-axis)
             // below the status bar + app bar
             // TODO: Get height from somewhere
+            /*
             contentPadding = rememberInsetsPaddingValues(
                 insets = LocalWindowInsets.current.statusBars,
                 additionalTop = 90.dp
             ),
+            */
             modifier = Modifier
                 .testTag(ConversationTestTag)
                 .fillMaxSize()
@@ -330,6 +330,7 @@ fun Message(
     Row(modifier = spaceBetweenAuthors) {
         if (isLastMessageByAuthor) {
             // Avatar
+            /*
             Image(
                 modifier = Modifier
                     .clickable(onClick = { onAuthorClick(msg.sender) })
@@ -339,10 +340,11 @@ fun Message(
                     .border(3.dp, MaterialTheme.colors.surface, CircleShape)
                     .clip(CircleShape)
                     .align(Alignment.Top),
-                painter = painterResource(id = R.drawable.someone_else),
+                //painter = painterResource(id = R.drawable.someone_else),
                 contentScale = ContentScale.Crop,
                 contentDescription = null,
             )
+            */
         } else {
             // Space under avatar
             Spacer(modifier = Modifier.width(74.dp))
@@ -450,7 +452,8 @@ fun ChatItemBubble(
         if (MaterialTheme.colors.isLight) {
             Color(0xFFF5F5F5)
         } else {
-            MaterialTheme.colors.elevatedSurface(2.dp)
+            Color(0x22222222)
+            //MaterialTheme.colors.elevatedSurface(2.dp)
         }
 
     val bubbleShape = if (lastMessageByAuthor) LastChatBubbleShape else ChatBubbleShape
@@ -465,12 +468,14 @@ fun ChatItemBubble(
         if (message is SharedUiImgMessage) {
             Spacer(modifier = Modifier.height(4.dp))
             Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                /*
                 Image(
-                    painter = rememberCoilPainter(File(message.url)),
+                    //painter = rememberCoilPainter(File(message.url)),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.size(160.dp),
-                    contentDescription = stringResource(id = R.string.attached_image)
+                    contentDescription = message.message
                 )
+                */
             }
         }
     }

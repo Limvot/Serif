@@ -29,7 +29,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
 import xyz.room409.serif.serif_android.MainViewModel
-import xyz.room409.serif.serif_android.theme.JetchatTheme
+import xyz.room409.serif.serif_compose.theme.JetchatTheme
 import com.google.accompanist.insets.LocalWindowInsets
 import com.google.accompanist.insets.ViewWindowInsetObserver
 

@@ -36,6 +36,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core:1.0.0-rc01")
     implementation("androidx.compose.material:material-icons-extended:1.0.0-rc01")
     // Integration with observables
+    implementation("androidx.compose.runtime:runtime:1.0.0-rc01")
     implementation("androidx.compose.runtime:runtime-livedata:1.0.0-rc01")
     implementation("androidx.compose.runtime:runtime-rxjava2:1.0.0-rc01")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.3.1")
@@ -53,6 +54,7 @@ dependencies {
 
     // My new
     implementation("com.google.accompanist:accompanist-coil:0.13.0")
+
 }
 
 android {

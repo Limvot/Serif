@@ -31,13 +31,12 @@ import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.findNavController
+import com.google.accompanist.insets.*
 import xyz.room409.serif.serif_android.MainViewModel
 import xyz.room409.serif.serif_android.R
-import xyz.room409.serif.serif_android.theme.JetchatTheme
-import com.google.accompanist.insets.ExperimentalAnimatedInsets
-import com.google.accompanist.insets.LocalWindowInsets
-import com.google.accompanist.insets.ViewWindowInsetObserver
-import com.google.accompanist.insets.navigationBarsPadding
+
+import xyz.room409.serif.serif_compose.*
+import xyz.room409.serif.serif_compose.theme.JetchatTheme
 
 class ConversationFragment : Fragment() {
 
@@ -62,13 +61,13 @@ class ConversationFragment : Fragment() {
 
         setContent {
             CompositionLocalProvider(
-                LocalBackPressedDispatcher provides requireActivity().onBackPressedDispatcher,
+                //LocalBackPressedDispatcher provides requireActivity().onBackPressedDispatcher,
                 LocalWindowInsets provides windowInsets,
             ) {
                 JetchatTheme(false) {
-                    val roomName by activityViewModel.roomName.collectAsState()
-                    val ourUserId by activityViewModel.ourUserId.collectAsState()
-                    val messages by activityViewModel.messages.collectAsState()
+                    val roomName by activityViewModel.roomName
+                    val ourUserId by activityViewModel.ourUserId
+                    val messages by activityViewModel.messages
                     ConversationContent(
                         bumpWindowBase = { idx -> activityViewModel.bumpWindow(idx?.let { messages.reversed()[it].id }); },
                         uiState = ConversationUiState(roomName, ourUserId, 0, messages.reversed()),
@@ -87,7 +86,10 @@ class ConversationFragment : Fragment() {
                         },
                         // Add padding so that we are inset from any left/right navigation bars
                         // (usually shown when in landscape orientation)
-                        modifier = Modifier.navigationBarsPadding(bottom = false)
+                        modifier = Modifier.navigationBarsPadding(bottom = false),
+                        // Use navigationBarsWithImePadding(), to move the input panel above both the
+                        // navigation bar, and on-screen keyboard (IME)
+                        uiInputModifier = Modifier.navigationBarsWithImePadding(),
                     )
                 }
             }

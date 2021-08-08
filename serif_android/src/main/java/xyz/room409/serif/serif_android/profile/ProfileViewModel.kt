@@ -21,8 +21,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import xyz.room409.serif.serif_android.data.colleagueProfile
-import xyz.room409.serif.serif_android.data.meProfile
+
 
 class ProfileViewModel : ViewModel() {
 
@@ -30,13 +29,7 @@ class ProfileViewModel : ViewModel() {
 
     fun setUserId(newUserId: String?) {
         if (newUserId != userId) {
-            userId = newUserId ?: meProfile.userId
-        }
-        // Workaround for simplicity
-        _userData.value = if (userId == meProfile.userId || userId == meProfile.displayName) {
-            meProfile
-        } else {
-            colleagueProfile
+            userId = "" //newUserId ?: meProfile.userId
         }
     }
 
@@ -56,5 +49,5 @@ data class ProfileScreenState(
     val timeZone: String?, // Null if me
     val commonChannels: String? // Null if me
 ) {
-    fun isMe() = userId == meProfile.userId
+    fun isMe() = false //userId == meProfile.userId
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xyz.room409.serif.serif_android.theme
+package xyz.room409.serif.serif_compose.theme
 
 import androidx.compose.material.Typography
 import androidx.compose.ui.text.TextStyle
@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+/*
 import xyz.room409.serif.serif_android.R
 
 private val MontserratFontFamily = FontFamily(
@@ -34,9 +35,10 @@ private val KarlaFontFamily = FontFamily(
     Font(R.font.karla_regular),
     Font(R.font.karla_bold, FontWeight.Bold)
 )
+*/
 
 val JetchatTypography = Typography(
-    defaultFontFamily = MontserratFontFamily,
+    //defaultFontFamily = MontserratFontFamily,
     h1 = TextStyle(
         fontWeight = FontWeight.Light,
         fontSize = 96.sp,
@@ -73,13 +75,13 @@ val JetchatTypography = Typography(
         letterSpacing = 0.sp
     ),
     subtitle2 = TextStyle(
-        fontFamily = KarlaFontFamily,
+        //fontFamily = KarlaFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 14.sp,
         letterSpacing = 0.1.sp
     ),
     body1 = TextStyle(
-        fontFamily = KarlaFontFamily,
+        //fontFamily = KarlaFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         letterSpacing = 0.sp,
@@ -96,7 +98,7 @@ val JetchatTypography = Typography(
         letterSpacing = 1.25.sp
     ),
     caption = TextStyle(
-        fontFamily = KarlaFontFamily,
+        //fontFamily = KarlaFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 12.sp,
         letterSpacing = 0.15.sp

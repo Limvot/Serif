@@ -47,9 +47,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import xyz.room409.serif.serif_android.R
-import xyz.room409.serif.serif_android.data.colleagueProfile
-import xyz.room409.serif.serif_android.data.meProfile
-import xyz.room409.serif.serif_android.theme.JetchatTheme
+
+import xyz.room409.serif.serif_compose.theme.JetchatTheme
 import com.google.accompanist.insets.statusBarsHeight
 
 @Composable
@@ -63,10 +62,10 @@ fun ColumnScope.JetchatDrawer(onProfileClicked: (String) -> Unit, onChatClicked:
     ChatItem("composers", true) { onChatClicked("composers") }
     ChatItem("droidcon-nyc", false) { onChatClicked("droidcon-nyc") }
     DrawerItemHeader("Recent Profiles")
-    ProfileItem("Ali Conors (you)", meProfile.photo) { onProfileClicked(meProfile.userId) }
-    ProfileItem("Taylor Brooks", colleagueProfile.photo) {
-        onProfileClicked(colleagueProfile.userId)
-    }
+    //ProfileItem("Ali Conors (you)", meProfile.photo) { onProfileClicked(meProfile.userId) }
+    //ProfileItem("Taylor Brooks", colleagueProfile.photo) {
+    //    onProfileClicked(colleagueProfile.userId)
+    //}
 }
 
 @Composable

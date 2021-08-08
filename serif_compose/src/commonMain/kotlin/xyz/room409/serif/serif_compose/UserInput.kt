@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xyz.room409.serif.serif_android.conversation
+package xyz.room409.serif.serif_compose
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -80,7 +80,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.FirstBaseline
-import androidx.compose.ui.res.stringResource
+//import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.contentDescription
@@ -90,13 +90,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
+//import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
-import xyz.room409.serif.serif_android.R
-import xyz.room409.serif.serif_android.theme.compositedOnSurface
-import xyz.room409.serif.serif_android.theme.elevatedSurface
+//import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
+//import xyz.room409.serif.serif_android.R
+import xyz.room409.serif.serif_compose.theme.compositedOnSurface
+import xyz.room409.serif.serif_compose.theme.elevatedSurface
 
 enum class InputSelector {
     NONE,
@@ -118,15 +118,15 @@ enum class EmojiStickerSelector {
 fun UserInput(
     roomName: String,
     onMessageSent: (String) -> Unit,
-    modifier: Modifier = Modifier,
     resetScroll: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     var currentInputSelector by rememberSaveable { mutableStateOf(InputSelector.NONE) }
     val dismissKeyboard = { currentInputSelector = InputSelector.NONE }
 
     // Intercept back navigation if there's a InputSelector visible
     if (currentInputSelector != InputSelector.NONE) {
-        BackPressHandler(onBackPressed = dismissKeyboard)
+        //BackPressHandler(onBackPressed = dismissKeyboard)
     }
 
     var textState by remember { mutableStateOf(TextFieldValue()) }
@@ -234,12 +234,12 @@ fun FunctionalityNotAvailablePanel() {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = stringResource(id = R.string.not_available),
+                text = "not available",
                 style = MaterialTheme.typography.subtitle1
             )
             CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
                 Text(
-                    text = stringResource(id = R.string.not_available_subtitle),
+                    text = "subtitile not available",
                     modifier = Modifier.paddingFrom(FirstBaseline, before = 32.dp),
                     style = MaterialTheme.typography.body2
                 )
@@ -276,31 +276,31 @@ private fun UserInputSelector(
             onClick = { onSelectorChange(InputSelector.EMOJI) },
             icon = Icons.Outlined.Mood,
             selected = currentInputSelector == InputSelector.EMOJI,
-            description = stringResource(id = R.string.emoji_selector_bt_desc)
+            description = "emoji descriptor bt desc"
         )
         InputSelectorButton(
             onClick = { onSelectorChange(InputSelector.DM) },
             icon = Icons.Outlined.AlternateEmail,
             selected = currentInputSelector == InputSelector.DM,
-            description = stringResource(id = R.string.dm_desc)
+            description = "dm desc"
         )
         InputSelectorButton(
             onClick = { onSelectorChange(InputSelector.PICTURE) },
             icon = Icons.Outlined.InsertPhoto,
             selected = currentInputSelector == InputSelector.PICTURE,
-            description = stringResource(id = R.string.attach_photo_desc)
+            description = "attach photo descript"
         )
         InputSelectorButton(
             onClick = { onSelectorChange(InputSelector.MAP) },
             icon = Icons.Outlined.Place,
             selected = currentInputSelector == InputSelector.MAP,
-            description = stringResource(id = R.string.map_selector_desc)
+            description = "map selector disc"
         )
         InputSelectorButton(
             onClick = { onSelectorChange(InputSelector.PHONE) },
             icon = Icons.Outlined.Duo,
             selected = currentInputSelector == InputSelector.PHONE,
-            description = stringResource(id = R.string.videochat_desc)
+            description = "videochat desc"
         )
 
         val border = if (!sendMessageEnabled) {
@@ -333,7 +333,7 @@ private fun UserInputSelector(
             contentPadding = PaddingValues(0.dp)
         ) {
             Text(
-                stringResource(id = R.string.send),
+                "Send",
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
@@ -364,7 +364,8 @@ private fun InputSelectorButton(
 
 @Composable
 private fun NotAvailablePopup(onDismissed: () -> Unit) {
-    FunctionalityNotAvailablePopup(onDismissed)
+    //FunctionalityNotAvailablePopup(onDismissed)
+    println("Functionality not available")
 }
 
 val KeyboardShownKey = SemanticsPropertyKey<Boolean>("KeyboardShownKey")
@@ -381,7 +382,7 @@ private fun UserInputText(
     onTextFieldFocused: (Boolean) -> Unit,
     focusState: Boolean
 ) {
-    val a11ylabel = stringResource(id = R.string.textfield_desc)
+    val a11ylabel = "a11ylabel"
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -445,7 +446,7 @@ fun EmojiSelector(
 ) {
     var selected by remember { mutableStateOf(EmojiStickerSelector.EMOJI) }
 
-    val a11yLabel = stringResource(id = R.string.emoji_selector_desc)
+    val a11yLabel = "emoji selecter desc"
     Column(
         modifier = Modifier
             .focusRequester(focusRequester) // Requests focus when the Emoji selector is displayed
@@ -459,13 +460,13 @@ fun EmojiSelector(
                 .padding(horizontal = 8.dp)
         ) {
             ExtendedSelectorInnerButton(
-                text = stringResource(id = R.string.emojis_label),
+                text = "emojis label",
                 onClick = { selected = EmojiStickerSelector.EMOJI },
                 selected = true,
                 modifier = Modifier.weight(1f)
             )
             ExtendedSelectorInnerButton(
-                text = stringResource(id = R.string.stickers_label),
+                text = "stickers label",
                 onClick = { selected = EmojiStickerSelector.STICKER },
                 selected = false,
                 modifier = Modifier.weight(1f)

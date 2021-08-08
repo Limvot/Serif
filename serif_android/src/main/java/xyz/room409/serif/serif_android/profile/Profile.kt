@@ -63,9 +63,7 @@ import xyz.room409.serif.serif_android.R
 import xyz.room409.serif.serif_android.components.AnimatingFabContent
 import xyz.room409.serif.serif_android.components.JetchatAppBar
 import xyz.room409.serif.serif_android.components.baselineHeight
-import xyz.room409.serif.serif_android.data.colleagueProfile
-import xyz.room409.serif.serif_android.data.meProfile
-import xyz.room409.serif.serif_android.theme.JetchatTheme
+import xyz.room409.serif.serif_compose.theme.JetchatTheme
 import com.google.accompanist.insets.ProvideWindowInsets
 import com.google.accompanist.insets.navigationBarsPadding
 import com.google.accompanist.insets.statusBarsPadding
@@ -281,42 +279,4 @@ fun ProfileFab(
     }
 }
 
-@Preview(widthDp = 640, heightDp = 360)
-@Composable
-fun ConvPreviewLandscapeMeDefault() {
-    ProvideWindowInsets(consumeWindowInsets = false) {
-        JetchatTheme {
-            ProfileScreen(meProfile)
-        }
-    }
-}
 
-@Preview(widthDp = 360, heightDp = 480)
-@Composable
-fun ConvPreviewPortraitMeDefault() {
-    ProvideWindowInsets(consumeWindowInsets = false) {
-        JetchatTheme {
-            ProfileScreen(meProfile)
-        }
-    }
-}
-
-@Preview(widthDp = 360, heightDp = 480)
-@Composable
-fun ConvPreviewPortraitOtherDefault() {
-    ProvideWindowInsets(consumeWindowInsets = false) {
-        JetchatTheme {
-            ProfileScreen(colleagueProfile)
-        }
-    }
-}
-
-@Preview
-@Composable
-fun ProfileFabPreview() {
-    ProvideWindowInsets(consumeWindowInsets = false) {
-        JetchatTheme {
-            ProfileFab(extended = true, userIsMe = false)
-        }
-    }
-}

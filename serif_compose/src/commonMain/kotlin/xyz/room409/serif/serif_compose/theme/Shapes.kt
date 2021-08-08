@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xyz.room409.serif.serif_android.theme
+package xyz.room409.serif.serif_compose.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Shapes

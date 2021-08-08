@@ -32,8 +32,8 @@ import androidx.core.view.WindowCompat
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import xyz.room409.serif.serif_android.components.JetchatScaffold
-import xyz.room409.serif.serif_android.conversation.BackPressHandler
-import xyz.room409.serif.serif_android.conversation.LocalBackPressedDispatcher
+//import xyz.room409.serif.serif_android.conversation.BackPressHandler
+//import xyz.room409.serif.serif_android.conversation.LocalBackPressedDispatcher
 import xyz.room409.serif.serif_android.databinding.ContentMainBinding
 import com.google.accompanist.insets.ProvideWindowInsets
 import kotlinx.coroutines.launch
@@ -56,7 +56,7 @@ class MainActivity : AppCompatActivity() {
             // they keep being pass down the view hierarchy (since we're using fragments).
             ProvideWindowInsets(consumeWindowInsets = false) {
                 CompositionLocalProvider(
-                    LocalBackPressedDispatcher provides this.onBackPressedDispatcher
+                    //LocalBackPressedDispatcher provides this.onBackPressedDispatcher
                 ) {
                     val scaffoldState = rememberScaffoldState()
 
@@ -70,20 +70,20 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     // Intercepts back navigation when the drawer is open
-                    val roomPath by viewModel.roomPath.collectAsState()
+                    val roomPath by viewModel.roomPath
                     val scope = rememberCoroutineScope()
                     if (scaffoldState.drawerState.isOpen) {
-                        BackPressHandler {
-                            scope.launch {
-                                scaffoldState.drawerState.close()
-                            }
-                        }
+                        //BackPressHandler {
+                        //    scope.launch {
+                        //        scaffoldState.drawerState.close()
+                        //    }
+                        //}
                     } else if (roomPath.size > 0) {
-                        BackPressHandler {
-                            scope.launch {
-                                viewModel.exitRoom()
-                            }
-                        }
+                        //BackPressHandler {
+                        //    scope.launch {
+                        //        viewModel.exitRoom()
+                        //    }
+                        //}
                     }
 
                     JetchatScaffold(

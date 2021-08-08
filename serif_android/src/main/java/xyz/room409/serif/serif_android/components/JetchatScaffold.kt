@@ -21,7 +21,7 @@ import androidx.compose.material.Scaffold
 import androidx.compose.material.ScaffoldState
 import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
-import xyz.room409.serif.serif_android.theme.JetchatTheme
+import xyz.room409.serif.serif_compose.theme.JetchatTheme
 
 @Composable
 fun JetchatScaffold(

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xyz.room409.serif.serif_android.conversation
+package xyz.room409.serif.serif_compose
 
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.updateTransition
@@ -29,10 +29,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import xyz.room409.serif.serif_android.R
 
 private enum class Visibility {
     VISIBLE,
@@ -67,7 +64,7 @@ fun JumpToBottom(
                 )
             },
             text = {
-                Text(text = stringResource(id = R.string.jumpBottom))
+                Text(text = "Jump To Bottom")
             },
             onClick = onClicked,
             backgroundColor = MaterialTheme.colors.surface,
@@ -77,10 +74,4 @@ fun JumpToBottom(
                 .height(36.dp)
         )
     }
-}
-
-@Preview
-@Composable
-fun JumpToBottomPreview() {
-    JumpToBottom(enabled = true, onClicked = {})
 }

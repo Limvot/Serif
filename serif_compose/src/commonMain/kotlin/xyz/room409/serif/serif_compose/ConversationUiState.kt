@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-package xyz.room409.serif.serif_android.conversation
+package xyz.room409.serif.serif_compose
 
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.mutableStateListOf
-import xyz.room409.serif.serif_android.R
 import xyz.room409.serif.serif_shared.SharedUiMessage
 
 class ConversationUiState(
@@ -32,11 +30,3 @@ class ConversationUiState(
     val messages: List<SharedUiMessage> = _messages
 }
 
-@Immutable
-data class Message(
-    val author: String,
-    val content: String,
-    val timestamp: String,
-    val image: Int? = null,
-    val authorImage: Int = R.drawable.someone_else
-)

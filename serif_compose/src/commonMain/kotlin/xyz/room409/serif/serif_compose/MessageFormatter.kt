@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xyz.room409.serif.serif_android.conversation
+package xyz.room409.serif.serif_compose
 
 import androidx.compose.material.Colors
 import androidx.compose.material.MaterialTheme
