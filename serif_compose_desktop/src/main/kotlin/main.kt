@@ -77,16 +77,9 @@ fun main() = application {
                 uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed()),
                 sendMessage = { message -> fakeViewModel.sendMessage(message); },
                 navigateToRoom = { room -> fakeViewModel.navigateToRoom(room); },
-                navigateToProfile = { user ->
-                    // Click callback
-                    println("clicked on user $user")
-                },
-                onNavIconPressed = {
-                    println("Pressed nav icon...")
-                },
-                // Add padding so that we are inset from any left/right navigation bars
-                // (usually shown when in landscape orientation)
-                //modifier = Modifier.navigationBarsPadding(bottom = false)
+                exitRoom = { fakeViewModel.exitRoom(); },
+                navigateToProfile = { user -> println("clicked on user $user"); },
+                onNavIconPressed = { println("Pressed nav icon..."); },
             )
         }
     }

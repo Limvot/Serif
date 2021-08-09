@@ -73,6 +73,7 @@ class ConversationFragment : Fragment() {
                         uiState = ConversationUiState(roomName, ourUserId, 0, messages.reversed()),
                         sendMessage = { message -> activityViewModel.sendMessage(message); },
                         navigateToRoom = { room -> activityViewModel.navigateToRoom(room); },
+                        exitRoom = { activityViewModel.exitRoom(); },
                         navigateToProfile = { user ->
                             // Click callback
                             val bundle = bundleOf("userId" to user)

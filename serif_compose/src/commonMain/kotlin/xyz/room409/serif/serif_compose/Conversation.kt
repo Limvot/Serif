@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.material.Button
 import androidx.compose.material.ContentAlpha
 import androidx.compose.material.Divider
 import androidx.compose.material.Icon
@@ -93,6 +94,7 @@ fun ConversationContent(
     bumpWindowBase: (Int?) -> Unit,
     sendMessage: (String) -> Unit,
     navigateToRoom: (String) -> Unit,
+    exitRoom: () -> Unit,
     navigateToProfile: (String) -> Unit,
     modifier: Modifier = Modifier,
     uiInputModifier: Modifier = Modifier,
@@ -104,6 +106,9 @@ fun ConversationContent(
     Surface(modifier = modifier) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
+                // instead of using statusBarsPadding below
+                // from accompinest, we just stick some in here
+                Spacer(modifier = Modifier.height(74.dp))
                 Messages(
                     messages = uiState.messages,
                     ourUserId = uiState.ourUserId,
@@ -129,6 +134,7 @@ fun ConversationContent(
                 channelName = uiState.channelName,
                 channelMembers = uiState.channelMembers,
                 onNavIconPressed = onNavIconPressed,
+                onBackPressed = exitRoom,
                 // Use statusBarsPadding() to move the app bar content below the status bar
                 //modifier = Modifier.statusBarsPadding(),
             )
@@ -153,7 +159,8 @@ fun ChannelNameBar(
     channelName: String,
     channelMembers: Int,
     modifier: Modifier = Modifier,
-    onNavIconPressed: () -> Unit = { }
+    onNavIconPressed: () -> Unit = { },
+    onBackPressed: () -> Unit = { }
 ) {
     var functionalityNotAvailablePopupShown by remember { mutableStateOf(false) }
     if (functionalityNotAvailablePopupShown) {
@@ -183,6 +190,9 @@ fun ChannelNameBar(
         },
         actions = {
             CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
+                Button( onClick = onBackPressed) {
+                    Text("Back")
+                }
                 /*
                 // Search icon
                 Icon(
