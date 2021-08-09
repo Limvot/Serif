@@ -176,7 +176,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
         val prelim_total_events = back_events + listOf(base_and_seqId_and_prevBatch).filter { isStandaloneEvent(it.first) } + fore_events
         val relatedEvents = Database.getRelatedEvents(session_id, room_id, prelim_total_events.map { it.first.event_id })
-        val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }
+        val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }.distinctBy { it.event_id }
         // in addition to overrrideCurrent, the other condition for following live
         // is that we have less events forward than requested, so our window overlaps
         // live.

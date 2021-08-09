@@ -61,7 +61,6 @@ class MatrixInterface {
                 roomName.value = "Login"
             }
             is MatrixChatRoom -> {
-                println("Our refresh is assigning ${_m.messages}")
                 messages.value = _m.messages
                 roomPath.value = _m.room_ids
                 roomName.value = _m.name
