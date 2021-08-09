@@ -477,6 +477,7 @@ fun ChatItemBubble(
         if (message is SharedUiImgMessage) {
             Spacer(modifier = Modifier.height(4.dp))
             Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                Spacer(modifier = Modifier.width(74.dp).height(74.dp))
                 /*
                 Image(
                     painter = rememberImagePainter(File(message.url)),

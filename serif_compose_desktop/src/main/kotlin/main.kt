@@ -74,7 +74,7 @@ fun main() = application {
         val scrollState = rememberLazyListState()
         JetchatTheme(false) {
             ConversationContent(
-                bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size)].id } }); },
+                bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
                 uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed()),
                 sendMessage = { message -> fakeViewModel.sendMessage(message); },
                 navigateToRoom = { room -> fakeViewModel.navigateToRoom(room); },

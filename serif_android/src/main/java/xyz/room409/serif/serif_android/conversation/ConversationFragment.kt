@@ -71,7 +71,7 @@ class ConversationFragment : Fragment() {
                     val ourUserId by activityViewModel.ourUserId
                     val messages by activityViewModel.messages
                     ConversationContent(
-                        bumpWindowBase = { idx -> activityViewModel.bumpWindow(idx?.let { idx -> activityViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size)].id } }); },
+                        bumpWindowBase = { idx -> activityViewModel.bumpWindow(idx?.let { idx -> activityViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
                         uiState = ConversationUiState(roomName, ourUserId, 0, messages.reversed()),
                         sendMessage = { message -> activityViewModel.sendMessage(message); },
                         navigateToRoom = { room -> activityViewModel.navigateToRoom(room); },
