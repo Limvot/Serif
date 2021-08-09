@@ -67,11 +67,6 @@ import androidx.compose.ui.unit.dp
 //import xyz.room409.serif.serif_android.R
 //import xyz.room409.serif.serif_android.components.JetchatAppBar
 //import xyz.room409.serif.serif_android.theme.elevatedSurface
-//import com.google.accompanist.insets.LocalWindowInsets
-//import com.google.accompanist.insets.navigationBarsWithImePadding
-//import com.google.accompanist.insets.rememberInsetsPaddingValues
-//import com.google.accompanist.insets.statusBarsPadding
-//import com.google.accompanist.coil.rememberCoilPainter
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -164,7 +159,6 @@ fun ChannelNameBar(
     if (functionalityNotAvailablePopupShown) {
         //FunctionalityNotAvailablePopup { functionalityNotAvailablePopupShown = false }
     }
-    /*
     JetchatAppBar(
         modifier = modifier,
         onNavIconPressed = onNavIconPressed,
@@ -181,7 +175,7 @@ fun ChannelNameBar(
                 // Number of members
                 CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
                     Text(
-                        text = stringResource(R.string.members, channelMembers),
+                        text = "members",
                         style = MaterialTheme.typography.caption
                     )
                 }
@@ -189,6 +183,7 @@ fun ChannelNameBar(
         },
         actions = {
             CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
+                /*
                 // Search icon
                 Icon(
                     imageVector = Icons.Outlined.Search,
@@ -207,10 +202,10 @@ fun ChannelNameBar(
                         .height(24.dp),
                     contentDescription = stringResource(id = R.string.info)
                 )
+                */
             }
         }
     )
-    */
 }
 
 const val ConversationTestTag = "ConversationTestTag"
@@ -330,6 +325,10 @@ fun Message(
     Row(modifier = spaceBetweenAuthors) {
         if (isLastMessageByAuthor) {
             // Avatar
+            // Spacer instead of avatar :/
+            Surface(color = Color(msg.sender.hashCode()), shape = CircleShape) {
+                Spacer(modifier = Modifier.width(74.dp).height(74.dp))
+            }
             /*
             Image(
                 modifier = Modifier
@@ -470,7 +469,7 @@ fun ChatItemBubble(
             Surface(color = backgroundBubbleColor, shape = bubbleShape) {
                 /*
                 Image(
-                    //painter = rememberCoilPainter(File(message.url)),
+                    painter = rememberImagePainter(File(message.url)),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.size(160.dp),
                     contentDescription = message.message

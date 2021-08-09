@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xyz.room409.serif.serif_android.components
+package xyz.room409.serif.serif_compose
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -30,11 +30,10 @@ import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
+//import androidx.compose.ui.res.painterResource
+//import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import xyz.room409.serif.serif_android.R
+//import xyz.room409.serif.serif_android.R
 import xyz.room409.serif.serif_compose.theme.JetchatTheme
 import xyz.room409.serif.serif_compose.theme.elevatedSurface
 
@@ -63,6 +62,7 @@ fun JetchatAppBar(
             actions = actions,
             title = { Row { title() } }, // https://issuetracker.google.com/168793068
             navigationIcon = {
+            /*
                 Image(
                     painter = painterResource(id = R.drawable.ic_jetchat),
                     contentDescription = stringResource(id = R.string.back),
@@ -70,24 +70,9 @@ fun JetchatAppBar(
                         .clickable(onClick = onNavIconPressed)
                         .padding(horizontal = 16.dp)
                 )
+                */
             }
         )
         Divider()
-    }
-}
-
-@Preview
-@Composable
-fun JetchatAppBarPreview() {
-    JetchatTheme {
-        JetchatAppBar(title = { Text("Preview!") })
-    }
-}
-
-@Preview
-@Composable
-fun JetchatAppBarPreviewDark() {
-    JetchatTheme(isDarkTheme = true) {
-        JetchatAppBar(title = { Text("Preview!") })
     }
 }

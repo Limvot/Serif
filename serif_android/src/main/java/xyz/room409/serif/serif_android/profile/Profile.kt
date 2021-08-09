@@ -61,7 +61,7 @@ import androidx.compose.ui.unit.dp
 import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
 import xyz.room409.serif.serif_android.R
 import xyz.room409.serif.serif_android.components.AnimatingFabContent
-import xyz.room409.serif.serif_android.components.JetchatAppBar
+import xyz.room409.serif.serif_compose.JetchatAppBar
 import xyz.room409.serif.serif_android.components.baselineHeight
 import xyz.room409.serif.serif_compose.theme.JetchatTheme
 import com.google.accompanist.insets.ProvideWindowInsets
