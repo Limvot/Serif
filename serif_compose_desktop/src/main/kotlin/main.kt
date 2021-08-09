@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 
 import kotlin.concurrent.thread
+import kotlin.math.min
 
 import xyz.room409.serif.serif_shared.*
 import xyz.room409.serif.serif_shared.db.DriverFactory
@@ -73,7 +74,7 @@ fun main() = application {
         val scrollState = rememberLazyListState()
         JetchatTheme(false) {
             ConversationContent(
-                bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { fakeViewModel.messages.value.reversed()[it].id }); },
+                bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size)].id } }); },
                 uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed()),
                 sendMessage = { message -> fakeViewModel.sendMessage(message); },
                 navigateToRoom = { room -> fakeViewModel.navigateToRoom(room); },

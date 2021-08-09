@@ -66,7 +66,9 @@ kotlin {
         val iosTest by getting
         val jvmMain by getting {
             dependencies {
-                implementation("io.ktor:ktor-client-cio:$ktor_version")
+                //implementation("io.ktor:ktor-client-cio:$ktor_version")
+                implementation("io.ktor:ktor-client-okhttp:$ktor_version")
+                implementation("com.squareup.okhttp3:okhttp:4.9.0")
                 implementation("com.squareup.sqldelight:sqlite-driver:$sql_delight_version")
             }
         }

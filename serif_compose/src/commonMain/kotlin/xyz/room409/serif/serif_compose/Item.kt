@@ -95,16 +95,18 @@ class MatrixInterface {
     }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))
     fun exitRoom() = pushDo(Action.ExitRoom())
-    fun bumpWindow(id: String?) = pushDo(Action.Refresh(20, id, 20))
+    fun bumpWindow(id: String?) = pushDo(Action.Refresh(50, id, 50))
 
     private fun pushDo(_a: Action): () -> Unit {
+        println("Pushing $_a")
         lock.lock()
         try {
             when (_a) {
-                is Action.NavigateToRoom -> { actions.clear(); }
-                is Action.ExitRoom -> { actions.clear(); }
+                is Action.NavigateToRoom -> { println("clearing actiosn b/c NavigateToRoom"); actions.clear(); }
+                is Action.ExitRoom -> { println("clearing actiosn b/c ExitRoom"); actions.clear(); }
                 is Action.Refresh -> {
                     if (actions.size != 0) {
+                        println("There are actions in the backlog, not doing Refresh")
                         return { -> }
                     }
                 }
@@ -119,6 +121,7 @@ class MatrixInterface {
             while (actions.size > 0) {
                 val this_action = actions.removeFirst()
                 lock.unlock()
+                println("EXECUTING $this_action")
                 execute(this_action)
                 lock.lock()
             }
@@ -131,6 +134,7 @@ class MatrixInterface {
                 when (val _m = m) {
                     is MatrixChatRoom -> {
                         //m = _m.refresh(_m.window_back_length, id, _m.window_forward_length)
+                        println("doing a refresh to $a")
                         m = _m.refresh(a.window_back, a.base_id, a.window_forward)
                         refresh()
                     }
@@ -173,10 +177,10 @@ class MatrixInterface {
         }
     }
 
-    sealed class Action {
-        class Refresh(val window_back: Int, val base_id: String?, val window_forward: Int): Action()
-        class ExitRoom(): Action()
-        class NavigateToRoom(val id: String): Action()
+    sealed class Action() {
+        data class Refresh(val window_back: Int, val base_id: String?, val window_forward: Int): Action()
+        data class ExitRoom(val v:Int = 1): Action()
+        data class NavigateToRoom(val id: String): Action()
     }
 }
 
