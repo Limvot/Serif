@@ -38,6 +38,8 @@ import xyz.room409.serif.serif_android.R
 import xyz.room409.serif.serif_compose.*
 import xyz.room409.serif.serif_compose.theme.JetchatTheme
 
+import kotlin.math.min
+
 class ConversationFragment : Fragment() {
 
     private val activityViewModel: MainViewModel by activityViewModels()
@@ -69,7 +71,7 @@ class ConversationFragment : Fragment() {
                     val ourUserId by activityViewModel.ourUserId
                     val messages by activityViewModel.messages
                     ConversationContent(
-                        bumpWindowBase = { idx -> activityViewModel.bumpWindow(idx?.let { messages.reversed()[it].id }); },
+                        bumpWindowBase = { idx -> activityViewModel.bumpWindow(idx?.let { idx -> activityViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size)].id } }); },
                         uiState = ConversationUiState(roomName, ourUserId, 0, messages.reversed()),
                         sendMessage = { message -> activityViewModel.sendMessage(message); },
                         navigateToRoom = { room -> activityViewModel.navigateToRoom(room); },
