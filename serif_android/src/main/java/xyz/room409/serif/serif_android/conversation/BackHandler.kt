@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-package xyz.room409.serif.serif_compose
-/*
+package xyz.room409.serif.serif_android.conversation
 
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.OnBackPressedDispatcher
@@ -72,4 +71,3 @@ fun BackPressHandler(onBackPressed: () -> Unit) {
  */
 val LocalBackPressedDispatcher =
     staticCompositionLocalOf<OnBackPressedDispatcher> { error("No Back Dispatcher provided") }
-*/
