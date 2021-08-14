@@ -557,6 +557,19 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
             }
         }.filterNotNull()
     }
+    fun getPresenceForUser(user_id: String): PresenceState {
+        when(val res = msession.getPresenceStatus(user_id)) {
+            is Success -> return res.value.presence
+            is Error -> {
+                println("Failed to get Presence for $user_id because ${res.cause}")
+                return PresenceState.unavailable
+            }
+        }
+    }
+    fun setPresenceStatus(presence: PresenceState, msg: String = "") {
+        println("Setting presence to $presence")
+        msession.sendPresenceStatus(presence, msg)
+    }
     fun getEventSrc(msg_id: String): String {
         val event = msession.getRoomEvent(room_id, msg_id)
         if (event as? RoomMessageEvent != null) {

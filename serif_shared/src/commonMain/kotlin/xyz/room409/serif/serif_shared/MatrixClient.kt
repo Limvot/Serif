@@ -95,6 +95,7 @@ fun getRelatedEvent(e: Event): String? {
 inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as? StateEvent<T>?)?.content) as? T?
 
 class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
+    private var user_presence_info: MutableMap<String,PresenceEventContent> = mutableMapOf()
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
     private var in_flight_media_requests: MutableSet<String> = mutableSetOf()
     private var in_flight_user_requests: MutableSet<String> = mutableSetOf()
@@ -557,6 +558,32 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         return Database.getStateEvent(session_id, id, "m.room.pinned_events", "")?.castToStateEventWithContentOfType<RoomPinnedEventContent>()?.pinned
             ?: listOf()
     }
+    fun sendPresenceStatus(status: PresenceState, msg: String) {
+        val url = "$server/_matrix/client/r0/presence/$user/status?access_token=$access_token"
+        runBlocking {
+            client.put<String>(url) {
+                contentType(ContentType.Application.Json)
+                body = PresenceEventUpdate(status,msg)
+            }
+        }
+        return
+    }
+    fun getPresenceStatus(user_id: String): Outcome<PresenceEventContent> {
+        //TODO: We may want to consider some occasional server query to refresh
+        //the cached data, instead of just returning the cached copy
+        val user_presence = user_presence_info.get(user_id)
+        if(user_presence != null) {
+            return Success(user_presence)
+        }
+        try {
+            val url = "$server/_matrix/client/r0/presence/$user_id/status?access_token=$access_token"
+            val presence = runBlocking { client.get<PresenceEventContent>(url) }
+            user_presence_info.put(user_id, presence)
+            return Success(presence)
+        } catch (e: Exception) {
+            return Error("Unable to get presence information for user $user_id", e)
+        }
+    }
     private fun constructRoomNameFromMembers(id: String): String? {
         val members = getRoomMembers(id).filter({it != this.user}).map({ sender ->
                val (displayname, _) = getDiplayNameAndAvatarFilePath(sender, id)
@@ -584,6 +611,11 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     }
     fun mergeInSync(new_sync_response: SyncResponse) {
         Database.transaction {
+            for (_p in new_sync_response.presence?.events ?: listOf()) {
+                val p = _p as PresenceEvent
+                println("Presence Event for ${p.sender} is ${p.content.presence}")
+                user_presence_info.put(p.sender, p.content)
+            }
             for ((room_id, room) in new_sync_response.rooms?.join ?: mapOf()) {
                 for (event in room.state.events + room.timeline.events) {
                     (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }

@@ -636,10 +636,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val mk_sender = { msg: SharedUiMessage ->
         val render_text = { msg: SharedUiMessage ->
             val displayname = msg.displayname ?: msg.sender
+            val presence = m.getPresenceForUser(msg.sender)
             if (msg.reactions.size > 0 ) {
-                "${displayname}: ${msg.reactions} "
+                "${displayname}: ${msg.reactions} ${presence}"
             } else {
-                "${displayname}: "
+                "${displayname}: ${presence}"
             }
         }
         val sender = SerifText(render_text(msg))
@@ -976,6 +977,19 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val members = m.members.map { user: String -> Pair(user, m.getDisplayNameForUser(user)) }
             val text = mention_txt.split("@").lastOrNull()?.split(" ")?.firstOrNull() ?: ""
             println("Showing mentions matching \'$text\'")
+            //NOTE: testing code for setting presence status
+            //TODO: server seems to reset status to online regardless
+            //of what we manually set our status to. Perhaps it resets
+            //because of the sync calls.
+            /*
+            if(text == "offline") {
+                m.setPresenceStatus(PresenceState.offline)
+            } else if(text == "online") {
+                m.setPresenceStatus(PresenceState.online)
+            } else if(text == "unavail") {
+                m.setPresenceStatus(PresenceState.unavailable)
+            }
+            */
             val suggestions = if(text == "") {
                 members
             } else {
