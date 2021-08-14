@@ -100,6 +100,7 @@ class MatrixInterface {
     private fun pushDo(_a: Action): () -> Unit {
         println("Pushing $_a")
         lock.lock()
+        val already_a_background_thread_running = actions.size != 0
         try {
             when (_a) {
                 is Action.NavigateToRoom -> { println("clearing actiosn b/c NavigateToRoom"); actions.clear(); }
@@ -112,7 +113,7 @@ class MatrixInterface {
                 }
             }
             actions.add(_a)
-            if (actions.size > 1) {
+            if (already_a_background_thread_running) {
                 return { -> }
             }
         } finally { lock.unlock() }
@@ -181,19 +182,5 @@ class MatrixInterface {
         data class Refresh(val window_back: Int, val base_id: String?, val window_forward: Int): Action()
         data class ExitRoom(val v:Int = 1): Action()
         data class NavigateToRoom(val id: String): Action()
-    }
-}
-
-
-@Composable
-fun SerifItem(text: String = "THIS IS A SHARED COMPOSE FUNCTION!") {
-    Box(
-            modifier = Modifier.height(32.dp)
-            .width(400.dp)
-            .background(color = Color(200, 0, 0, 20))
-            .padding(start = 10.dp),
-            contentAlignment = Alignment.CenterStart
-       ) {
-        Text(text = text)
     }
 }

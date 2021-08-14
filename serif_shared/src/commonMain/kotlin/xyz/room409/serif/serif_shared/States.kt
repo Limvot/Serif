@@ -310,8 +310,9 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                 else ->
                     if(it.unsigned?.redacted_because!=null) {
                         val details: RoomMessageEvent = it.unsigned.redacted_because as RoomMessageEvent
-                        val dcontent: RedactionRMEC = details.content as RedactionRMEC
-                        SharedUiMessagePlain(it.sender, null, null, "Deleted by ${details.sender} because ${dcontent.reason}", null, it.event_id, it.origin_server_ts, reactions)
+                        // Might be a FallbackRMEC if no reason is given
+                        val reason = (details.content as? RedactionRMEC)?.reason ?: "No reason given"
+                        SharedUiMessagePlain(it.sender, null, null, "Deleted by ${details.sender} because $reason", null, it.event_id, it.origin_server_ts, reactions)
                     }
                     else
                         SharedUiMessagePlain(it.sender, null, null, "UNHANDLED ROOM MESSAGE EVENT!!!  ${it.content.body}", null, it.event_id, it.origin_server_ts, reactions)
