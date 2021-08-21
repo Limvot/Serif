@@ -60,9 +60,7 @@ object Database {
     }
 
     fun addMediaToCache(url: String, file_data: ByteArray, update: Boolean): String {
-        val cache_path = File(System.getProperty("user.dir") + "/cache/")
-        cache_path.mkdirs()
-        val file = File.createTempFile("serif_media_", "", cache_path)
+        val file = Platform.getFile()
         file.outputStream().write(file_data)
         val local = file.toPath().toString()
         if (update) {

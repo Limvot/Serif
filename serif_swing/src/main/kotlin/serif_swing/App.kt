@@ -329,7 +329,7 @@ class SerifText(private var text: AttributedString) : JComponent() {
         line_height = metrics.height
         max_char_width = metrics.charWidth('W')
         lines = calculateLines(text, -1)
-        max_line_length = lines.map { it.second - it.first }.max() ?: 1
+        max_line_length = lines.map { it.second - it.first }.maxOrNull() ?: 1
         size = Dimension(max_char_width * max_line_length, line_height * (lines.size + 1))
     }
     fun calculateLines(text: AttributedString, max_chars_per_line: Int): List<Pair<Int,Int>> {
@@ -377,7 +377,7 @@ class SerifText(private var text: AttributedString) : JComponent() {
             text.addAttribute(TextAttribute.FONT, javax.swing.UIManager.getLookAndFeelDefaults().getFont("Label.font"))
         }
         lines = calculateLines(text, size.width / (max_char_width+1))
-        max_line_length = lines.map { it.second - it.first }.max() ?: 1
+        max_line_length = lines.map { it.second - it.first }.maxOrNull() ?: 1
     }
     fun getText() = text
     override fun setSize(d: Dimension) {
