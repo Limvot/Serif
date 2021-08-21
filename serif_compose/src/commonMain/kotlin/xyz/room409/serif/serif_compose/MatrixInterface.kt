@@ -39,6 +39,7 @@ class MatrixInterface {
     val roomName: MutableState<String> = mutableStateOf("<>")
     val lock = ReentrantLock()
     val actions: MutableList<Action> = mutableListOf()
+    var already_a_background_thread_running = false
     var m: MatrixState = MatrixLogin()
     init {
         refresh()
@@ -100,7 +101,6 @@ class MatrixInterface {
     private fun pushDo(_a: Action): () -> Unit {
         println("Pushing $_a")
         lock.lock()
-        val already_a_background_thread_running = actions.size != 0
         try {
             when (_a) {
                 is Action.NavigateToRoom -> { println("clearing actiosn b/c NavigateToRoom"); actions.clear(); }
@@ -119,6 +119,7 @@ class MatrixInterface {
         } finally { lock.unlock() }
         return { ->
             lock.lock()
+            already_a_background_thread_running = true
             while (actions.size > 0) {
                 val this_action = actions.removeFirst()
                 lock.unlock()
@@ -126,6 +127,7 @@ class MatrixInterface {
                 execute(this_action)
                 lock.lock()
             }
+            already_a_background_thread_running = false
             lock.unlock()
         }
     }
