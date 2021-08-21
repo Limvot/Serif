@@ -1,6 +1,5 @@
 package xyz.room409.serif.serif_shared
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.features.*
 import io.ktor.client.features.json.*
 import io.ktor.client.features.json.serializer.KotlinxSerializer
@@ -177,7 +176,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
         val prelim_total_events = back_events + listOf(base_and_seqId_and_prevBatch).filter { isStandaloneEvent(it.first) } + fore_events
         val relatedEvents = Database.getRelatedEvents(session_id, room_id, prelim_total_events.map { it.first.event_id })
-        val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }
+        val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }.distinctBy { it.event_id }
         // in addition to overrrideCurrent, the other condition for following live
         // is that we have less events forward than requested, so our window overlaps
         // live.
@@ -530,7 +529,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 synchronized(this) {
                     println("This backfill for $room_id failed with an exception $e")
                     e.printStackTrace()
-                    in_flight_backfill_requests.remove(room_id)
+                    in_flight_backfill_requests.remove(Triple(room_id, event_id, from))
                 }
             }
         }
@@ -642,19 +641,8 @@ object JsonFormatHolder {
 }
 
 class MatrixClient {
-    // 35 seconds, to comfortably handle the 30 second sync
-    // timeout we send to the server (recommended Matrix default)
-    fun makeClient() = HttpClient(CIO.create { requestTimeout = 35000 }) {
-        install(JsonFeature) {
-            serializer = KotlinxSerializer(
-                kotlinx.serialization.json.Json {
-                    ignoreUnknownKeys = true
-                }
-            )
-        }
-    }
     fun login(username: String, password: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
-        val client = makeClient()
+        val client = Platform.makeHttpClient()
         val server = "https://synapse.room409.xyz"
         try {
             val loginResponse = runBlocking {
@@ -676,7 +664,7 @@ class MatrixClient {
         }
     }
     fun loginFromSavedSession(username: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
-        val client = makeClient()
+        val client = Platform.makeHttpClient()
         val server = "https://synapse.room409.xyz"
         // Load from DB
         println("loading specific session from db")
