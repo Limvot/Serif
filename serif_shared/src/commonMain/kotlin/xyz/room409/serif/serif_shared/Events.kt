@@ -71,6 +71,7 @@ data class Room(
     var timeline: Timeline,
     var state: State,
     val summary: RoomSummary,
+    val ephemeral: Ephemeral,
     var unread_notifications: UnreadNotifications? = null
 )
 
@@ -111,6 +112,18 @@ data class RoomSummary(
     @SerialName("m.joined_member_count") val joined_member_count: Long? = null,
     @SerialName("m.invited_member_count") val invited_member_count: Long? = null
 )
+
+@Serializable
+data class Ephemeral(var events: List<EphemeralEvent>)
+@Serializable
+data class EphemeralEvent(
+    val type: String = "m.typing",
+    val content: EphemeralEventContent
+)
+@Serializable
+data class EphemeralEventContent(val user_ids: List<String>? = null)
+@Serializable
+data class TypingStatusNotify(val typing: Boolean, val timeout: Int? = null)
 
 @Serializable
 data class BackfillResponse(

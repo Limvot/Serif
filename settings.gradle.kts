@@ -1,6 +1,7 @@
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
         google()
         jcenter()
         mavenCentral()
@@ -16,8 +17,9 @@ pluginManagement {
 rootProject.name = "Serif"
 
 
-include(":serif_cli")
 include(":serif_swing")
+include(":serif_compose")
+include(":serif_compose_desktop")
 include(":serif_android")
 include(":serif_shared")
 

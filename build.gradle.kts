@@ -1,4 +1,5 @@
 buildscript {
+    //val compose_version by extra("1.0.0-beta07")
     repositories {
         gradlePluginPortal()
         jcenter()
@@ -6,8 +7,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.4.10")
-        classpath("com.android.tools.build:gradle:4.1.3")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.5.21")
+        classpath("com.android.tools.build:gradle:7.1.0-alpha01")
         classpath("com.squareup.sqldelight:gradle-plugin:1.4.3")
     }
 }
@@ -36,7 +37,7 @@ val ktlintCheck by tasks.creating(JavaExec::class) {
     description = "Check Kotlin code style."
     classpath = ktlint
     main = "com.pinterest.ktlint.Main"
-    args = listOf("serif_android/src/**/*.kt", "serif_shared/src/**/*.kt", "serif_cli/src/**/*.kt", "serif_swing/src/**/*.kt", "serif_ios/src/**/*.kt")
+    args = listOf("serif_android/src/**/*.kt", "serif_shared/src/**/*.kt", "serif_swing/src/**/*.kt", "serif_ios/src/**/*.kt")
 }
 
 val ktlintFormat by tasks.creating(JavaExec::class) {
@@ -46,6 +47,6 @@ val ktlintFormat by tasks.creating(JavaExec::class) {
     description = "Fix Kotlin code style deviations."
     classpath = ktlint
     main = "com.pinterest.ktlint.Main"
-    args = listOf("-F", "serif_android/src/**/*.kt", "serif_shared/src/**/*.kt", "serif_cli/src/**/*.kt", "serif_swing/src/**/*.kt", "serif_ios/src/**/*.kt")
+    args = listOf("-F", "serif_android/src/**/*.kt", "serif_shared/src/**/*.kt", "serif_swing/src/**/*.kt", "serif_ios/src/**/*.kt")
 }
 

@@ -4,16 +4,16 @@
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
-        <option name="delegatedBuild" value="true" />
-        <option name="testRunner" value="PLATFORM" />
+        <option name="testRunner" value="GRADLE" />
         <option name="distributionType" value="DEFAULT_WRAPPED" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
-        <option name="gradleJvm" value="adopt-openjdk-11 (WSL)" />
+        <option name="gradleJvm" value="11" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/serif_android" />
-            <option value="$PROJECT_DIR$/serif_cli" />
+            <option value="$PROJECT_DIR$/serif_compose" />
+            <option value="$PROJECT_DIR$/serif_compose_desktop" />
             <option value="$PROJECT_DIR$/serif_shared" />
             <option value="$PROJECT_DIR$/serif_swing" />
           </set>

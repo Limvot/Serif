@@ -1,6 +1,5 @@
 package xyz.room409.serif.serif_shared
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.features.*
 import io.ktor.client.features.json.*
 import io.ktor.client.features.json.serializer.KotlinxSerializer
@@ -96,6 +95,7 @@ inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as
 
 class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var user_presence_info: MutableMap<String,PresenceEventContent> = mutableMapOf()
+    private var roomTypingNotifications: MutableMap<String, List<String>> = mutableMapOf()
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
     private var in_flight_media_requests: MutableSet<String> = mutableSetOf()
     private var in_flight_user_requests: MutableSet<String> = mutableSetOf()
@@ -178,7 +178,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
         val prelim_total_events = back_events + listOf(base_and_seqId_and_prevBatch).filter { isStandaloneEvent(it.first) } + fore_events
         val relatedEvents = Database.getRelatedEvents(session_id, room_id, prelim_total_events.map { it.first.event_id })
-        val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }
+        val total_events = (prelim_total_events.map { Pair(it.first, it.second) } + relatedEvents).sortedBy { it.second } .map { it.first }.distinctBy { it.event_id }
         // in addition to overrrideCurrent, the other condition for following live
         // is that we have less events forward than requested, so our window overlaps
         // live.
@@ -531,7 +531,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                 synchronized(this) {
                     println("This backfill for $room_id failed with an exception $e")
                     e.printStackTrace()
-                    in_flight_backfill_requests.remove(room_id)
+                    in_flight_backfill_requests.remove(Triple(room_id, event_id, from))
                 }
             }
         }
@@ -609,6 +609,24 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             ?: constructRoomNameFromMembers(id)
             ?: "<no room name - $id>"
     }
+    fun getTypingStatusForRoom(room_id: String): List<String> {
+        return roomTypingNotifications.get(room_id) ?: listOf()
+    }
+    fun sendTypingStatus(room_id: String, is_typing: Boolean): Outcome<String> {
+        try {
+            val url = "$server/_matrix/client/r0/rooms/$room_id/typing/$user?access_token=$access_token"
+            val timeout = if(is_typing) { 10000 } else { null }
+            val res = runBlocking {
+                client.put<String>(url) {
+                    contentType(ContentType.Application.Json)
+                    body = TypingStatusNotify(is_typing, timeout)
+                }
+            }
+            return Success(res)
+        } catch (e: Exception) {
+            return Error("Sending Typing Status failed", e)
+        }
+    }
     fun mergeInSync(new_sync_response: SyncResponse) {
         Database.transaction {
             for (_p in new_sync_response.presence?.events ?: listOf()) {
@@ -619,6 +637,13 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             for ((room_id, room) in new_sync_response.rooms?.join ?: mapOf()) {
                 for (event in room.state.events + room.timeline.events) {
                     (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }
+                }
+                for (eph_event in room.ephemeral.events) {
+                    if(eph_event.type == "m.typing") {
+                        roomTypingNotifications.put(room_id,eph_event.content.user_ids!!)
+                    } else {
+                        println("Ephem Event Received of type ${eph_event.type} for ${room_id}!")
+                    }
                 }
                 val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
                 val redactedEvents : MutableList<String> = mutableListOf()
@@ -674,19 +699,8 @@ object JsonFormatHolder {
 }
 
 class MatrixClient {
-    // 35 seconds, to comfortably handle the 30 second sync
-    // timeout we send to the server (recommended Matrix default)
-    fun makeClient() = HttpClient(CIO.create { requestTimeout = 35000 }) {
-        install(JsonFeature) {
-            serializer = KotlinxSerializer(
-                kotlinx.serialization.json.Json {
-                    ignoreUnknownKeys = true
-                }
-            )
-        }
-    }
     fun login(username: String, password: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
-        val client = makeClient()
+        val client = Platform.makeHttpClient()
         val server = "https://synapse.room409.xyz"
         try {
             val loginResponse = runBlocking {
@@ -708,7 +722,7 @@ class MatrixClient {
         }
     }
     fun loginFromSavedSession(username: String, onUpdate: () -> Unit): Outcome<MatrixSession> {
-        val client = makeClient()
+        val client = Platform.makeHttpClient()
         val server = "https://synapse.room409.xyz"
         // Load from DB
         println("loading specific session from db")
