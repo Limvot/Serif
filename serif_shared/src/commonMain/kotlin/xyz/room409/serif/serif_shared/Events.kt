@@ -62,7 +62,7 @@ data class EventIdResponse(val event_id: String)
 @Serializable
 data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
 
-@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms? = null)
+@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms? = null, val presence: Presence? = null)
 
 @Serializable data class Rooms(val join: MutableMap<String, Room>)
 
@@ -74,6 +74,33 @@ data class Room(
     val ephemeral: Ephemeral,
     var unread_notifications: UnreadNotifications? = null
 )
+
+@Serializable
+data class Presence(var events: List<Event> = listOf())
+
+@Serializable
+data class PresenceEvent(
+    override val raw_self: JsonObject,
+    override val raw_content: JsonElement,
+    override val type: String = "m.presence",
+    val sender: String,
+    val content: PresenceEventContent
+) : Event()
+
+@Serializable
+data class PresenceEventContent(
+    val avatar_url: String? = null,
+    val displayname: String? = null,
+    val last_active_ago: Int? = null,
+    val presence: PresenceState,
+    val currently_active: Boolean? = false,
+    val status_msg: String? = null
+)
+
+enum class PresenceState { online, offline, unavailable }
+
+@Serializable
+data class PresenceEventUpdate(val presence: PresenceState, val status_msg: String)
 
 @Serializable data class Timeline(var events: List<Event>, var limited: Boolean = false, var prev_batch: String)
 
@@ -324,6 +351,7 @@ object EventSerializer : JsonContentPolymorphicSerializer<Event>(Event::class) {
                 type == "m.space.child" -> SpaceChildStateEventSerializer
                 type == "m.room.pinned_events" -> RoomPinnedEventSerializer
                 type == "m.room.member" -> RoomMemberEventSerializer //TODO: Make a member serializer
+                type == "m.presence" -> PresenceEventSerializer
                 element.jsonObject["state_key"] != null -> StateEventFallbackSerializer
                 type.startsWith("m.room") -> RoomEventFallbackSerializer
                 else -> EventFallbackSerializer
@@ -352,6 +380,7 @@ object RoomEventFallbackSerializer : GenericJsonEventSerializer<RoomEventFallbac
 object RoomMessageEventSerializer : GenericJsonEventSerializer<RoomMessageEvent>(RoomMessageEvent.serializer())
 object RoomCreationEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCreationContent>>(StateEvent.serializer(RoomCreationContent.serializer()))
 object RoomPinnedEventSerializer : GenericJsonEventSerializer<StateEvent<RoomPinnedEventContent>>(StateEvent.serializer(RoomPinnedEventContent.serializer()))
+object PresenceEventSerializer : GenericJsonEventSerializer<PresenceEvent>(PresenceEvent.serializer())
 object RoomMemberEventSerializer : GenericJsonEventSerializer<StateEvent<RoomMemberEventContent>>(StateEvent.serializer(RoomMemberEventContent.serializer()))
 object RoomNameStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomNameContent>>(StateEvent.serializer(RoomNameContent.serializer()))
 object RoomCanonicalAliasStateEventSerializer : GenericJsonEventSerializer<StateEvent<RoomCanonicalAliasContent>>(StateEvent.serializer(RoomCanonicalAliasContent.serializer()))
