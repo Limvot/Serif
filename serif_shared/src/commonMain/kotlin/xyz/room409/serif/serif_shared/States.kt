@@ -632,6 +632,8 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
         }
         return this
     }
+    fun createRoom(name: String, room_alias_name: String, topic: String) = msession.createRoom(name, room_alias_name, topic)
+
     fun setRoomTopic(topic: String) {
         msession.setRoomTopic(room_id,topic)
     }

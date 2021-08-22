@@ -1137,6 +1137,45 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 }
             })
             room_header_panel.add(room_cnfg_button, BorderLayout.LINE_END)
+        } else {
+            val newRoomButton = SmoothButton("New Room")
+            room_header_panel.add(newRoomButton, BorderLayout.LINE_END)
+            val create : (JDialog) -> Unit = { dialog->
+                val dpanel = JPanel()
+                dpanel.layout = BoxLayout(dpanel, BoxLayout.PAGE_AXIS)
+                // name, room_alias_name, topic
+                var roomname_field = SmoothTextField(20)
+                var roomname_label = SmoothLabel("Room Name: ")
+                var alias_field = SmoothTextField(20)
+                var alias_label = SmoothLabel("Alias: ")
+                var topic_field = SmoothTextField(20)
+                var topic_label = SmoothLabel("Topic: ")
+
+                val create_btn = SmoothButton("Create")
+                create_btn.addActionListener({
+                    println(m.createRoom(roomname_field.text, alias_field.text, topic_field.text))
+                    dialog.setVisible(false)
+                    dialog.dispose()
+                })
+
+                val close_btn = SmoothButton("Close")
+                close_btn.addActionListener({
+                    dialog.setVisible(false)
+                    dialog.dispose()
+                })
+                dpanel.add(roomname_label)
+                dpanel.add(roomname_field)
+                dpanel.add(alias_label)
+                dpanel.add(alias_field)
+                dpanel.add(topic_label)
+                dpanel.add(topic_field)
+                dpanel.add(create_btn)
+                dpanel.add(close_btn)
+                dialog.add(dpanel)
+            }
+            newRoomButton.addActionListener({
+                createPopup(panel, "Create Room", false, true, create)
+            })
             //uncomment bellow block for sending out typing notifications
             //Commented out right now to avoid being too spammy until we
             //get it properly sending in the compose gui.
