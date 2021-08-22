@@ -73,6 +73,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
@@ -467,13 +468,6 @@ fun ChatItemBubble(
 
     val bubbleShape = if (lastMessageByAuthor) LastChatBubbleShape else ChatBubbleShape
     Column {
-        Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-            ClickableMessage(
-                message = message,
-                roomClicked = roomClicked,
-                authorClicked = authorClicked
-            )
-        }
         if (message is SharedUiImgMessage) {
             Spacer(modifier = Modifier.height(4.dp))
             Surface(color = backgroundBubbleColor, shape = bubbleShape) {
@@ -486,6 +480,32 @@ fun ChatItemBubble(
                     contentDescription = message.message
                 )
                 */
+            }
+        } else if (message is SharedUiLocationMessage) {
+            val uriHandler = LocalUriHandler.current
+            val styledMessage = messageFormatter(text = message.message)
+            val parts = message.location.split(",")
+            val lat = parts[0].replace("geo:","")
+            val lon = parts[1]
+            val href = "https://maps.google.com/?q=$lat,$lon"
+            Spacer(modifier = Modifier.height(4.dp))
+            Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                ClickableText(
+                    text = styledMessage,
+                    style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                    modifier = Modifier.padding(8.dp),
+                    onClick = {
+                        uriHandler.openUri(href)
+                    }
+                )
+            }
+        } else {
+            Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                ClickableMessage(
+                    message = message,
+                    roomClicked = roomClicked,
+                    authorClicked = authorClicked
+                )
             }
         }
     }
