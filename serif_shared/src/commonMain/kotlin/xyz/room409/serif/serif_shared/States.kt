@@ -88,7 +88,8 @@ data class SharedUiRoom(
 
     val unreadCount: Int,
     val highlightCount: Int,
-    val lastMessage: SharedUiMessage?
+    val lastMessage: SharedUiMessage?,
+    val typing: List<String>
 ) : SharedUiMessage()
 
 data class SharedUiMessagePlain(
@@ -325,7 +326,8 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                 message=summary?.first ?: event.state_key,
                 unreadCount=summary?.second?.first ?: 0,
                 highlightCount=summary?.second?.first ?: 0,
-                lastMessage=summary?.third?.let { toSharedUiMessageList(msession, username, event.state_key, 0, it, 0, true).first.firstOrNull() }
+                lastMessage=summary?.third?.let { toSharedUiMessageList(msession, username, event.state_key, 0, it, 0, true).first.firstOrNull() },
+                typing=listOf()
             )
         } else if (it as? RoomEvent != null) {
             // This won't actually happen currently,
@@ -372,6 +374,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
     val avatar: String
     val roomName: String = msession.getRoomName(room_id)
     val roomTopic: String = msession.getRoomTopic(room_id)
+    val typing = if(room_type == "m.space") { listOf() } else { normalizeTypingList(msession.getTypingStatusForRoom(room_id)) }
     val link_regex = Regex("<a href=\"https://matrix.to/#/[^:]*:[^>]*\">(.*)</a>")
     init {
         messages = if (room_id == "Room List" || room_id == "All Rooms" || msession.getRoomType(room_id) == "m.space") {
@@ -393,12 +396,14 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
             }
             if (spaces == null) {
                 val (__spaces, _rooms) = msession.mapRooms { id, name, unread_notif, unread_highlight, last_event_id ->
+                    val typing = normalizeTypingList(msession.getTypingStatusForRoom(id))
                     Pair(id, SharedUiRoom(
                         id=id,
                         message=name,
                         unreadCount=unread_notif,
                         highlightCount=unread_highlight,
-                        lastMessage=last_event_id?.let { toSharedUiMessageList(msession, username, id, 0, it, 0, false).first.firstOrNull() }
+                        lastMessage=last_event_id?.let { toSharedUiMessageList(msession, username, id, 0, it, 0, false).first.firstOrNull() },
+                        typing=typing
                     ))
                 }.sortedBy { -(it.second.lastMessage?.timestamp ?: 0) }.partition { msession.getRoomType(it.second.id) == "m.space" }
                 val _spaces = __spaces.toMap()
@@ -430,7 +435,8 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
                         message=_spaces[id]!!.message,
                         unreadCount=total_unread,
                         highlightCount=total_highlight,
-                        lastMessage=latest
+                        lastMessage=latest,
+                        typing=listOf()
                     )
                 }
                 for (space_id in _spaces.keys) {
@@ -457,7 +463,8 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
                     message="All Rooms",
                     unreadCount=0,
                     highlightCount=0,
-                    lastMessage=null
+                    lastMessage=null,
+                    typing=listOf()
                 )) + spaces!!.keys.filter { id -> !childrenSet!!.contains(id) }.map { liveMap!![it]!! }.sortedBy { -(it.lastMessage?.timestamp ?: 0) }
             } else {
                 // it's a space! Grab this one from the liveMap and sort it
@@ -482,6 +489,12 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
                 is Error -> { "" }
             }
         } else { "" }
+    }
+    private fun normalizeTypingList(typing: List<String>): List<String> {
+        return typing.map { user ->
+            val d = getDisplayNameForUser(user)
+            if(d == "") { user } else { d }
+        }
     }
     fun getDisplayNameForUser(sender: String) : String {
         val (displayname, _) = msession.getDiplayNameAndAvatarFilePath(sender, room_id)
@@ -571,6 +584,25 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
                 null
             }
         }.filterNotNull()
+    }
+    fun getPresenceForUser(user_id: String): PresenceState {
+        when(val res = msession.getPresenceStatus(user_id)) {
+            is Success -> return res.value.presence
+            is Error -> {
+                println("Failed to get Presence for $user_id because ${res.cause}")
+                return PresenceState.unavailable
+            }
+        }
+    }
+    fun setPresenceStatus(presence: PresenceState, msg: String = "") {
+        println("Setting presence to $presence")
+        msession.sendPresenceStatus(presence, msg)
+    }
+    fun sendTypingStatus(typing: Boolean) {
+        when (val res = msession.sendTypingStatus(room_id, typing)) {
+            is Success -> println("Server Notified of typing status")
+            is Error -> println("Failed send typing status because ${res.cause}")
+        }
     }
     fun getEventSrc(msg_id: String): String {
         val event = msession.getRoomEvent(room_id, msg_id)
