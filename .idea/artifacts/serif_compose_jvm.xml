@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="serif_compose-jvm">
+    <output-path>$PROJECT_DIR$/serif_compose/build/libs</output-path>
+    <root id="archive" name="serif_compose-jvm.jar">
+      <element id="module-output" name="Serif.serif_compose.jvmMain" />
+    </root>
+  </artifact>
+</component>

@@ -1,6 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" default="true" project-jdk-name="1.8" project-jdk-type="JavaSDK">
+  <component name="DesignSurface">
+    <option name="filePathToZoomLevelMap">
+      <map>
+        <entry key="../../../layout/compose-model-1625419045896.xml" value="0.8224932249322493" />
+        <entry key="../../../layout/compose-model-1625461561495.xml" value="0.18157181571815717" />
+        <entry key="../../../layout/compose-model-1625500280876.xml" value="0.18157181571815717" />
+        <entry key="../../../layout/compose-model-1625506985903.xml" value="1.0" />
+        <entry key="../../../layout/compose-model-1625533385480.xml" value="0.16937669376693767" />
+        <entry key="../../../layout/compose-model-1625537716706.xml" value="0.24525745257452575" />
+        <entry key="../../../layout/compose-model-1628449889592.xml" value="0.18157181571815717" />
+        <entry key="../../../layout/compose-model-1628449923054.xml" value="0.10151515151515152" />
+        <entry key="../../../layout/compose-model-1628449946691.xml" value="0.1" />
+        <entry key="../../../layout/compose-model-1628453564791.xml" value="0.1" />
+        <entry key="../../../layout/compose-model-1628453586698.xml" value="0.16666666666666666" />
+        <entry key="serif_android/src/main/res/drawable-v24/ic_launcher_foreground.xml" value="0.12222222222222222" />
+        <entry key="serif_android/src/main/res/drawable/ic_baseline_person_24.xml" value="0.12222222222222222" />
+        <entry key="serif_android/src/main/res/drawable/ic_jetchat.xml" value="0.12222222222222222" />
+        <entry key="serif_android/src/main/res/drawable/ic_launcher_foreground.xml" value="0.12222222222222222" />
+        <entry key="serif_android/src/main/res/drawable/jetchat_logo.xml" value="0.12222222222222222" />
+        <entry key="serif_android/src/main/res/layout/activity_main.xml" value="0.20520833333333333" />
+        <entry key="serif_android/src/main/res/layout/content_main.xml" value="0.20520833333333333" />
+        <entry key="serif_android/src/main/res/menu/activity_main_drawer.xml" value="0.11458333333333333" />
+        <entry key="serif_android/src/main/res/mipmap-anydpi-v26/ic_launcher.xml" value="0.12222222222222222" />
+      </map>
+    </option>
+  </component>
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_11" project-jdk-name="1.8" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/build/classes" />
   </component>
   <component name="ProjectType">

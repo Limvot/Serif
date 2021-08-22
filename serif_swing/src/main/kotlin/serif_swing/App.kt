@@ -329,7 +329,7 @@ class SerifText(private var text: AttributedString) : JComponent() {
         line_height = metrics.height
         max_char_width = metrics.charWidth('W')
         lines = calculateLines(text, -1)
-        max_line_length = lines.map { it.second - it.first }.max() ?: 1
+        max_line_length = lines.map { it.second - it.first }.maxOrNull() ?: 1
         size = Dimension(max_char_width * max_line_length, line_height * (lines.size + 1))
     }
     fun calculateLines(text: AttributedString, max_chars_per_line: Int): List<Pair<Int,Int>> {
@@ -377,7 +377,7 @@ class SerifText(private var text: AttributedString) : JComponent() {
             text.addAttribute(TextAttribute.FONT, javax.swing.UIManager.getLookAndFeelDefaults().getFont("Label.font"))
         }
         lines = calculateLines(text, size.width / (max_char_width+1))
-        max_line_length = lines.map { it.second - it.first }.max() ?: 1
+        max_line_length = lines.map { it.second - it.first }.maxOrNull() ?: 1
     }
     fun getText() = text
     override fun setSize(d: Dimension) {
@@ -651,8 +651,13 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         attString
     }
     val room_name = SmoothLabel("")
-    fun setRoomName(path: List<String>, name: String) {
-        room_name.setText("Path: ${path}, Room Name: $name")
+    fun setRoomName(path: List<String>, name: String, typing: List<String> = listOf()) {
+        val room_bar_txt = if(typing.size == 0) {
+            "Path: ${path}, Room Name: $name"
+        } else {
+            "Path: ${path}, Room Name: $name, ${typing} are typing"
+        }
+        room_name.setText(room_bar_txt)
     }
     fun updatePinOptionText(event_id: String, menu_item: JMenuItem) {
         val pin_str = if(m.pinned.contains(event_id)) { "Unpin" } else { "Pin" }
@@ -661,10 +666,11 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val mk_sender = { msg: SharedUiMessage ->
         val render_text = { msg: SharedUiMessage ->
             val displayname = msg.displayname ?: msg.sender
+            val presence = m.getPresenceForUser(msg.sender)
             if (msg.reactions.size > 0 ) {
-                "${displayname}: ${msg.reactions} "
+                "${displayname}: ${msg.reactions} ${presence}"
             } else {
-                "${displayname}: "
+                "${displayname}: ${presence}"
             }
         }
         val sender = SerifText(render_text(msg))
@@ -777,7 +783,8 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 val room_btn = SmoothButton("")
                 val set_click = { msgi: SharedUiRoom ->
                     transition_room_id = msgi.id
-                    room_btn.setText("${msgi.message} (${msgi.unreadCount} unread / ${msgi.highlightCount} mentions)")
+                    val typing_str = if(msgi.typing.size == 0) { "" } else { ", ${msgi.typing} are typing" }
+                    room_btn.setText("${msgi.message} (${msgi.unreadCount} unread / ${msgi.highlightCount} mentions)$typing_str")
                 }
                 set_click(msg as SharedUiRoom)
                 room_btn.addActionListener({
@@ -978,6 +985,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
     val mentions_popup = JPopupMenu()
     val msg_context_label = SmoothLabel("Reply")
     val msg_context_panel = JPanel()
+    var typing_timer = Timer()
 
     var replied_event_id = ""
     var reacted_event_id = ""
@@ -987,6 +995,19 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             val members = m.members.map { user: String -> Pair(user, m.getDisplayNameForUser(user)) }
             val text = mention_txt.split("@").lastOrNull()?.split(" ")?.firstOrNull() ?: ""
             println("Showing mentions matching \'$text\'")
+            //NOTE: testing code for setting presence status
+            //TODO: server seems to reset status to online regardless
+            //of what we manually set our status to. Perhaps it resets
+            //because of the sync calls.
+            /*
+            if(text == "offline") {
+                m.setPresenceStatus(PresenceState.offline)
+            } else if(text == "online") {
+                m.setPresenceStatus(PresenceState.online)
+            } else if(text == "unavail") {
+                m.setPresenceStatus(PresenceState.unavailable)
+            }
+            */
             val suggestions = if(text == "") {
                 members
             } else {
@@ -1019,7 +1040,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         message_field.getDocument().addDocumentListener(mention_listener)
         msg_context_panel.setVisible(false)
         panel.layout = BorderLayout()
-        setRoomName(m.room_ids, m.name)
+        setRoomName(m.room_ids, m.name, m.typing)
         val room_header_panel = JPanel()
         room_header_panel.layout = BorderLayout()
         room_header_panel.add(room_name, BorderLayout.LINE_START)
@@ -1116,6 +1137,18 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
                 }
             })
             room_header_panel.add(room_cnfg_button, BorderLayout.LINE_END)
+            //uncomment bellow block for sending out typing notifications
+            //Commented out right now to avoid being too spammy until we
+            //get it properly sending in the compose gui.
+            /*
+            typing_timer = fixedRateTimer("typing_notifier", false, 0L, 5000) {
+                if(message_field.isFocusOwner() && message_field.text != "") {
+                    m.sendTypingStatus(true)
+                } else {
+                    m.sendTypingStatus(false)
+                }
+            }
+            */
         }
 
         panel.add(
@@ -1238,7 +1271,7 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         } else {
             m = new_m
         }
-        setRoomName(m.room_ids, m.name)
+        setRoomName(m.room_ids, m.name, m.typing)
     }
     private fun openUrl(href: String) {
         // In the background, so that GUI doesn't freeze

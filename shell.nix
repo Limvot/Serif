@@ -4,8 +4,9 @@ let
 in
 pkgs.mkShell {
     buildInputs = with pkgs; [
-        android-studio
-        jdk
+        #android-studio
+        androidStudioPackages.canary
+        jdk11
         steam-run-native
     ];
     _JAVA_AWT_WM_NONREPARENTING=1;
