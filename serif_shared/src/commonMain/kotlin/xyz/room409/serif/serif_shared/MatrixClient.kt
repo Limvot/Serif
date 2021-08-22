@@ -544,6 +544,53 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         client.close()
         sync_should_run = false
     }
+    fun sendStateEvent(id: String, type: String, content: Any) {
+        //NOTE(marcus): We don't send a state key
+        return runBlocking {
+            client.put<String>("$server/_matrix/client/r0/rooms/$id/state/$type/?access_token=$access_token")
+            {
+                contentType(ContentType.Application.Json)
+                body = content
+            }
+        }
+    }
+    fun setRoomAvatar(id: String, local_url: String) {
+        val mxc_url = runBlocking {
+            val img_f = File(local_url)
+            val image_data = img_f.readBytes()
+            val ct =
+                if(local_url.endsWith(".png")) {
+                    ContentType.Image.PNG
+                } else if(local_url.endsWith(".gif")) {
+                    ContentType.Image.GIF
+                } else {
+                    ContentType.Image.JPEG
+                }
+            //Post Image to server
+            val upload_img_response =
+                client.post<MediaUploadResponse>("$server/_matrix/media/r0/upload?access_token=$access_token") {
+                    contentType(ct)
+                    body = image_data
+                }
+            upload_img_response.content_uri
+        }
+        return sendStateEvent(id, "m.room.avatar", RoomAvatarContent(mxc_url))
+    }
+    fun setRoomTopic(id: String, topic: String) {
+        return sendStateEvent(id, "m.room.topic", RoomTopicContent(topic))
+    }
+    fun setRoomName(id: String, name: String) {
+        return sendStateEvent(id, "m.room.name", RoomNameContent(name))
+    }
+    fun getRoomAvatar(id: String): String {
+        return Database.getStateEvent(session_id, id, "m.room.avatar", "")?.castToStateEventWithContentOfType<RoomAvatarContent>()?.url ?: ""
+    }
+    fun getRoomName(id: String): String {
+        return Database.getStateEvent(session_id, id, "m.room.name", "")?.castToStateEventWithContentOfType<RoomNameContent>()?.name ?: ""
+    }
+    fun getRoomTopic(id: String): String {
+        return Database.getStateEvent(session_id, id, "m.room.topic", "")?.castToStateEventWithContentOfType<RoomTopicContent>()?.topic ?: ""
+    }
     fun getRoomMembers(id: String): List<String> {
         val events = Database.getStateEvents(session_id, id, "m.room.member")
         return events.map({ (id,event) ->  (event as RoomEvent).sender })

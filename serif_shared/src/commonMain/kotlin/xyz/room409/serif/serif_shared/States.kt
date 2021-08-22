@@ -371,6 +371,9 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
     val message_window_base: String?
     val pinned: List<String>
     val members: List<String>
+    val avatar: String
+    val roomName: String = msession.getRoomName(room_id)
+    val roomTopic: String = msession.getRoomTopic(room_id)
     val typing = if(room_type == "m.space") { listOf() } else { normalizeTypingList(msession.getTypingStatusForRoom(room_id)) }
     val link_regex = Regex("<a href=\"https://matrix.to/#/[^:]*:[^>]*\">(.*)</a>")
     init {
@@ -479,6 +482,13 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
             }
             got_messages
         }
+        val avatar_mxc_url = msession.getRoomAvatar(room_id)
+        avatar = if(avatar_mxc_url != "") {
+            when (val url_local = msession.getLocalMediaPathFromUrl(avatar_mxc_url)) {
+                is Success -> { url_local.value }
+                is Error -> { "" }
+            }
+        } else { "" }
     }
     private fun normalizeTypingList(typing: List<String>): List<String> {
         return typing.map { user ->
@@ -489,6 +499,10 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
     fun getDisplayNameForUser(sender: String) : String {
         val (displayname, _) = msession.getDiplayNameAndAvatarFilePath(sender, room_id)
         return displayname ?: ""
+    }
+    fun getAvatarFilePathForUser(sender: String) : String {
+        val (_, afp) = msession.getDiplayNameAndAvatarFilePath(sender, room_id)
+        return afp ?: ""
     }
     fun getUnformattedBody(formatted_body: String) : String {
         return formatted_body.replace(link_regex,"$1")
@@ -617,6 +631,15 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
             is Error -> { println("${sendMessageResult.message} - exception was ${sendMessageResult.cause}") }
         }
         return this
+    }
+    fun setRoomTopic(topic: String) {
+        msession.setRoomTopic(room_id,topic)
+    }
+    fun setRoomName(name: String) {
+        msession.setRoomName(room_id,name)
+    }
+    fun setRoomAvatar(local_path: String) {
+        msession.setRoomAvatar(room_id,local_path)
     }
     override fun refresh(): MatrixState = refresh(window_back_length, message_window_base, window_forward_length)
     fun refresh(new_window_back_length: Int, new_message_window_base: String?, new_window_forward_length: Int): MatrixState = MatrixChatRoom(

@@ -613,6 +613,31 @@ class MentionListener(val tf: SmoothTextField, val autocompl: (String) -> Unit, 
 
 }
 
+fun createPopup(panel: JPanel, popup_title: String, half_width: Boolean, half_height: Boolean, create: (JDialog) -> Unit) {
+    // This is a helper function to create popup dialogs for the swing gui
+    // Users should pass in a create lambda which takes in the dialog we
+    // make below and can configure the popup to look how they please
+    // with any necessary widgets.
+
+    // Shared dialog and size setup
+    val window = SwingUtilities.getWindowAncestor(panel)
+    val dim = window.getSize()
+    val h = if(half_height) { dim.height / 2 } else { dim.height }
+    val w = if(half_width) { dim.width / 2 } else { dim.width }
+    val dialog = JDialog(window, popup_title)
+
+    // Custom stuff
+    create(dialog)
+    // end Custom Stuff
+
+    // Shared dialog configuring
+    dialog.setSize(w, h)
+    dialog.setVisible(true)
+    dialog.setResizable(false)
+    dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+
+}
+
 class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: JPanel, var m: MatrixChatRoom, var last_window_width: Int) : SwingState() {
     // From @stephenhay via https://mathiasbynens.be/demo/url-regex
     // slightly modified
@@ -683,62 +708,48 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
             })
             val delete_option = JMenuItem("Delete")
             delete_option.addActionListener({
-                val window = SwingUtilities.getWindowAncestor(panel)
-                val dim = window.getSize()
-                val h = dim.height
-                val w = dim.width
-                val dialog = JDialog(window, "Are you sure you want to delete this message?")
-                val confirm_btn = JButton("Yes")
-                confirm_btn.addActionListener({
-                    m.sendRedaction(msg.id)
-                    dialog.setVisible(false)
-                    dialog.dispose()
-                })
-                val cancel_btn = JButton("No")
-                cancel_btn.addActionListener({
-                    dialog.setVisible(false)
-                    dialog.dispose()
-                })
-                val dpanel = JPanel(FlowLayout())
-                dpanel.add(confirm_btn)
-                dpanel.add(cancel_btn)
-                dialog.add(dpanel)
-
-                dialog.setSize(w / 2, h / 2)
-                dialog.setVisible(true)
-                dialog.setResizable(false)
-                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+                val create : (JDialog) -> Unit = { dialog ->
+                    val confirm_btn = JButton("Yes")
+                    confirm_btn.addActionListener({
+                        m.sendRedaction(msg.id)
+                        dialog.setVisible(false)
+                        dialog.dispose()
+                    })
+                    val cancel_btn = JButton("No")
+                    cancel_btn.addActionListener({
+                        dialog.setVisible(false)
+                        dialog.dispose()
+                    })
+                    val dpanel = JPanel(FlowLayout())
+                    dpanel.add(confirm_btn)
+                    dpanel.add(cancel_btn)
+                    dialog.add(dpanel)
+                }
+                createPopup(panel, "Are you sure you want to delete this message?", true, true, create)
             })
             val show_src_option = JMenuItem("Show Source")
             show_src_option.addActionListener({
                 val json_str = m.getEventSrc(msg.id)
 
-                val window = SwingUtilities.getWindowAncestor(panel)
-                val dim = window.getSize()
-                val h = dim.height
-                val w = dim.width
-                val dialog = JDialog(window, "Event Source")
+                val create : (JDialog) -> Unit = { dialog ->
 
-                val dpanel = JPanel(BorderLayout())
-                val src_txt = JTextPane()
-                src_txt.setContentType("text/plain")
-                src_txt.setText(json_str)
-                src_txt.setEditable(false)
+                    val src_txt = JTextPane()
+                    src_txt.setContentType("text/plain")
+                    src_txt.setText(json_str)
+                    src_txt.setEditable(false)
 
-                val close_btn = SmoothButton("Close")
-                close_btn.addActionListener({
-                    dialog.setVisible(false)
-                    dialog.dispose()
-                })
+                    val close_btn = SmoothButton("Close")
+                    close_btn.addActionListener({
+                        dialog.setVisible(false)
+                        dialog.dispose()
+                    })
 
-                dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
-                dpanel.add(close_btn,BorderLayout.PAGE_END)
-                dialog.add(dpanel)
-
-                dialog.setSize(w,h/2)
-                dialog.setVisible(true)
-                dialog.setResizable(false)
-                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE)
+                    val dpanel = JPanel(BorderLayout())
+                    dpanel.add(JScrollPane(src_txt), BorderLayout.CENTER)
+                    dpanel.add(close_btn,BorderLayout.PAGE_END)
+                    dialog.add(dpanel)
+                }
+                createPopup(panel, "Event Source", false, true, create)
             })
 
             val msg_action_popup = JPopupMenu()
@@ -1034,9 +1045,98 @@ class SwingChatRoom(val transition: (MatrixState, Boolean) -> Unit, val panel: J
         room_header_panel.layout = BorderLayout()
         room_header_panel.add(room_name, BorderLayout.LINE_START)
         if (m.room_type != "m.space") {
+            if(m.avatar != "") {
+                val icon = ImageIcon(m.avatar)
+                val img = icon.image
+                icon.setImage(img.getScaledInstance(32, 32, Image.SCALE_DEFAULT))
+                room_name.setIcon(icon)
+            }
             room_header_panel.add(pinned_events_btn, BorderLayout.CENTER)
             generatePinned(pinned_action_popup)
             pinned_events_btn.addActionListener({ pinned_action_popup.show(pinned_events_btn,0,0) })
+            val room_cnfg_button = SmoothButton("???")
+            val room_cnfg_screen = { event: ActionEvent ->
+                val create : (JDialog) -> Unit = { dialog->
+                    val room_name = m.roomName
+                    val room_topic = m.roomTopic
+                    val room_members = m.members
+                    val avatar_url = m.avatar
+
+                    val c_left = GridBagConstraints()
+                    val c_right = GridBagConstraints()
+
+                    c_left.anchor = GridBagConstraints.EAST
+                    c_left.gridwidth = GridBagConstraints.RELATIVE
+                    c_left.fill = GridBagConstraints.NONE
+                    c_left.weightx = 0.0
+
+                    c_right.anchor = GridBagConstraints.EAST
+                    c_right.gridwidth = GridBagConstraints.REMAINDER
+                    c_right.fill = GridBagConstraints.HORIZONTAL
+                    c_right.weightx = 1.0
+                    val sub_panel = JPanel()
+                    sub_panel.layout = GridBagLayout()
+
+                    val icon = if(avatar_url != "") { ImageIcon(avatar_url) } else { null }
+                    val avatar_icon = if(icon != null) { JButton(icon) } else { JButton("Upload Image") }
+                    avatar_icon.addActionListener({
+                        val fc = JFileChooser()
+                        val iff = ImageFileFilter()
+                        fc.addChoosableFileFilter(iff)
+                        fc.setFileFilter(iff)
+                        val ret = fc.showDialog(panel, "Attach")
+                        if (ret == JFileChooser.APPROVE_OPTION) {
+                            val file = fc.getSelectedFile()
+                            m.setRoomAvatar(file.toPath().toString())
+                        }
+                    })
+
+                    sub_panel.add(avatar_icon, c_right)
+
+                    var room_name_field = SmoothTextField(40)
+                    room_name_field.text = room_name
+                    sub_panel.add(SmoothLabel("Room Name:"), c_left)
+                    sub_panel.add(room_name_field, c_right)
+                    var room_topic_field = SmoothTextField(40)
+                    room_topic_field.text = room_topic
+                    sub_panel.add(SmoothLabel("Room Topic:"), c_left)
+                    sub_panel.add(room_topic_field, c_right)
+
+                    val name_save = SmoothButton("Save")
+                    name_save.addActionListener({
+                        m.setRoomName(room_name_field.text)
+                        m.setRoomTopic(room_topic_field.text)
+                    })
+                    sub_panel.add(name_save, c_left)
+                    sub_panel.add(JLabel(), c_right)
+
+                    for(rm in room_members) {
+                        val dn = m.getDisplayNameForUser(rm)
+                        val user_str = if(dn == "") { rm } else { "$rm | $dn" }
+                        sub_panel.add(SmoothLabel("[User Avatar]  "), c_left)
+                        sub_panel.add(SmoothLabel(user_str), c_right)
+                    }
+
+                    val close_btn = SmoothButton("Close")
+                    close_btn.addActionListener({
+                        dialog.setVisible(false)
+                        dialog.dispose()
+                    })
+
+                    val dpanel = JPanel(BorderLayout())
+                    dpanel.add(JScrollPane(sub_panel), BorderLayout.CENTER)
+                    dpanel.add(close_btn,BorderLayout.PAGE_END)
+                    dialog.add(dpanel)
+                }
+                createPopup(panel, "Room Configuration", false, false, create)
+            }
+            room_cnfg_button.addActionListener(room_cnfg_screen)
+            room_name.addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
+                    room_cnfg_screen(ActionEvent(room_name,ActionEvent.ACTION_FIRST,""))
+                }
+            })
+            room_header_panel.add(room_cnfg_button, BorderLayout.LINE_END)
             //uncomment bellow block for sending out typing notifications
             //Commented out right now to avoid being too spammy until we
             //get it properly sending in the compose gui.
