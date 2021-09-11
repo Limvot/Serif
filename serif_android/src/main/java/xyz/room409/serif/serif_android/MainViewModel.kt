@@ -60,6 +60,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             f()
         }
     }
+    fun login(server: String, username: String, password: String) = backgroundInvoke(inter.login(server, username, password))
+    fun login(session: String) = backgroundInvoke(inter.login(session))
     fun sendMessage(message: String) = backgroundInvoke(inter.sendMessage(message))
     fun navigateToRoom(id: String) = backgroundInvoke(inter.navigateToRoom(id))
     fun exitRoom() = backgroundInvoke(inter.exitRoom())
@@ -72,4 +74,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         get() = inter.roomPath
     val roomName: MutableState<String>
         get() = inter.roomName
+    val sessions: MutableState<List<String>>
+        get() = inter.sessions
+    val uistate: MutableState<UiScreenState>
+        get() = inter.uistate
 }
