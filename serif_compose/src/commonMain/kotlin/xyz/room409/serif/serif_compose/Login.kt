@@ -55,11 +55,19 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.layout.fillMaxWidth
 
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.ExperimentalComposeUiApi
+
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LoginContent(
     loginMethod: (String, String, String) -> Unit, 
     sessionLogin: (String) -> Unit, 
     sessions: List<String>,
+    loginMessage: String = "",
     modifier: Modifier = Modifier
 )
 {
@@ -82,9 +90,10 @@ fun LoginContent(
                 Divider(modifier = Modifier.padding(32.dp))
 
                 // Login fields 
-                Text(text = "Login")
+                Text(text = "Login ${loginMessage}")
                 OutlinedTextField(
                     value = user_text,
+                    singleLine = true,
                     modifier = Modifier.padding(8.dp).fillMaxWidth(),
                     label = { Text(text = "Username") },
                     placeholder = { Text(text = "AcidBurn") },
@@ -93,7 +102,15 @@ fun LoginContent(
                 )
                 OutlinedTextField(
                     value = password_text,
-                    modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                    singleLine = true,
+                    modifier = Modifier.padding(8.dp).fillMaxWidth().onKeyEvent { it ->
+                        if(it.key == Key.Enter) {
+                            loginMethod("https://synapse.room409.xyz",user_text.text,password_text.text)
+                            true
+                        } else {
+                            false
+                        }
+                    },
                     label = { Text(text = "Password") },
                     placeholder = { Text(text = "super_secret_password") },
                     visualTransformation = PasswordVisualTransformation(),
@@ -101,7 +118,7 @@ fun LoginContent(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                 )
                 Button(
-                    onClick = { loginMethod("https://synapse.room409.xyz",user_text.text,password_text.text)}, 
+                    onClick = { loginMethod("https://synapse.room409.xyz",user_text.text,password_text.text)},
                     modifier = Modifier.padding(8.dp).fillMaxWidth()
                 ) {
                     Text(text = "Login")

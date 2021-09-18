@@ -82,6 +82,7 @@ class MatrixInterface {
                         refresh()
                     }
                     if(m !is MatrixLogin) { uistate.value = UiChatRoom() }
+                    else if(m is MatrixLogin) { uistate.value = UiLogin((m as MatrixLogin).login_message) }
                     refresh()
                 }
             }
@@ -96,6 +97,7 @@ class MatrixInterface {
                         refresh()
                     }
                     if(m !is MatrixLogin) { uistate.value = UiChatRoom() }
+                    else if(m is MatrixLogin) { uistate.value = UiLogin((m as MatrixLogin).login_message) }
                     refresh()
                 }
             }
@@ -187,7 +189,7 @@ class MatrixInterface {
 }
 
 sealed class UiScreenState()
-class UiLogin(): UiScreenState()
+class UiLogin(val message: String = ""): UiScreenState()
 class UiChatRoom(): UiScreenState()
 class UiRoomList(): UiScreenState()
 class UiConfig(): UiScreenState()

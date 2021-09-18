@@ -83,7 +83,8 @@ fun main() = application {
                 LoginContent(
                     loginMethod = { serv, user, pass -> fakeViewModel.login(serv, user, pass)},
                     sessionLogin = { session -> fakeViewModel.login(session) },
-                    sessions = fakeViewModel.sessions.value
+                    sessions = fakeViewModel.sessions.value,
+                    loginMessage = ((fakeViewModel.uistate.value) as UiLogin).message
                 )
             } else {
                 ConversationContent(
