@@ -187,7 +187,7 @@ class StateEvent<T>(
 )
 @Serializable class RoomNameContent(val name: String)
 @Serializable class RoomTopicContent(val topic: String)
-@Serializable class RoomAvatarContent(val url: String)
+@Serializable class RoomAvatarContent(val url: String? = null)
 @Serializable class FallbackContent()
 
 @Serializable
