@@ -35,6 +35,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-core:$ktor_version")
                 implementation("io.ktor:ktor-client-serialization:$ktor_version")
                 implementation("com.squareup.sqldelight:runtime:$sql_delight_version")
+                implementation(files("libs/WasmOlm.jar"))
             }
         }
         val commonTest by getting {

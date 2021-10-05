@@ -1,4 +1,5 @@
 package xyz.room409.serif.serif_shared
+
 import io.ktor.client.*
 import io.ktor.client.features.*
 import io.ktor.client.features.json.*
@@ -73,7 +74,7 @@ fun isStandaloneEvent(e: Event): Boolean {
     if (e as? RoomMessageEvent != null) {
         return !(e.content is ReactionRMEC || (e.content is TextRMEC && is_edit_content(e.content)))
     } else {
-        return e.castToStateEventWithContentOfType<SpaceChildContent>() != null
+        return e.castToStateEventWithContentOfType<SpaceChildContent>() != null || e as? RoomEventFallback != null
     }
 }
 fun getRelatedEvent(e: Event): String? {
@@ -779,8 +780,8 @@ class MatrixClient {
         val transactionId = session.third
         return Success(MatrixSession(client, server, username, session_id, tok, transactionId, onUpdate))
     }
-
     fun getStoredSessions(): List<String> {
+        olm_test()
         println("loading sessions from db")
         return Database.getStoredSessions().map({ it.first })
     }
