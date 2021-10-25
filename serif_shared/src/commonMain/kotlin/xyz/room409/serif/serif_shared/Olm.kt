@@ -509,6 +509,62 @@ class Olm() {
         }
     }
 
+    inner class PkSigning() {
+        val size = olm.olm_pk_signing_size()
+        val buf = olm.malloc(size)
+        val ptr = olm.olm_pk_signing(buf)
+
+        fun error_check(x: Int): Int {
+            if (x == OLM_ERROR) {
+                val error_str = get_string(olm.olm_pk_signing_last_error(ptr))
+                throw Exception(error_str)
+            }
+            return x
+        }
+        fun free() {
+            olm.olm_clear_pk_signing(ptr)
+            olm.free(ptr)
+        }
+        fun init_with_seed(seed: String): String {
+            var result: String? = null
+            stack(seed) { seed_buffer, seed_buffer_length ->
+                // line 3602 in olm.js does something I don't understand -> Module['HEAPU8'].set(seed, seed_buffer);
+                val pubkey_length = error_check(olm.olm_pk_signing_public_key_length())
+                stack(pubkey_length + 1) { pubkey_buffer ->
+                    error_check(olm.olm_pk_signing_key_from_seed(
+                        ptr, pubkey_buffer, pubkey_length,
+                        seed_buffer, seed_buffer_length
+                    ))
+                    result = get_string(pubkey_buffer, pubkey_length)
+                }
+            }
+            return result!!
+        }
+        fun generate_seed(): ByteArray {
+            var result: ByteArray? = null
+            val random_length = error_check(olm.olm_pk_signing_seed_length())
+            // This is some unnecessary indirection, but they do it???
+            stack(random_length) { random_buffer ->
+                result = get_array(random_buffer, random_length)
+            }
+            return result!!
+        }
+        fun sign(message: String): String {
+            var result: String? = null
+            stack(message) { message_buffer, message_buffer_length ->
+                val sig_length = error_check(olm.olm_pk_signature_length())
+                stack(sig_length + 1) { sig_buffer ->
+                    error_check(olm.olm_pk_sign(
+                        ptr, message_buffer, message_buffer_length,
+                        sig_buffer, sig_length
+                    ))
+                    result = get_string(sig_buffer, sig_length)
+                }
+            }
+            return result!!
+        }
+    }
+
     inner class Account() {
         val size = olm.olm_account_size()
         val buf = olm.malloc(size)
