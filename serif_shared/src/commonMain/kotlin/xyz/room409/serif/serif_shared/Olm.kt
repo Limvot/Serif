@@ -35,6 +35,11 @@ class Olm() {
         olm.free(patch_ptr)
         return Triple(major, minor, patch)
     }
+    fun get_array(ptr: Int, size: Int): ByteArray {
+        val dst = ByteArray(size)
+        memory.get(dst, ptr, size)
+        return dst
+    }
     fun get_string(ptr: Int, size: Int): String {
         return String(memory.array(), ptr, size)
     }
@@ -381,6 +386,121 @@ class Olm() {
                                     ephemeral = get_string(ephemeral_buffer, ephemeral_length)
                                 )
                             }
+                        }
+                    }
+                }
+            }
+            return result!!
+        }
+    }
+
+    inner class PkDecryption() {
+        val size = olm.olm_pk_decryption_size()
+        val buf = olm.malloc(size)
+        val ptr = olm.olm_pk_decryption(buf)
+
+        fun error_check(x: Int): Int {
+            if (x == OLM_ERROR) {
+                val error_str = get_string(olm.olm_pk_decryption_last_error(ptr))
+                throw Exception(error_str)
+            }
+            return x
+        }
+        fun free() {
+            olm.olm_clear_pk_decryption(ptr)
+            olm.free(ptr)
+        }
+        fun init_with_private_key(private_key: String): String {
+            var result: String? = null
+            stack(private_key) { private_key_buffer, private_key_buffer_length ->
+                // line 3427 in olm.js does something I don't understand -> Module['HEAPU8'].set(private_key, private_key_buffer);
+                val pubkey_length = error_check(olm.olm_pk_key_length())
+                stack(pubkey_length + 1) { pubkey_buffer ->
+                    error_check(olm.olm_pk_key_from_private(
+                        ptr, pubkey_buffer, pubkey_length,
+                        private_key_buffer, private_key_buffer_length
+                    ))
+                    result = get_string(pubkey_buffer, pubkey_length)
+                }
+            }
+            return result!!
+        }
+        fun generate_key(): String {
+            var result: String? = null
+            val random_length = error_check(olm.olm_pk_private_key_length())
+            random_stack(random_length) { random_buffer ->
+                val pubkey_length = error_check(olm.olm_pk_key_length())
+                stack(pubkey_length + 1) { pubkey_buffer ->
+                    error_check(olm.olm_pk_key_from_private(
+                        ptr, pubkey_buffer, pubkey_length,
+                        random_buffer, random_length
+                    ))
+                    result = get_string(pubkey_buffer, pubkey_length)
+                }
+            }
+            return result!!
+        }
+        fun get_private_key(): ByteArray {
+            var result: ByteArray? = null
+            val privkey_length = error_check(olm.olm_pk_private_key_length())
+            stack(privkey_length) { privkey_buffer ->
+                error_check(olm.olm_pk_get_private_key(
+                    ptr, privkey_buffer, privkey_length
+                ))
+                result = get_array(privkey_buffer, privkey_length)
+            }
+            return result!!
+        }
+        fun pickle(key: String): String {
+            var result: String? = null
+            stack(key) { key_buffer, key_buffer_length ->
+                val pickle_length = error_check(olm.olm_pickle_pk_decryption_length(
+                    ptr
+                ))
+                stack(pickle_length + 1) { pickle_buffer ->
+                    error_check(olm.olm_pickle_pk_decryption(
+                        ptr, key_buffer, key_buffer_length,
+                        pickle_buffer, pickle_length
+                    ))
+                    result = get_string(pickle_buffer, pickle_length)
+                }
+            }
+            return result!!
+        }
+        fun unpickle(key: String, pickle: String): String {
+            var result: String? = null
+            stack(key) { key_buffer, key_buffer_length ->
+                stack(pickle) { pickle_buffer, pickle_buffer_length ->
+                    val ephemeral_length = error_check(olm.olm_pk_key_length())
+                    stack(ephemeral_length + 1) { ephemeral_buffer ->
+                        error_check(olm.olm_unpickle_pk_decryption(
+                            ptr, key_buffer, key_buffer_length,
+                            pickle_buffer, pickle_buffer_length,
+                            ephemeral_buffer, ephemeral_length
+                        ))
+                        result = get_string(ephemeral_buffer, ephemeral_length)
+                    }
+                }
+            }
+            return result!!
+        }
+        fun decrypt(ephemeral_key: String, mac: String, ciphertext: String): String {
+            var result: String? = null
+            stack(ciphertext) { ciphertext_buffer, ciphertext_buffer_length ->
+                stack(ephemeral_key) { ephemeral_key_buffer, ephemeral_key_buffer_length ->
+                    stack(mac) { mac_buffer, mac_buffer_length ->
+                        val plaintext_max_length = error_check(olm.olm_pk_max_plaintext_length(
+                            ptr, ciphertext_buffer_length
+                        ))
+                        malloc_buffer(plaintext_max_length) { plaintext_buffer ->
+                            val plaintext_length = error_check(olm.olm_pk_decrypt(
+                                ptr,
+                                ephemeral_key_buffer, ephemeral_key_buffer_length,
+                                mac_buffer, mac_buffer_length,
+                                ciphertext_buffer, ciphertext_buffer_length,
+                                plaintext_buffer, plaintext_max_length
+                            ))
+                            result = get_string(plaintext_buffer, plaintext_length)
                         }
                     }
                 }
