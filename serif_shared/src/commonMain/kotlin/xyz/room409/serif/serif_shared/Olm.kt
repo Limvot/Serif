@@ -9,6 +9,7 @@ import java.security.SecureRandom
 import xyz.room409.WasmOlm
 
 data class DecryptedMessage(val plaintext: String, val message_index: Int)
+data class EncryptedMessage(val ciphertext: String, val mac: String, val ephemeral: String)
 class Olm() {
     val random = SecureRandom()
     val memory = ByteBuffer.allocate(65536*4)
@@ -56,10 +57,11 @@ class Olm() {
     }
     fun stack(a: ByteArray, f: (Int, Int) -> Unit) {
         val sp = olm.stackSave()
-        val s_ptr = olm.stackAlloc(a.size)
+        val s_ptr = olm.stackAlloc(a.size + 1)
         copy_array_to_buffer(a, s_ptr)
+        memory.put(s_ptr + a.size, 0.toByte())
         f(s_ptr, a.size)
-        for (i in 0..(a.size-1)) {
+        for (i in 0..a.size) {
             memory.put(s_ptr + i, 0.toByte())
         }
         olm.stackRestore(sp)
@@ -84,10 +86,11 @@ class Olm() {
         olm.free(b)
     }
     fun malloc_buffer(a: ByteArray, f: (Int, Int) -> Unit) {
-        val b = olm.malloc(a.size)
+        val b = olm.malloc(a.size+1)
         copy_array_to_buffer(a, b)
+        memory.put(b + a.size, 0.toByte())
         f(b, a.size)
-        for (i in 0..(a.size-1)) {
+        for (i in 0..a.size) {
             memory.put(b + i, 0.toByte())
         }
         olm.free(b)
@@ -325,12 +328,76 @@ class Olm() {
         }
     }
 
+    inner class PkEncryption() {
+        val size = olm.olm_pk_encryption_size()
+        val buf = olm.malloc(size)
+        val ptr = olm.olm_pk_encryption(buf)
+
+        fun error_check(x: Int): Int {
+            if (x == OLM_ERROR) {
+                val error_str = get_string(olm.olm_pk_encryption_last_error(ptr))
+                throw Exception(error_str)
+            }
+            return x
+        }
+        fun free() {
+            olm.olm_clear_pk_encryption(ptr)
+            olm.free(ptr)
+        }
+        fun set_recipient_key(key: String) {
+            stack(key) { key_buffer, key_buffer_length ->
+                error_check(olm.olm_pk_encryption_set_recipient_key(
+                    ptr, key_buffer, key_buffer_length
+                ))
+            }
+        }
+        fun encrypt(plaintext: String): EncryptedMessage {
+            var result: EncryptedMessage? = null
+            malloc_buffer(plaintext) { plaintext_buffer, plaintext_length ->
+                val random_length = error_check(olm.olm_pk_encrypt_random_length(
+                    ptr
+                ))
+                random_stack(random_length) { random ->
+                    val ciphertext_length = error_check(olm.olm_pk_ciphertext_length(
+                        ptr, plaintext_length
+                    ))
+                    malloc_buffer(ciphertext_length + 1) { ciphertext_buffer ->
+                        val mac_length = error_check(olm.olm_pk_mac_length(
+                            ptr
+                        ))
+                        stack(mac_length + 1) { mac_buffer ->
+                            val ephemeral_length = error_check(olm.olm_pk_key_length())
+                            stack(ephemeral_length + 1) { ephemeral_buffer ->
+                                error_check(olm.olm_pk_encrypt(
+                                    ptr, plaintext_buffer, plaintext_length,
+                                    ciphertext_buffer, ciphertext_length,
+                                    mac_buffer, mac_length,
+                                    ephemeral_buffer, ephemeral_length,
+                                    random, random_length
+                                ))
+                                result = EncryptedMessage(
+                                    ciphertext = get_string(ciphertext_buffer, ciphertext_length),
+                                    mac = get_string(mac_buffer, mac_length),
+                                    ephemeral = get_string(ephemeral_buffer, ephemeral_length)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            return result!!
+        }
+    }
+
     inner class Account() {
         val size = olm.olm_account_size()
         val buf = olm.malloc(size)
         val ptr = olm.olm_account(buf)
     }
 }
+// olm.js errors?
+//  - one of the inbound session methods uses outbound's error check
+//  - olm_pk_encrypt_random_length should take in a pointer
 
 fun olm_test() {
     println("Testing WasmOlm")
