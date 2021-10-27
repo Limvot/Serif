@@ -565,6 +565,100 @@ class Olm() {
         }
     }
 
+    inner class SAS() {
+        val size = olm.olm_sas_size()
+        val buf = olm.malloc(size)
+        var ptr: Int = 0
+        init {
+            val random_length = error_check(olm.olm_create_sas_random_length(ptr))
+            stack(random_length) { random_buffer ->
+                ptr = olm.olm_create_sas(buf, random_buffer, random_length)
+            }
+        }
+
+        fun error_check(x: Int): Int {
+            if (x == OLM_ERROR) {
+                val error_str = get_string(olm.olm_sas_last_error(ptr))
+                throw Exception(error_str)
+            }
+            return x
+        }
+        fun free() {
+            olm.olm_clear_sas(ptr)
+            olm.free(ptr)
+        }
+        fun get_pubkey(): String {
+            var result: String? = null
+            val pubkey_length = error_check(olm.olm_sas_pubkey_length(ptr))
+            stack(pubkey_length + 1) { pubkey_buffer ->
+                error_check(olm.olm_sas_get_pubkey(
+                    ptr, pubkey_buffer, pubkey_length,
+                ))
+                result = get_string(pubkey_buffer, pubkey_length)
+            }
+            return result!!
+        }
+        fun set_their_key(their_key: String) {
+            stack(their_key) { their_key_buffer, their_key_buffer_length ->
+                error_check(olm.olm_sas_set_their_key(
+                    ptr, their_key_buffer, their_key_buffer_length,
+                ))
+            }
+        }
+        fun is_their_key_set(): Boolean {
+            return error_check(olm.olm_sas_is_their_key_set(
+                ptr
+            )) != 0
+        }
+        fun generate_bytes(info: String, length: Int): ByteArray {
+            var result: ByteArray? = null
+            stack(info) { info_buffer, info_buffer_length ->
+                stack(length) { output_buffer ->
+                    error_check(olm.olm_sas_generate_bytes(
+                        ptr, info_buffer, info_buffer_length,
+                        output_buffer, length
+                    ))
+                    result = get_array(output_buffer, length)
+                }
+            }
+            return result!!
+        }
+        fun calculate_mac(input: String, info: String): String {
+            var result: String? = null
+            stack(input) { input_buffer, input_buffer_length ->
+                stack(info) { info_buffer, info_buffer_length ->
+                    val mac_length = error_check(olm.olm_sas_mac_length(ptr))
+                    stack(mac_length + 1) { mac_buffer ->
+                        error_check(olm.olm_sas_calculate_mac(
+                            ptr, input_buffer, input_buffer_length,
+                            info_buffer, info_buffer_length,
+                            mac_buffer, mac_length
+                        ))
+                        result = get_string(mac_buffer, mac_length)
+                    }
+                }
+            }
+            return result!!
+        }
+        fun calculate_mac_long_kdf(input: String, info: String): String {
+            var result: String? = null
+            stack(input) { input_buffer, input_buffer_length ->
+                stack(info) { info_buffer, info_buffer_length ->
+                    val mac_length = error_check(olm.olm_sas_mac_length(ptr))
+                    stack(mac_length + 1) { mac_buffer ->
+                        error_check(olm.olm_sas_calculate_mac_long_kdf(
+                            ptr, input_buffer, input_buffer_length,
+                            info_buffer, info_buffer_length,
+                            mac_buffer, mac_length
+                        ))
+                        result = get_string(mac_buffer, mac_length)
+                    }
+                }
+            }
+            return result!!
+        }
+    }
+
     inner class Account() {
         val size = olm.olm_account_size()
         val buf = olm.malloc(size)
