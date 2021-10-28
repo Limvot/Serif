@@ -663,6 +663,149 @@ class Olm() {
         val size = olm.olm_account_size()
         val buf = olm.malloc(size)
         val ptr = olm.olm_account(buf)
+        fun error_check(x: Int): Int {
+            if (x == OLM_ERROR) {
+                val error_str = get_string(olm.olm_account_last_error(ptr))
+                throw Exception(error_str)
+            }
+            return x
+        }
+        fun free() {
+            olm.olm_clear_account(ptr)
+            olm.free(ptr)
+        }
+        fun create() {
+            val random_length = error_check(olm.olm_create_account_random_length(ptr))
+            random_stack(random_length) { random_buffer ->
+                error_check(olm.olm_create_account(
+                    ptr, random_buffer, random_length,
+                ))
+            }
+        }
+        fun identity_keys(): String {
+            var result: String? = null
+            val keys_length = error_check(olm.olm_account_identity_keys_length(ptr))
+            stack(keys_length + 1) { keys_buffer ->
+                error_check(olm.olm_account_identity_keys(
+                    ptr, keys_buffer, keys_length,
+                ))
+                result = get_string(keys_buffer, keys_length)
+            }
+            return result!!
+        }
+        fun sign(message: String): String {
+            var result: String? = null
+            val signature_length = error_check(olm.olm_account_signature_length(ptr))
+            stack(message) { message_buffer, message_buffer_length ->
+                stack(signature_length + 1) { signature_buffer ->
+                    error_check(olm.olm_account_sign(
+                        ptr, message_buffer, message_buffer_length,
+                        signature_buffer, signature_length
+                    ))
+                    result = get_string(signature_buffer, signature_length)
+                }
+            }
+            return result!!
+        }
+        fun one_time_keys(): String {
+            var result: String? = null
+            val keys_length = error_check(olm.olm_account_one_time_keys_length(ptr))
+            stack(keys_length + 1) { keys_buffer ->
+                error_check(olm.olm_account_one_time_keys(
+                    ptr, keys_buffer, keys_length,
+                ))
+                result = get_string(keys_buffer, keys_length)
+            }
+            return result!!
+        }
+        fun mark_keys_as_published() {
+            error_check(olm.olm_account_mark_keys_as_published(
+                ptr
+            ))
+        }
+        fun max_number_of_one_time_keys(): Int {
+            return error_check(olm.olm_account_max_number_of_one_time_keys(
+                ptr
+            ))
+        }
+        fun generate_one_time_keys(number_of_keys: Int) {
+            val random_length = error_check(olm.olm_account_generate_one_time_keys_random_length(ptr, number_of_keys))
+            random_stack(random_length) { random_buffer ->
+                error_check(olm.olm_account_generate_one_time_keys(
+                    ptr, number_of_keys, random_buffer, random_length,
+                ))
+            }
+        }
+        fun remove_one_time_keys(session: Session) {
+            error_check(olm.olm_remove_one_time_keys(
+                ptr, session.ptr
+            ))
+        }
+        fun generate_fallback_key() {
+            val random_length = error_check(olm.olm_account_generate_fallback_key_random_length(ptr))
+            random_stack(random_length) { random_buffer ->
+                error_check(olm.olm_account_generate_fallback_key(
+                    ptr, random_buffer, random_length,
+                ))
+            }
+        }
+        fun fallback_key(): String {
+            var result: String? = null
+            val keys_length = error_check(olm.olm_account_fallback_key_length(ptr))
+            stack(keys_length + 1) { keys_buffer ->
+                error_check(olm.olm_account_fallback_key(
+                    ptr, keys_buffer, keys_length,
+                ))
+                result = get_string(keys_buffer, keys_length)
+            }
+            return result!!
+        }
+        fun pickle(key: String): String {
+            var result: String? = null
+            val pickle_length = error_check(olm.olm_pickle_account_length(ptr))
+            stack(key) { key_buffer, key_buffer_size ->
+                stack(pickle_length + 1) { pickle_buffer ->
+                    error_check(
+                        olm.olm_pickle_account(
+                            ptr,
+                            key_buffer, key_buffer_size,
+                            pickle_buffer, pickle_length
+                        )
+                    )
+                    result = get_string(pickle_buffer, pickle_length)
+                }
+            }
+            return result!!
+        }
+        fun unpickle(key: String, pickle: String) {
+            stack(key) { key_buffer, key_buffer_size ->
+                stack(pickle) { pickle_buffer, pickle_buffer_size ->
+                    error_check(
+                        olm.olm_unpickle_account(
+                            ptr,
+                            key_buffer, key_buffer_size,
+                            pickle_buffer, pickle_buffer_size
+                        )
+                    )
+                }
+            }
+        }
+    }
+    inner class Session() {
+        val size = olm.olm_session_size()
+        val buf = olm.malloc(size)
+        val ptr = olm.olm_session(buf)
+        fun error_check(x: Int): Int {
+            if (x == OLM_ERROR) {
+                val error_str = get_string(olm.olm_session_last_error(ptr))
+                throw Exception(error_str)
+            }
+            return x
+        }
+        fun free() {
+            olm.olm_clear_session(ptr)
+            olm.free(ptr)
+        }
     }
 }
 // olm.js errors?
