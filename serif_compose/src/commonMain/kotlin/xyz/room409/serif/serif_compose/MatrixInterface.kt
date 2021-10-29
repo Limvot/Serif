@@ -94,6 +94,24 @@ class MatrixInterface {
             }
         }
     }
+    fun sendReply(message: String, eventid: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.sendReply(message, eventid) }
+        }
+    }
+    fun sendEdit(message: String, eventid: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.sendEdit(message, eventid) }
+        }
+    }
+    fun sendReaction(message: String, eventid: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.sendReaction(message, eventid) }
+        }
+    }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))
     fun exitRoom() = pushDo(Action.ExitRoom())
     fun bumpWindow(id: String?) = pushDo(Action.Refresh(50, id, 50))
