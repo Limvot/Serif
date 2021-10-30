@@ -427,6 +427,7 @@ fun Message(
             isLastMessageByAuthor = isLastMessageByAuthor,
             roomClicked = onRoomClick,
             authorClicked = onAuthorClick,
+            isUserMe = isUserMe,
             updateMsgType = updateMsgType,
             modifier = Modifier
                 .padding(end = 16.dp)
@@ -442,6 +443,7 @@ fun AuthorAndTextMessage(
     isLastMessageByAuthor: Boolean,
     roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit,
+    isUserMe: Boolean,
     updateMsgType: (MessageSendType) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -449,7 +451,7 @@ fun AuthorAndTextMessage(
         if (isLastMessageByAuthor) {
             AuthorNameTimestamp(msg)
         }
-        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked, updateMsgType = updateMsgType)
+        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked, updateMsgType = updateMsgType, isUserMe = isUserMe)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -521,6 +523,7 @@ fun ChatItemBubble(
     roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    isUserMe: Boolean
 ) {
 
     val backgroundBubbleColor =
@@ -541,10 +544,12 @@ fun ChatItemBubble(
         ) {
             Text("Reply")
         }
-        DropdownMenuItem(
-            onClick = { updateMsgType(MstEdit(message)); show_menu = false }
-        ) {
-            Text("Edit")
+        if(isUserMe) {
+            DropdownMenuItem(
+                onClick = { updateMsgType(MstEdit(message)); show_menu = false }
+            ) {
+                Text("Edit")
+            }
         }
         DropdownMenuItem(
             onClick = { updateMsgType(MstReaction(message)); show_menu = false }
