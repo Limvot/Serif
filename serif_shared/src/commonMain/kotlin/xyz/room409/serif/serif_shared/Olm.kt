@@ -23,6 +23,7 @@ class Olm() {
     val olm = WasmOlm(memory, null, null, null, Array(9) { null as? MethodHandle })
 
     val OLM_ERROR = olm.olm_error()
+    val PRIVATE_KEY_LENGTH = olm.olm_pk_private_key_length()
 
     fun version(): Triple<Byte,Byte,Byte> {
         val major_ptr = olm.malloc(1)
@@ -973,6 +974,55 @@ class Olm() {
                 result = get_string(description_buf, 256)
             }
             return result!!
+        }
+    }
+    inner class Utility() {
+        val size = olm.olm_utility_size()
+        val buf = olm.malloc(size)
+        val ptr = olm.olm_utility(buf)
+        fun error_check(x: Int): Int {
+            if (x == OLM_ERROR) {
+                val error_str = get_string(olm.olm_utility_last_error(ptr))
+                throw Exception(error_str)
+            }
+            return x
+        }
+        fun free() {
+            olm.olm_clear_utility(ptr)
+            olm.free(ptr)
+        }
+        fun sha256(input: String): String {
+            var result: String? = null
+            val output_length = error_check(olm.olm_sha256_length(ptr))
+            stack(input) { input_buffer, input_buffer_length ->
+                stack(output_length + 1) { output_buffer ->
+                    error_check(
+                        olm.olm_sha256(
+                            ptr,
+                            input_buffer, input_buffer_length,
+                            output_buffer, output_length
+                        )
+                    )
+                    result = get_string(output_buffer, output_length)
+                }
+            }
+            return result!!
+        }
+        fun ed25519_verify(key: String, message: String, signature: String) {
+            stack(key) { key_buffer, key_buffer_length ->
+                stack(message) { message_buffer, message_buffer_length ->
+                    stack(signature) { signature_buffer, signature_buffer_length ->
+                        error_check(
+                            olm.olm_ed25519_verify(
+                                ptr,
+                                key_buffer, key_buffer_length,
+                                message_buffer, message_buffer_length,
+                                signature_buffer, signature_buffer_length,
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 }
