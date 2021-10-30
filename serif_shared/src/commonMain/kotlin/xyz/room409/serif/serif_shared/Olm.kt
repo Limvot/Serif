@@ -8,6 +8,8 @@ import java.security.SecureRandom
 
 import xyz.room409.WasmOlm
 
+data class EncryptedSessionMessage(val type: Int, val body: String)
+
 data class DecryptedMessage(val plaintext: String, val message_index: Int)
 data class EncryptedMessage(val ciphertext: String, val mac: String, val ephemeral: String)
 class Olm() {
@@ -805,6 +807,172 @@ class Olm() {
         fun free() {
             olm.olm_clear_session(ptr)
             olm.free(ptr)
+        }
+        fun pickle(key: String): String {
+            var result: String? = null
+            val pickle_length = error_check(olm.olm_pickle_session_length(ptr))
+            stack(key) { key_buffer, key_buffer_size ->
+                stack(pickle_length + 1) { pickle_buffer ->
+                    error_check(
+                        olm.olm_pickle_session(
+                            ptr,
+                            key_buffer, key_buffer_size,
+                            pickle_buffer, pickle_length
+                        )
+                    )
+                    result = get_string(pickle_buffer, pickle_length)
+                }
+            }
+            return result!!
+        }
+        fun unpickle(key: String, pickle: String) {
+            stack(key) { key_buffer, key_buffer_size ->
+                stack(pickle) { pickle_buffer, pickle_buffer_size ->
+                    error_check(
+                        olm.olm_unpickle_session(
+                            ptr,
+                            key_buffer, key_buffer_size,
+                            pickle_buffer, pickle_buffer_size
+                        )
+                    )
+                }
+            }
+        }
+        fun create_outbound(account: Account, their_identity_key: String, their_one_time_key: String) {
+            val random_length = error_check(olm.olm_create_outbound_session_random_length(ptr))
+            random_stack(random_length) { random_buffer ->
+                stack(their_identity_key) { their_identity_key_buffer, their_identity_key_buffer_length ->
+                    stack(their_one_time_key) { their_one_time_key_buffer, their_one_time_key_buffer_length ->
+                        error_check(
+                            olm.olm_create_outbound_session(
+                                ptr, account.ptr,
+                                their_identity_key_buffer, their_identity_key_buffer_length,
+                                their_one_time_key_buffer, their_one_time_key_buffer_length,
+                                random_buffer, random_length,
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        fun create_inbound(account: Account, one_time_key_message: String) {
+            stack(one_time_key_message) { one_time_key_message_buffer, one_time_key_message_buffer_length ->
+                error_check(
+                    olm.olm_create_inbound_session(
+                        ptr, account.ptr,
+                        one_time_key_message_buffer, one_time_key_message_buffer_length,
+                    )
+                )
+            }
+        }
+        fun create_inbound_from(account: Account, identity_key: String, one_time_key_message: String) {
+            stack(identity_key) { identity_key_buffer, identity_key_buffer_length ->
+                stack(one_time_key_message) { one_time_key_message_buffer, one_time_key_message_buffer_length ->
+                    error_check(
+                        olm.olm_create_inbound_session_from(
+                            ptr, account.ptr,
+                            identity_key_buffer, identity_key_buffer_length,
+                            one_time_key_message_buffer, one_time_key_message_buffer_length,
+                        )
+                    )
+                }
+            }
+        }
+        fun session_id(): String {
+            var result: String? = null
+            val id_length = error_check(olm.olm_session_id_length(ptr))
+            stack(id_length + 1) { id_buffer ->
+                error_check(
+                    olm.olm_session_id(
+                        ptr,
+                        id_buffer, id_length,
+                    )
+                )
+                result = get_string(id_buffer, id_length)
+            }
+            return result!!
+        }
+        fun has_received_message(): Boolean {
+            return error_check(olm.olm_session_has_received_message(ptr)) != 0
+        }
+        fun matches_inbound(one_time_key_message: String): Boolean {
+            var result: Boolean? = null
+            stack(one_time_key_message) { one_time_key_message_buffer, one_time_key_message_buffer_length ->
+                result = error_check(
+                    olm.olm_matches_inbound_session(
+                        ptr,
+                        one_time_key_message_buffer, one_time_key_message_buffer_length,
+                    )
+                ) != 0
+            }
+            return result!!
+        }
+        fun matches_inbound_from(identity_key: String, one_time_key_message: String): Boolean {
+            var result: Boolean? = null
+            stack(identity_key) { identity_key_buffer, identity_key_buffer_length ->
+                stack(one_time_key_message) { one_time_key_message_buffer, one_time_key_message_buffer_length ->
+                    result = error_check(
+                        olm.olm_matches_inbound_session_from(
+                            ptr,
+                            identity_key_buffer, identity_key_buffer_length,
+                            one_time_key_message_buffer, one_time_key_message_buffer_length,
+                        )
+                    ) != 0
+                }
+            }
+            return result!!
+        }
+        fun encrypt(plaintext: String): EncryptedSessionMessage {
+            var result: EncryptedSessionMessage? = null
+            malloc_buffer(plaintext) { plaintext_buffer, plaintext_length ->
+                val random_length = error_check(olm.olm_encrypt_random_length(ptr))
+                val message_type = error_check(olm.olm_encrypt_message_type(ptr))
+                val message_length = error_check(olm.olm_encrypt_message_length(
+                    ptr, plaintext_length
+                ))
+                random_stack(random_length) { random ->
+                    malloc_buffer(message_length + 1) { message_buffer ->
+                        error_check(olm.olm_encrypt(
+                            ptr, plaintext_buffer, plaintext_length,
+                            random, random_length,
+                            message_buffer, message_length,
+                        ))
+                        result = EncryptedSessionMessage(
+                            type = message_type,
+                            body = get_string(message_buffer, message_length)
+                        )
+                    }
+                }
+            }
+            return result!!
+        }
+        fun decrypt(message_type: Int, message: String): String {
+            var result: String? = null
+            malloc_buffer(message) { message_buffer, message_buffer_length ->
+                val max_plaintext_length = error_check(olm.olm_decrypt_max_plaintext_length(
+                    ptr, message_type, message_buffer, message_buffer_length + 1
+                ))
+                // finding the length destroys the buffer, must re-copy
+                copy_array_to_buffer(message.toByteArray(), message_buffer)
+                malloc_buffer(max_plaintext_length + 1) { plaintext_buffer ->
+                    val plaintext_length = error_check(olm.olm_decrypt(
+                        ptr, message_type, message_buffer, message_buffer_length,
+                        plaintext_buffer, max_plaintext_length
+                    ))
+                    result = get_string(plaintext_buffer, plaintext_length)
+                }
+            }
+            return result!!
+        }
+        fun describe(): String {
+            var result: String? = null
+            malloc_buffer(256) { description_buf ->
+                olm.olm_session_describe(
+                    ptr, description_buf, 256
+                )
+                result = get_string(description_buf, 256)
+            }
+            return result!!
         }
     }
 }
