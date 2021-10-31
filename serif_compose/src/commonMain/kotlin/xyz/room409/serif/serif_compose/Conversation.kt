@@ -87,7 +87,7 @@ import java.text.DateFormat
 import java.util.*
 
 abstract sealed class MessageSendType
-data class MstMessage(val _unused : String = "") : MessageSendType()
+class MstMessage() : MessageSendType()
 data class MstReply(val msg: SharedUiMessage): MessageSendType()
 data class MstEdit(val msg: SharedUiMessage): MessageSendType()
 data class MstReaction(val msg: SharedUiMessage): MessageSendType()
@@ -117,7 +117,7 @@ fun ConversationContent(
 ) {
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    var msg_type : MutableState<MessageSendType> = remember { mutableStateOf(MstMessage("")) }
+    var msg_type : MutableState<MessageSendType> = remember { mutableStateOf(MstMessage()) }
 
     // Helper lambda to decide which message type we are trying to send
     val determine_message_send_callback = { message : String ->
@@ -127,7 +127,7 @@ fun ConversationContent(
             is MstEdit -> { sendEdit(message, _mt.msg.id) }
             is MstReaction -> { sendReaction(message, _mt.msg.id) }
         }
-        msg_type.value = MstMessage("")
+        msg_type.value = MstMessage()
     }
 
     // Helper lambda to let popup change msg_type
@@ -205,7 +205,7 @@ fun MessageTypeContextBar(
 ) {
     Divider()
     Row(modifier = Modifier.fillMaxWidth()) {
-        Button( onClick = { updateMsgType(MstMessage("")) }) {
+        Button( onClick = { updateMsgType(MstMessage()) }) {
             Text("Cancel")
         }
         Box(modifier = Modifier.fillMaxWidth()) {
