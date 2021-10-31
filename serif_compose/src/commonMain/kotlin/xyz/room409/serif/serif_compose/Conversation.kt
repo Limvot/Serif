@@ -77,6 +77,7 @@ import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
+import xyz.room409.serif.serif_shared.Platform
 import java.io.File
 import java.text.DateFormat
 import java.util.*
@@ -482,7 +483,6 @@ fun ChatItemBubble(
                 */
             }
         } else if (message is SharedUiLocationMessage) {
-            val uriHandler = LocalUriHandler.current
             val styledMessage = messageFormatter(text = message.message)
             val parts = message.location.split(",")
             val lat = parts[0].replace("geo:","")
@@ -495,7 +495,7 @@ fun ChatItemBubble(
                     style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                     modifier = Modifier.padding(8.dp),
                     onClick = {
-                        uriHandler.openUri(href)
+                        Platform.openUrl(href)
                     }
                 )
             }
