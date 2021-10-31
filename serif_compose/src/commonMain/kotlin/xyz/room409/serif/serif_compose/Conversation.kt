@@ -585,7 +585,6 @@ fun ChatItemBubble(
         modifier = Modifier.combinedClickable(
             onClick = {
                 println("NORMAL Press for message ${message.id}: ${message.message}")
-                show_menu = true
             },
             onDoubleClick = {
                 println("DOUBLE Press for message ${message.id}: ${message.message}")
@@ -593,6 +592,7 @@ fun ChatItemBubble(
             },
             onLongClick = {
                 println("LONG Press for message ${message.id}: ${message.message}")
+                show_menu = true
             }
         ).background(Color(0x22222222))
     )
