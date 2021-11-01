@@ -20,12 +20,16 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.paddingFrom
@@ -41,6 +45,8 @@ import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.Button
 import androidx.compose.material.ContentAlpha
 import androidx.compose.material.Divider
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.LocalContentAlpha
 import androidx.compose.material.LocalContentColor
@@ -82,6 +88,12 @@ import java.io.File
 import java.text.DateFormat
 import java.util.*
 
+abstract sealed class MessageSendType
+class MstMessage() : MessageSendType()
+data class MstReply(val msg: SharedUiMessage): MessageSendType()
+data class MstEdit(val msg: SharedUiMessage): MessageSendType()
+data class MstReaction(val msg: SharedUiMessage): MessageSendType()
+
 /**
  * Entry point for a conversation screen.
  *
@@ -95,6 +107,9 @@ fun ConversationContent(
     uiState: ConversationUiState,
     bumpWindowBase: (Int?) -> Unit,
     sendMessage: (String) -> Unit,
+    sendReply: (String,String) -> Unit = {_m, _s -> },
+    sendEdit: (String,String) -> Unit = {_m, _s -> },
+    sendReaction: (String,String) -> Unit = {_m, _s -> },
     navigateToRoom: (String) -> Unit,
     exitRoom: () -> Unit,
     navigateToProfile: (String) -> Unit,
@@ -104,6 +119,21 @@ fun ConversationContent(
 ) {
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var msg_type : MutableState<MessageSendType> = remember { mutableStateOf(MstMessage()) }
+
+    // Helper lambda to decide which message type we are trying to send
+    val determine_message_send_callback = { message : String ->
+        when(val _mt : MessageSendType = msg_type.value) {
+            is MstMessage -> { sendMessage(message) }
+            is MstReply -> { sendReply(message, _mt.msg.id) }
+            is MstEdit -> { sendEdit(message, _mt.msg.id) }
+            is MstReaction -> { sendReaction(message, _mt.msg.id) }
+        }
+        msg_type.value = MstMessage()
+    }
+
+    // Helper lambda to let popup change msg_type
+    val change_message_type = { new_type : MessageSendType -> msg_type.value = new_type }
 
     Surface(modifier = modifier) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -117,12 +147,25 @@ fun ConversationContent(
                     bumpWindowBase = bumpWindowBase,
                     navigateToRoom = navigateToRoom,
                     navigateToProfile = navigateToProfile,
+                    updateMsgType = change_message_type,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
+                when(val _mt : MessageSendType = msg_type.value) {
+                    is MstMessage -> {  }
+                    is MstReply -> {
+                        MessageTypeContextBar(text = "Replying to: ${_mt.msg.message}", updateMsgType = change_message_type)
+                    }
+                    is MstEdit -> {
+                        MessageTypeContextBar(text = "Editing: ${_mt.msg.message}", updateMsgType = change_message_type)
+                    }
+                    is MstReaction -> {
+                        MessageTypeContextBar(text = "Reacting to: ${_mt.msg.message}", updateMsgType = change_message_type)
+                    }
+                }
                 UserInput(
                     uiState.channelName,
-                    sendMessage,
+                    determine_message_send_callback,
                     {
                         scope.launch {
                             scrollState.scrollToItem(0)
@@ -153,6 +196,23 @@ fun ConversationContent(
                 println("LOOKING TO BUMP $it - ${scrollState.firstVisibleItemIndex} / ${scrollState.layoutInfo.totalItemsCount}")
                 bumpWindowBase(scrollState.firstVisibleItemIndex)
             }
+    }
+}
+
+@Composable
+fun MessageTypeContextBar(
+    text: String,
+    modifier: Modifier = Modifier,
+    updateMsgType: (MessageSendType) -> Unit,
+) {
+    Divider()
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Button( onClick = { updateMsgType(MstMessage()) }) {
+            Text("Cancel")
+        }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Text(text)
+        }
     }
 }
 
@@ -229,6 +289,7 @@ fun Messages(
     bumpWindowBase: (Int?) -> Unit,
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
+    updateMsgType: (MessageSendType) -> Unit,
     scrollState: LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -281,6 +342,7 @@ fun Messages(
                     Message(
                         onRoomClick = navigateToRoom,
                         onAuthorClick = { name -> navigateToProfile(name) },
+                        updateMsgType = updateMsgType,
                         msg = content,
                         isUserMe = content.sender == ourUserId,
                         isFirstMessageByAuthor = isFirstMessageByAuthor,
@@ -322,6 +384,7 @@ fun Messages(
 fun Message(
     onRoomClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit,
+    updateMsgType: (MessageSendType) -> Unit,
     msg: SharedUiMessage,
     isUserMe: Boolean,
     isFirstMessageByAuthor: Boolean,
@@ -366,6 +429,8 @@ fun Message(
             isLastMessageByAuthor = isLastMessageByAuthor,
             roomClicked = onRoomClick,
             authorClicked = onAuthorClick,
+            isUserMe = isUserMe,
+            updateMsgType = updateMsgType,
             modifier = Modifier
                 .padding(end = 16.dp)
                 .weight(1f)
@@ -380,13 +445,15 @@ fun AuthorAndTextMessage(
     isLastMessageByAuthor: Boolean,
     roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit,
+    isUserMe: Boolean,
+    updateMsgType: (MessageSendType) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
         if (isLastMessageByAuthor) {
             AuthorNameTimestamp(msg)
         }
-        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked)
+        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked, updateMsgType = updateMsgType, isUserMe = isUserMe)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -456,7 +523,9 @@ fun ChatItemBubble(
     message: SharedUiMessage,
     lastMessageByAuthor: Boolean,
     roomClicked: (String) -> Unit,
-    authorClicked: (String) -> Unit
+    authorClicked: (String) -> Unit,
+    updateMsgType: (MessageSendType) -> Unit,
+    isUserMe: Boolean
 ) {
 
     val uriHandler = LocalUriHandler.current
@@ -468,50 +537,113 @@ fun ChatItemBubble(
             //MaterialTheme.colors.elevatedSurface(2.dp)
         }
 
+    var show_menu by remember { mutableStateOf(false) }
+    DropdownMenu(
+        expanded = show_menu,
+        onDismissRequest = {show_menu = false}
+    ) {
+        DropdownMenuItem(
+            onClick = { updateMsgType(MstReply(message)); show_menu = false }
+        ) {
+            Text("Reply")
+        }
+        if(isUserMe) {
+            DropdownMenuItem(
+                onClick = { updateMsgType(MstEdit(message)); show_menu = false }
+            ) {
+                Text("Edit")
+            }
+        }
+        DropdownMenuItem(
+            onClick = { updateMsgType(MstReaction(message)); show_menu = false }
+        ) {
+            Text("Reaction")
+        }
+        //TODO(marcus): Implement deletion logic
+        DropdownMenuItem(
+            onClick = { println("Deleting Message"); show_menu = false }
+        ) {
+            Text("Delete")
+        }
+        Divider()
+        //TODO(marcus): Implement show source logic
+        DropdownMenuItem(
+            onClick = {
+                println("Viewing Message Source")
+                show_menu = false
+            }
+        ) {
+            Text("View Source")
+        }
+    }
+
+    /* NOTE(marcus): The API is still being worked on for clickable callbacks,
+     * in particular right click handling which only really makes sense on desktop.
+     * For now we can just use some of the click events provided for combinedClickable,
+     * and we can add right click support later.
+     */
     val bubbleShape = if (lastMessageByAuthor) LastChatBubbleShape else ChatBubbleShape
-    Column {
-        if (message is SharedUiImgMessage) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-                Spacer(modifier = Modifier.width(74.dp).height(74.dp))
-                /*
-                Image(
-                    painter = rememberImagePainter(File(message.url)),
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(160.dp),
-                    contentDescription = message.message
-                )
-                */
+    @OptIn(ExperimentalFoundationApi::class)
+    Box(
+        modifier = Modifier.combinedClickable(
+            onClick = {
+                println("NORMAL Press for message ${message.id}: ${message.message}")
+            },
+            onDoubleClick = {
+                println("DOUBLE Press for message ${message.id}: ${message.message}")
+                show_menu = true
+            },
+            onLongClick = {
+                println("LONG Press for message ${message.id}: ${message.message}")
+                show_menu = true
             }
-        } else if (message is SharedUiLocationMessage) {
-            val styledMessage = messageFormatter(text = message.message)
-            val parts = message.location.split(",")
-            val lat = parts[0].replace("geo:","")
-            val lon = parts[1]
-            val href = "https://maps.google.com/?q=$lat,$lon"
-            Spacer(modifier = Modifier.height(4.dp))
-            Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-                ClickableText(
-                    text = styledMessage,
-                    style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
-                    modifier = Modifier.padding(8.dp),
-                    onClick = {
-                        val other_opener = Platform.getOpenUrl()
-                        if (other_opener != null) {
-                            other_opener(href)
-                        } else {
-                            uriHandler.openUri(href)
+        ).background(Color(0x22222222))
+    )
+    {
+        Column {
+            if (message is SharedUiImgMessage) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    Spacer(modifier = Modifier.width(74.dp).height(74.dp))
+                    /*
+                    Image(
+                        painter = rememberImagePainter(File(message.url)),
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(160.dp),
+                        contentDescription = message.message
+                    )
+                    */
+                }
+            } else if (message is SharedUiLocationMessage) {
+                val styledMessage = messageFormatter(text = message.message)
+                val parts = message.location.split(",")
+                val lat = parts[0].replace("geo:","")
+                val lon = parts[1]
+                val href = "https://maps.google.com/?q=$lat,$lon"
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    ClickableText(
+                        text = styledMessage,
+                        style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                        modifier = Modifier.padding(8.dp),
+                        onClick = {
+                            val other_opener = Platform.getOpenUrl()
+                            if (other_opener != null) {
+                                other_opener(href)
+                            } else {
+                                uriHandler.openUri(href)
+                            }
                         }
-                    }
-                )
-            }
-        } else {
-            Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-                ClickableMessage(
-                    message = message,
-                    roomClicked = roomClicked,
-                    authorClicked = authorClicked
-                )
+                    )
+                }
+            } else {
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    ClickableMessage(
+                        message = message,
+                        roomClicked = roomClicked,
+                        authorClicked = authorClicked
+                    )
+                }
             }
         }
     }

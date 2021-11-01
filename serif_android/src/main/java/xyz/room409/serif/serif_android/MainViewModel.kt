@@ -61,6 +61,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun sendMessage(message: String) = backgroundInvoke(inter.sendMessage(message))
+    fun sendReply(message: String, eventid: String) = backgroundInvoke(inter.sendReply(message, eventid))
+    fun sendEdit(message: String, eventid: String) = backgroundInvoke(inter.sendEdit(message, eventid))
+    fun sendReaction(reaction: String, eventid: String) = backgroundInvoke(inter.sendReaction(reaction, eventid))
     fun navigateToRoom(id: String) = backgroundInvoke(inter.navigateToRoom(id))
     fun exitRoom() = backgroundInvoke(inter.exitRoom())
     fun bumpWindow(id: String?) = backgroundInvoke(inter.bumpWindow(id))
