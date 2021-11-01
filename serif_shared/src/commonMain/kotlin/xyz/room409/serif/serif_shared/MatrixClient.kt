@@ -94,6 +94,8 @@ fun getRelatedEvent(e: Event): String? {
 inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as? StateEvent<T>?)?.content) as? T?
 
 class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
+    private var user_presence_info: MutableMap<String,PresenceEventContent> = mutableMapOf()
+    private var roomTypingNotifications: MutableMap<String, List<String>> = mutableMapOf()
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
     private var in_flight_media_requests: MutableSet<String> = mutableSetOf()
     private var in_flight_user_requests: MutableSet<String> = mutableSetOf()
@@ -542,6 +544,53 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
         client.close()
         sync_should_run = false
     }
+    fun sendStateEvent(id: String, type: String, content: Any) {
+        //NOTE(marcus): We don't send a state key
+        return runBlocking {
+            client.put<String>("$server/_matrix/client/r0/rooms/$id/state/$type/?access_token=$access_token")
+            {
+                contentType(ContentType.Application.Json)
+                body = content
+            }
+        }
+    }
+    fun setRoomAvatar(id: String, local_url: String) {
+        val mxc_url = runBlocking {
+            val img_f = File(local_url)
+            val image_data = img_f.readBytes()
+            val ct =
+                if(local_url.endsWith(".png")) {
+                    ContentType.Image.PNG
+                } else if(local_url.endsWith(".gif")) {
+                    ContentType.Image.GIF
+                } else {
+                    ContentType.Image.JPEG
+                }
+            //Post Image to server
+            val upload_img_response =
+                client.post<MediaUploadResponse>("$server/_matrix/media/r0/upload?access_token=$access_token") {
+                    contentType(ct)
+                    body = image_data
+                }
+            upload_img_response.content_uri
+        }
+        return sendStateEvent(id, "m.room.avatar", RoomAvatarContent(mxc_url))
+    }
+    fun setRoomTopic(id: String, topic: String) {
+        return sendStateEvent(id, "m.room.topic", RoomTopicContent(topic))
+    }
+    fun setRoomName(id: String, name: String) {
+        return sendStateEvent(id, "m.room.name", RoomNameContent(name))
+    }
+    fun getRoomAvatar(id: String): String {
+        return Database.getStateEvent(session_id, id, "m.room.avatar", "")?.castToStateEventWithContentOfType<RoomAvatarContent>()?.url ?: ""
+    }
+    fun getRoomName(id: String): String {
+        return Database.getStateEvent(session_id, id, "m.room.name", "")?.castToStateEventWithContentOfType<RoomNameContent>()?.name ?: ""
+    }
+    fun getRoomTopic(id: String): String {
+        return Database.getStateEvent(session_id, id, "m.room.topic", "")?.castToStateEventWithContentOfType<RoomTopicContent>()?.topic ?: ""
+    }
     fun getRoomMembers(id: String): List<String> {
         val events = Database.getStateEvents(session_id, id, "m.room.member")
         return events.map({ (id,event) ->  (event as RoomEvent).sender })
@@ -555,6 +604,32 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     fun getPinnedEvents(id: String): List<String> {
         return Database.getStateEvent(session_id, id, "m.room.pinned_events", "")?.castToStateEventWithContentOfType<RoomPinnedEventContent>()?.pinned
             ?: listOf()
+    }
+    fun sendPresenceStatus(status: PresenceState, msg: String) {
+        val url = "$server/_matrix/client/r0/presence/$user/status?access_token=$access_token"
+        runBlocking {
+            client.put<String>(url) {
+                contentType(ContentType.Application.Json)
+                body = PresenceEventUpdate(status,msg)
+            }
+        }
+        return
+    }
+    fun getPresenceStatus(user_id: String): Outcome<PresenceEventContent> {
+        //TODO: We may want to consider some occasional server query to refresh
+        //the cached data, instead of just returning the cached copy
+        val user_presence = user_presence_info.get(user_id)
+        if(user_presence != null) {
+            return Success(user_presence)
+        }
+        try {
+            val url = "$server/_matrix/client/r0/presence/$user_id/status?access_token=$access_token"
+            val presence = runBlocking { client.get<PresenceEventContent>(url) }
+            user_presence_info.put(user_id, presence)
+            return Success(presence)
+        } catch (e: Exception) {
+            return Error("Unable to get presence information for user $user_id", e)
+        }
     }
     private fun constructRoomNameFromMembers(id: String): String? {
         val members = getRoomMembers(id).filter({it != this.user}).map({ sender ->
@@ -581,11 +656,41 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             ?: constructRoomNameFromMembers(id)
             ?: "<no room name - $id>"
     }
+    fun getTypingStatusForRoom(room_id: String): List<String> {
+        return roomTypingNotifications.get(room_id) ?: listOf()
+    }
+    fun sendTypingStatus(room_id: String, is_typing: Boolean): Outcome<String> {
+        try {
+            val url = "$server/_matrix/client/r0/rooms/$room_id/typing/$user?access_token=$access_token"
+            val timeout = if(is_typing) { 10000 } else { null }
+            val res = runBlocking {
+                client.put<String>(url) {
+                    contentType(ContentType.Application.Json)
+                    body = TypingStatusNotify(is_typing, timeout)
+                }
+            }
+            return Success(res)
+        } catch (e: Exception) {
+            return Error("Sending Typing Status failed", e)
+        }
+    }
     fun mergeInSync(new_sync_response: SyncResponse) {
         Database.transaction {
+            for (_p in new_sync_response.presence?.events ?: listOf()) {
+                val p = _p as PresenceEvent
+                println("Presence Event for ${p.sender} is ${p.content.presence}")
+                user_presence_info.put(p.sender, p.content)
+            }
             for ((room_id, room) in new_sync_response.rooms?.join ?: mapOf()) {
                 for (event in room.state.events + room.timeline.events) {
                     (event as? StateEvent<*>)?.let { Database.setStateEvent(session_id, room_id, it) }
+                }
+                for (eph_event in room.ephemeral.events) {
+                    if(eph_event.type == "m.typing") {
+                        roomTypingNotifications.put(room_id,eph_event.content.user_ids!!)
+                    } else {
+                        println("Ephem Event Received of type ${eph_event.type} for ${room_id}!")
+                    }
                 }
                 val events = room.timeline.events.map { it as? RoomEvent }.filterNotNull()
                 val redactedEvents : MutableList<String> = mutableListOf()
