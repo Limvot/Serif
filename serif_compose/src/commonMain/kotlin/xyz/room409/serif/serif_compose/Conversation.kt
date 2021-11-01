@@ -79,9 +79,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
+import xyz.room409.serif.serif_shared.Platform
 import java.io.File
 import java.text.DateFormat
 import java.util.*
@@ -526,6 +528,7 @@ fun ChatItemBubble(
     isUserMe: Boolean
 ) {
 
+    val uriHandler = LocalUriHandler.current
     val backgroundBubbleColor =
         if (MaterialTheme.colors.isLight) {
             Color(0xFFF5F5F5)
@@ -598,13 +601,6 @@ fun ChatItemBubble(
     )
     {
         Column {
-            Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-                ClickableMessage(
-                    message = message,
-                    roomClicked = roomClicked,
-                    authorClicked = authorClicked
-                )
-            }
             if (message is SharedUiImgMessage) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Surface(color = backgroundBubbleColor, shape = bubbleShape) {
@@ -617,6 +613,36 @@ fun ChatItemBubble(
                         contentDescription = message.message
                     )
                     */
+                }
+            } else if (message is SharedUiLocationMessage) {
+                val styledMessage = messageFormatter(text = message.message)
+                val parts = message.location.split(",")
+                val lat = parts[0].replace("geo:","")
+                val lon = parts[1]
+                val href = "https://maps.google.com/?q=$lat,$lon"
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    ClickableText(
+                        text = styledMessage,
+                        style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                        modifier = Modifier.padding(8.dp),
+                        onClick = {
+                            val other_opener = Platform.getOpenUrl()
+                            if (other_opener != null) {
+                                other_opener(href)
+                            } else {
+                                uriHandler.openUri(href)
+                            }
+                        }
+                    )
+                }
+            } else {
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    ClickableMessage(
+                        message = message,
+                        roomClicked = roomClicked,
+                        authorClicked = authorClicked
+                    )
                 }
             }
         }
@@ -642,7 +668,14 @@ fun ClickableMessage(message: SharedUiMessage, roomClicked: (String) -> Unit, au
                     .firstOrNull()
                     ?.let { annotation ->
                         when (annotation.tag) {
-                            SymbolAnnotationType.LINK.name -> uriHandler.openUri(annotation.item)
+                            SymbolAnnotationType.LINK.name -> {
+                                val other_opener = Platform.getOpenUrl()
+                                if (other_opener != null) {
+                                    other_opener(annotation.item)
+                                } else {
+                                    uriHandler.openUri(annotation.item)
+                                }
+                            }
                             SymbolAnnotationType.PERSON.name -> authorClicked(annotation.item)
                             else -> Unit
                         }

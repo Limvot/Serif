@@ -9,4 +9,5 @@ expect object Platform {
     val platform: String
     fun getFile(): File
     fun makeHttpClient(): HttpClient
+    fun getOpenUrl(): ((url: String) -> Unit)?
 }

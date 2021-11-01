@@ -28,4 +28,5 @@ actual object Platform {
             )
         }
     }
+    actual fun getOpenUrl(): ((url: String) -> Unit)? = null
 }
