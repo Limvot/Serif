@@ -45,7 +45,7 @@ actual object Platform {
             )
         }
     }
-    actual fun openUrl(url: String): Unit {
+    actual fun getOpenUrl(): ((url: String) -> Unit)? = { url: String ->
         thread(start = true) {
             // We have to try using xdg-open first,
             // since PinePhone somehow implements the

@@ -459,6 +459,7 @@ fun ChatItemBubble(
     authorClicked: (String) -> Unit
 ) {
 
+    val uriHandler = LocalUriHandler.current
     val backgroundBubbleColor =
         if (MaterialTheme.colors.isLight) {
             Color(0xFFF5F5F5)
@@ -495,7 +496,12 @@ fun ChatItemBubble(
                     style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                     modifier = Modifier.padding(8.dp),
                     onClick = {
-                        Platform.openUrl(href)
+                        val other_opener = Platform.getOpenUrl()
+                        if (other_opener != null) {
+                            other_opener(href)
+                        } else {
+                            uriHandler.openUri(href)
+                        }
                     }
                 )
             }
@@ -530,7 +536,14 @@ fun ClickableMessage(message: SharedUiMessage, roomClicked: (String) -> Unit, au
                     .firstOrNull()
                     ?.let { annotation ->
                         when (annotation.tag) {
-                            SymbolAnnotationType.LINK.name -> uriHandler.openUri(annotation.item)
+                            SymbolAnnotationType.LINK.name -> {
+                                val other_opener = Platform.getOpenUrl()
+                                if (other_opener != null) {
+                                    other_opener(annotation.item)
+                                } else {
+                                    uriHandler.openUri(annotation.item)
+                                }
+                            }
                             SymbolAnnotationType.PERSON.name -> authorClicked(annotation.item)
                             else -> Unit
                         }

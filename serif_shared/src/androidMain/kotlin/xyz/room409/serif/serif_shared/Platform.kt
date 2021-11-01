@@ -6,7 +6,6 @@ import io.ktor.client.features.json.*
 import io.ktor.client.features.json.serializer.KotlinxSerializer
 import io.ktor.client.engine.android.*
 import android.content.Context
-import androidx.compose.ui.platform.LocalUriHandler
 import java.io.File
 
 actual object Platform {
@@ -29,8 +28,5 @@ actual object Platform {
             )
         }
     }
-    actual fun openUrl(url: String): Unit {
-        val uriHandler = LocalUriHandler.current
-        uriHandler.openUri(url)
-    }
+    actual fun getOpenUrl(): ((url: String) -> Unit)? = null
 }
