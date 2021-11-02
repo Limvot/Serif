@@ -461,6 +461,7 @@ fun AuthorAndTextMessage(
             // Between bubbles
             Spacer(modifier = Modifier.height(4.dp))
         }
+        MessageReactions(msg, modifier)
     }
 }
 
@@ -483,6 +484,36 @@ private fun AuthorNameTimestamp(msg: SharedUiMessage) {
                 modifier = Modifier.alignBy(LastBaseline)
             )
         }
+    }
+}
+
+@Composable
+private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier) {
+    val backgroundBubbleColor =
+        if (MaterialTheme.colors.isLight) {
+            Color(0xFFF5F5F5)
+        } else {
+            Color(0x22222222)
+        }
+    val bubbleShape = ChatBubbleShape
+    if (msg.reactions.size > 0 ) {
+        Spacer(modifier = Modifier.height(2.dp))
+        //This message has reaction, render them all
+        Row(modifier = Modifier) {
+            for((reaction,senders) in msg.reactions.entries) {
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    if(senders.size > 1) {
+                        Text("${reaction} ${senders.size}")
+                    } else {
+                        Text("${reaction}")
+                    }
+                }
+                //Space between reaction bubbles
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+        }
+        //Space after row of reactions
+        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
