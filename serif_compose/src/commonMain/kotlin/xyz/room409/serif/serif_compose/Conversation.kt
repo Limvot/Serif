@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 //import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 //import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
 //import xyz.room409.serif.serif_android.R
@@ -148,6 +149,7 @@ fun ConversationContent(
                     navigateToRoom = navigateToRoom,
                     navigateToProfile = navigateToProfile,
                     updateMsgType = change_message_type,
+                    sendReaction = sendReaction,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
@@ -290,6 +292,7 @@ fun Messages(
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendReaction: (String,String) -> Unit,
     scrollState: LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -343,7 +346,9 @@ fun Messages(
                         onRoomClick = navigateToRoom,
                         onAuthorClick = { name -> navigateToProfile(name) },
                         updateMsgType = updateMsgType,
+                        sendReaction = sendReaction,
                         msg = content,
+                        ourUserId = ourUserId,
                         isUserMe = content.sender == ourUserId,
                         isFirstMessageByAuthor = isFirstMessageByAuthor,
                         isLastMessageByAuthor = isLastMessageByAuthor
@@ -385,7 +390,9 @@ fun Message(
     onRoomClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendReaction: (String,String) -> Unit,
     msg: SharedUiMessage,
+    ourUserId: String,
     isUserMe: Boolean,
     isFirstMessageByAuthor: Boolean,
     isLastMessageByAuthor: Boolean
@@ -431,6 +438,8 @@ fun Message(
             authorClicked = onAuthorClick,
             isUserMe = isUserMe,
             updateMsgType = updateMsgType,
+            ourUserId = ourUserId,
+            sendReaction = sendReaction,
             modifier = Modifier
                 .padding(end = 16.dp)
                 .weight(1f)
@@ -447,6 +456,8 @@ fun AuthorAndTextMessage(
     authorClicked: (String) -> Unit,
     isUserMe: Boolean,
     updateMsgType: (MessageSendType) -> Unit,
+    ourUserId: String,
+    sendReaction: (String,String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
@@ -461,7 +472,7 @@ fun AuthorAndTextMessage(
             // Between bubbles
             Spacer(modifier = Modifier.height(4.dp))
         }
-        MessageReactions(msg, modifier)
+        MessageReactions(msg, modifier, ourUserId, sendReaction)
     }
 }
 
@@ -488,7 +499,7 @@ private fun AuthorNameTimestamp(msg: SharedUiMessage) {
 }
 
 @Composable
-private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier) {
+private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId: String, sendReaction: (String,String) -> Unit) {
     val backgroundBubbleColor =
         if (MaterialTheme.colors.isLight) {
             Color(0xFFF5F5F5)
@@ -502,11 +513,25 @@ private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier) {
         Row(modifier = Modifier) {
             for((reaction,senders) in msg.reactions.entries) {
                 Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    val reaction_text =
                     if(senders.size > 1) {
-                        Text("${reaction} ${senders.size}")
+                        "${reaction} ${senders.size}"
                     } else {
-                        Text("${reaction}")
+                        "${reaction}"
                     }
+                    ClickableText(
+                        text = AnnotatedString(reaction_text),
+                        style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                        //modifier = Modifier.padding(8.dp),
+                        onClick = {
+                            if(!senders.contains(ourUserId)) {
+                                //Send reaction message
+                                sendReaction(reaction, msg.id)
+                            } else {
+                                //TODO: Redact the reaction
+                            }
+                        }
+                    )
                 }
                 //Space between reaction bubbles
                 Spacer(modifier = Modifier.width(4.dp))
