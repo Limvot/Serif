@@ -106,17 +106,20 @@ data class MstReaction(val msg: SharedUiMessage): MessageSendType()
 fun ConversationContent(
     uiState: ConversationUiState,
     bumpWindowBase: (Int?) -> Unit,
-    sendMessage: (String) -> Unit,
-    sendReply: (String,String) -> Unit = {_m, _s -> },
-    sendEdit: (String,String) -> Unit = {_m, _s -> },
-    sendReaction: (String,String) -> Unit = {_m, _s -> },
-    navigateToRoom: (String) -> Unit,
-    exitRoom: () -> Unit,
+    runInViewModel: ((MatrixInterface) -> (() -> Unit)) -> Unit,
     navigateToProfile: (String) -> Unit,
     modifier: Modifier = Modifier,
     uiInputModifier: Modifier = Modifier,
     onNavIconPressed: () -> Unit = { },
 ) {
+
+    val sendMessage = { message: String -> runInViewModel { inter -> inter.sendMessage(message) } }
+    val sendReply = { message: String, eventid: String -> runInViewModel { inter -> inter.sendReply(message, eventid) } }
+    val sendEdit = { message: String, eventid: String -> runInViewModel { inter -> inter.sendEdit(message, eventid) } }
+    val sendReaction = { reaction: String, eventid: String -> runInViewModel { inter -> inter.sendReaction(reaction, eventid) } }
+    val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
+    val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
+
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var msg_type : MutableState<MessageSendType> = remember { mutableStateOf(MstMessage()) }

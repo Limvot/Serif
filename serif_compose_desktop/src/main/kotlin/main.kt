@@ -48,13 +48,9 @@ class FakeViewModel {
             f()
         }
     }
-    fun sendMessage(message: String) = backgroundInvoke(inter.sendMessage(message))
-    fun sendReply(message: String, eventid: String) = backgroundInvoke(inter.sendReply(message, eventid))
-    fun sendEdit(message: String, eventid: String) = backgroundInvoke(inter.sendEdit(message, eventid))
-    fun sendReaction(reaction: String, eventid: String) = backgroundInvoke(inter.sendReaction(reaction, eventid))
-    fun navigateToRoom(id: String) = backgroundInvoke(inter.navigateToRoom(id))
-    fun exitRoom() = backgroundInvoke(inter.exitRoom())
+    fun runInViewModel(f: (MatrixInterface) -> (() -> Unit)) = backgroundInvoke(f(inter))
     fun bumpWindow(id: String?) = backgroundInvoke(inter.bumpWindow(id))
+
     val ourUserId: MutableState<String>
         get() = inter.ourUserId
     val messages: MutableState<List<SharedUiMessage>>
@@ -79,12 +75,7 @@ fun main() = application {
             ConversationContent(
                 bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
                 uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed()),
-                sendMessage = { message -> fakeViewModel.sendMessage(message); },
-                sendReply = { message, id -> fakeViewModel.sendReply(message, id); },
-                sendEdit = { message, id -> fakeViewModel.sendEdit(message, id); },
-                sendReaction = { message, id -> fakeViewModel.sendReaction(message, id); },
-                navigateToRoom = { room -> fakeViewModel.navigateToRoom(room); },
-                exitRoom = { fakeViewModel.exitRoom(); },
+                runInViewModel = { fakeViewModel.runInViewModel(it) },
                 navigateToProfile = { user -> println("clicked on user $user"); },
                 onNavIconPressed = { println("Pressed nav icon..."); },
             )
