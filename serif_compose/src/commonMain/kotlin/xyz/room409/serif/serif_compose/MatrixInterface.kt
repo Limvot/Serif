@@ -112,6 +112,12 @@ class MatrixInterface {
             if (_m is MatrixChatRoom) { _m.sendReaction(message, eventid) }
         }
     }
+    fun sendRedaction(msgid: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.sendRedaction(msgid) }
+        }
+    }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))
     fun exitRoom() = pushDo(Action.ExitRoom())
     fun bumpWindow(id: String?) = pushDo(Action.Refresh(50, id, 50))

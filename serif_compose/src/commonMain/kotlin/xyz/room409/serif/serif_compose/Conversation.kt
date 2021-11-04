@@ -53,6 +53,7 @@ import androidx.compose.material.LocalContentColor
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
+import androidx.compose.material.TextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
@@ -67,6 +68,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.rememberDialogState
 //import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -117,6 +121,7 @@ fun ConversationContent(
     val sendReply = { message: String, eventid: String -> runInViewModel { inter -> inter.sendReply(message, eventid) } }
     val sendEdit = { message: String, eventid: String -> runInViewModel { inter -> inter.sendEdit(message, eventid) } }
     val sendReaction = { reaction: String, eventid: String -> runInViewModel { inter -> inter.sendReaction(reaction, eventid) } }
+    val sendRedaction = { eventid: String -> runInViewModel { inter -> inter.sendRedaction(eventid) } }
     val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
     val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
 
@@ -151,6 +156,7 @@ fun ConversationContent(
                     navigateToRoom = navigateToRoom,
                     navigateToProfile = navigateToProfile,
                     updateMsgType = change_message_type,
+                    sendRedaction = sendRedaction,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
@@ -293,6 +299,7 @@ fun Messages(
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     scrollState: LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -346,6 +353,7 @@ fun Messages(
                         onRoomClick = navigateToRoom,
                         onAuthorClick = { name -> navigateToProfile(name) },
                         updateMsgType = updateMsgType,
+                        sendRedaction = sendRedaction,
                         msg = content,
                         isUserMe = content.sender == ourUserId,
                         isFirstMessageByAuthor = isFirstMessageByAuthor,
@@ -388,6 +396,7 @@ fun Message(
     onRoomClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     msg: SharedUiMessage,
     isUserMe: Boolean,
     isFirstMessageByAuthor: Boolean,
@@ -434,6 +443,7 @@ fun Message(
             authorClicked = onAuthorClick,
             isUserMe = isUserMe,
             updateMsgType = updateMsgType,
+            sendRedaction = sendRedaction,
             modifier = Modifier
                 .padding(end = 16.dp)
                 .weight(1f)
@@ -450,13 +460,14 @@ fun AuthorAndTextMessage(
     authorClicked: (String) -> Unit,
     isUserMe: Boolean,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
         if (isLastMessageByAuthor) {
             AuthorNameTimestamp(msg)
         }
-        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked, updateMsgType = updateMsgType, isUserMe = isUserMe)
+        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked, updateMsgType = updateMsgType, sendRedaction = sendRedaction, isUserMe = isUserMe)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -528,6 +539,7 @@ fun ChatItemBubble(
     roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     isUserMe: Boolean
 ) {
 
@@ -539,6 +551,31 @@ fun ChatItemBubble(
             Color(0x22222222)
             //MaterialTheme.colors.elevatedSurface(2.dp)
         }
+
+    var show_deletion_dialog by remember { mutableStateOf(false) }
+    var reason by remember { mutableStateOf("") }
+    if(show_deletion_dialog) {
+        Dialog(
+            onCloseRequest = { show_deletion_dialog = false; reason = "" },
+            state = rememberDialogState(position = WindowPosition(Alignment.Center))
+        ) {
+                Column() {
+                    Text("Deleting: ${message.message}")
+                    Text("Reason:")
+                    TextField(
+                        value = reason,
+                        onValueChange = { reason = it })
+                    Row() {
+                        Button(onClick = { sendRedaction(message.id); show_deletion_dialog = false; reason = "" }) {
+                            Text("Confirm")
+                        }
+                        Button(onClick = { show_deletion_dialog = false; reason = "" }) {
+                            Text("Cancel")
+                        }
+                    }
+                }
+            }
+    }
 
     var show_menu by remember { mutableStateOf(false) }
     DropdownMenu(
@@ -562,9 +599,11 @@ fun ChatItemBubble(
         ) {
             Text("Reaction")
         }
-        //TODO(marcus): Implement deletion logic
         DropdownMenuItem(
-            onClick = { println("Deleting Message"); show_menu = false }
+            onClick = {
+                show_deletion_dialog = true
+                show_menu = false
+            }
         ) {
             Text("Delete")
         }
