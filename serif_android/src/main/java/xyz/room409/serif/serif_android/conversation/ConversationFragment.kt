@@ -73,12 +73,7 @@ class ConversationFragment : Fragment() {
                     ConversationContent(
                         bumpWindowBase = { idx -> activityViewModel.bumpWindow(idx?.let { idx -> activityViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
                         uiState = ConversationUiState(roomName, ourUserId, 0, messages.reversed()),
-                        sendMessage = { message -> activityViewModel.sendMessage(message); },
-                        sendReply = { message, id -> activityViewModel.sendReply(message, id); },
-                        sendEdit = { message, id -> activityViewModel.sendEdit(message, id); },
-                        sendReaction = { message, id -> activityViewModel.sendReaction(message, id); },
-                        navigateToRoom = { room -> activityViewModel.navigateToRoom(room); },
-                        exitRoom = { activityViewModel.exitRoom(); },
+                        runInViewModel = { activityViewModel.runInViewModel(it) },
                         navigateToProfile = { user ->
                             // Click callback
                             val bundle = bundleOf("userId" to user)
