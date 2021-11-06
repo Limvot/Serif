@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS SavedSessions (
  id INTEGER PRIMARY KEY NOT NULL,
  userId TEXT NOT NULL UNIQUE,
  authTok TEXT NOT NULL,
+ deviceId TEXT NOT NULL,
  nextBatch TEXT,
  transactionId INTEGER NOT NULL
 );
@@ -10,8 +11,8 @@ deleteAllSessions:
 DELETE FROM SavedSessions;
 
 insertSession:
-INSERT INTO SavedSessions(id, userId, authTok, nextBatch, transactionId)
-VALUES(NULL,?,?,NULL,?);
+INSERT INTO SavedSessions(id, userId, authTok, deviceId, nextBatch, transactionId)
+VALUES(NULL,?,?,?,NULL,?);
 
 updateSessionTransactionId:
 UPDATE SavedSessions

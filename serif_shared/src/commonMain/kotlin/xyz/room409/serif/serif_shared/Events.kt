@@ -62,7 +62,9 @@ data class EventIdResponse(val event_id: String)
 @Serializable
 data class UnreadNotifications(val highlight_count: Int? = null, val notification_count: Int? = null)
 
-@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms? = null, val presence: Presence? = null)
+@Serializable data class SyncResponse(var next_batch: String, val rooms: Rooms? = null, val presence: Presence? = null, val device_lists: DeviceLists? = null, val device_one_time_keys_count: Map<String,Long>? = null)
+
+@Serializable data class DeviceLists(val changed: List<String>? = null, val left: List<String>? = null)
 
 @Serializable data class Rooms(val join: MutableMap<String, Room>)
 
@@ -404,3 +406,18 @@ open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) : JsonTran
     override fun transformSerialize(element: JsonElement): JsonElement =
         element.jsonObject["raw_self"]!!
 }
+
+
+// E2EE
+
+
+@Serializable data class KeysUpload(
+    val device_keys: DeviceKeys? = null,
+    val one_time_keys: Map<String,String>? = null) // keys are <algorithm>:<key_id>
+
+@Serializable data class DeviceKeys(
+    val user_id: String,
+    val device_id: String,
+    val algorithms: List<String>,
+    val keys: Map<String,String>,
+    val signatures: Map<String,Map<String,String>>) // { user_id: { "<algorithm>:<device_id>": signature } }

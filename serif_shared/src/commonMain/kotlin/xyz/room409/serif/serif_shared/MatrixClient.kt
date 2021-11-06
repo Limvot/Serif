@@ -94,7 +94,7 @@ fun getRelatedEvent(e: Event): String? {
 // the right T. Java generics are bad, yall, and Kotlin in trying to be nice sometimes makes things much worse.
 inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as? StateEvent<T>?)?.content) as? T?
 
-class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
+class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, device_id: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var user_presence_info: MutableMap<String,PresenceEventContent> = mutableMapOf()
     private var roomTypingNotifications: MutableMap<String, List<String>> = mutableMapOf()
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
@@ -761,10 +761,10 @@ class MatrixClient {
             // Save to DB
             println("Saving session to db")
             val new_transactionId: Long = 0
-            Database.saveSession(loginResponse.user_id, loginResponse.access_token, new_transactionId)
-            val session_id = Database.getUserSession(loginResponse.user_id).second.first
+            Database.saveSession(loginResponse.user_id, loginResponse.access_token, loginResponse.device_id, new_transactionId)
+            val session_id = Database.getUserSession(loginResponse.user_id).id
 
-            return Success(MatrixSession(client, server, loginResponse.user_id, session_id, loginResponse.access_token, new_transactionId, onUpdate))
+            return Success(MatrixSession(client, server, loginResponse.user_id, session_id, loginResponse.access_token, loginResponse.device_id, new_transactionId, onUpdate))
         } catch (e: Exception) {
             return Error("Login failed", e)
         }
@@ -775,14 +775,14 @@ class MatrixClient {
         // Load from DB
         println("loading specific session from db")
         val session = Database.getUserSession(username)
-        val session_id = session.second.first
-        val tok = session.second.second
-        val transactionId = session.third
-        return Success(MatrixSession(client, server, username, session_id, tok, transactionId, onUpdate))
+        val session_id = session.id
+        val tok = session.auth_tok
+        val transaction_id = session.transaction_id
+        return Success(MatrixSession(client, server, username, session_id, tok, session.device_id, transaction_id, onUpdate))
     }
     fun getStoredSessions(): List<String> {
         olm_test()
         println("loading sessions from db")
-        return Database.getStoredSessions().map({ it.first })
+        return Database.getStoredSessions().map({ it.user })
     }
 }

@@ -9,6 +9,8 @@ import java.io.File
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 
+data class StoredSession(val id: Long, val user: String, val auth_tok: String, val device_id: String, val transaction_id: Long)
+
 object Database {
     // See platform specific code in serif_shared for the
     // different implementations of DriverFactory and the
@@ -20,8 +22,8 @@ object Database {
     fun transaction(f: () -> Unit) = this.db?.sessionDbQueries?.transaction{ f() }
     fun <T> transactionWithResult(f: () -> T) = this.db?.sessionDbQueries?.transaction{ f() }
 
-    fun saveSession(username: String, access_token: String, transactionId: Long) {
-        this.db?.sessionDbQueries?.insertSession(username, access_token, transactionId)
+    fun saveSession(username: String, access_token: String, device_id: String, transactionId: Long) {
+        this.db?.sessionDbQueries?.insertSession(username, access_token, device_id, transactionId)
     }
 
     fun updateSessionTransactionId(session_id: Long, transactionId: Long) {
@@ -34,18 +36,18 @@ object Database {
     fun getSessionNextBatch(session_id: Long): String? =
         this.db?.sessionDbQueries?.getSessionNextBatch(session_id)?.executeAsOneOrNull()?.nextBatch
 
-    fun getStoredSessions(): List<Triple<String, String, Long>> {
+    fun getStoredSessions(): List<StoredSession> {
         val saved_sessions = this.db?.sessionDbQueries?.selectAllSessions(
-            { id: Long, user: String, auth_tok: String, nextBatch: String?, transactionId: Long ->
-                Triple(user, auth_tok, transactionId)
+            { id: Long, user: String, auth_tok: String, device_id: String, nextBatch: String?, transactionId: Long ->
+                StoredSession(id, user, auth_tok, device_id, transactionId)
             })?.executeAsList() ?: listOf()
         return saved_sessions
     }
 
-    fun getUserSession(user: String): Triple<String, Pair<Long, String>, Long> {
-        val saved_session = this.db?.sessionDbQueries?.selectUserSession(user) { id: Long, user: String, auth_tok: String, nextBatch: String?, transactionId: Long ->
-            Triple(user, Pair(id, auth_tok), transactionId)
-        }?.executeAsOne() ?: Triple("", Pair(0L,""), 0L)
+    fun getUserSession(user: String): StoredSession {
+        val saved_session = this.db?.sessionDbQueries?.selectUserSession(user) { id: Long, user: String, auth_tok: String, device_id: String, nextBatch: String?, transactionId: Long ->
+            StoredSession(id, user, auth_tok, device_id, transactionId)
+        }?.executeAsOne() ?: StoredSession(0L, "", "", "", 0L)
         return saved_session
     }
 
