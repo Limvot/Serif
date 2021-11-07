@@ -68,9 +68,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.WindowPosition
-import androidx.compose.ui.window.rememberDialogState
 //import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -609,28 +606,8 @@ fun ChatItemBubble(
         }
 
     var show_deletion_dialog by remember { mutableStateOf(false) }
-    var reason by remember { mutableStateOf("") }
     if(show_deletion_dialog) {
-        Dialog(
-            onCloseRequest = { show_deletion_dialog = false; reason = "" },
-            state = rememberDialogState(position = WindowPosition(Alignment.Center))
-        ) {
-                Column() {
-                    Text("Deleting: ${message.message}")
-                    Text("Reason:")
-                    TextField(
-                        value = reason,
-                        onValueChange = { reason = it })
-                    Row() {
-                        Button(onClick = { sendRedaction(message.id); show_deletion_dialog = false; reason = "" }) {
-                            Text("Confirm")
-                        }
-                        Button(onClick = { show_deletion_dialog = false; reason = "" }) {
-                            Text("Cancel")
-                        }
-                    }
-                }
-            }
+        DeletionDialog(message, sendRedaction, { show_deletion_dialog = false })
     }
 
     var show_menu by remember { mutableStateOf(false) }
