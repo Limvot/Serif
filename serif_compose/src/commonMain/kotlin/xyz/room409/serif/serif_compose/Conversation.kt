@@ -73,6 +73,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberDialogState
 //import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 //import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
 //import xyz.room409.serif.serif_android.R
@@ -157,6 +158,7 @@ fun ConversationContent(
                     navigateToProfile = navigateToProfile,
                     updateMsgType = change_message_type,
                     sendRedaction = sendRedaction,
+                    sendReaction = sendReaction,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
@@ -300,6 +302,7 @@ fun Messages(
     navigateToProfile: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
     sendRedaction: (String) -> Unit,
+    sendReaction: (String,String) -> Unit,
     scrollState: LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -354,7 +357,9 @@ fun Messages(
                         onAuthorClick = { name -> navigateToProfile(name) },
                         updateMsgType = updateMsgType,
                         sendRedaction = sendRedaction,
+                        sendReaction = sendReaction,
                         msg = content,
+                        ourUserId = ourUserId,
                         isUserMe = content.sender == ourUserId,
                         isFirstMessageByAuthor = isFirstMessageByAuthor,
                         isLastMessageByAuthor = isLastMessageByAuthor
@@ -397,7 +402,9 @@ fun Message(
     onAuthorClick: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
     sendRedaction: (String) -> Unit,
+    sendReaction: (String,String) -> Unit,
     msg: SharedUiMessage,
+    ourUserId: String,
     isUserMe: Boolean,
     isFirstMessageByAuthor: Boolean,
     isLastMessageByAuthor: Boolean
@@ -444,6 +451,8 @@ fun Message(
             isUserMe = isUserMe,
             updateMsgType = updateMsgType,
             sendRedaction = sendRedaction,
+            ourUserId = ourUserId,
+            sendReaction = sendReaction,
             modifier = Modifier
                 .padding(end = 16.dp)
                 .weight(1f)
@@ -461,6 +470,8 @@ fun AuthorAndTextMessage(
     isUserMe: Boolean,
     updateMsgType: (MessageSendType) -> Unit,
     sendRedaction: (String) -> Unit,
+    ourUserId: String,
+    sendReaction: (String,String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
@@ -475,6 +486,7 @@ fun AuthorAndTextMessage(
             // Between bubbles
             Spacer(modifier = Modifier.height(4.dp))
         }
+        MessageReactions(msg, modifier, ourUserId, sendReaction)
     }
 }
 
@@ -497,6 +509,50 @@ private fun AuthorNameTimestamp(msg: SharedUiMessage) {
                 modifier = Modifier.alignBy(LastBaseline)
             )
         }
+    }
+}
+
+@Composable
+private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId: String, sendReaction: (String,String) -> Unit) {
+    val backgroundBubbleColor =
+        if (MaterialTheme.colors.isLight) {
+            Color(0xFFF5F5F5)
+        } else {
+            Color(0x22222222)
+        }
+    val bubbleShape = ChatBubbleShape
+    if (msg.reactions.size > 0 ) {
+        Spacer(modifier = Modifier.height(2.dp))
+        //This message has reaction, render them all
+        Row(modifier = Modifier) {
+            for((reaction,senders) in msg.reactions.entries) {
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    val reaction_text =
+                    if(senders.size > 1) {
+                        "${reaction} ${senders.size}"
+                    } else {
+                        "${reaction}"
+                    }
+                    ClickableText(
+                        text = AnnotatedString(reaction_text),
+                        style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                        //modifier = Modifier.padding(8.dp),
+                        onClick = {
+                            if(!senders.contains(ourUserId)) {
+                                //Send reaction message
+                                sendReaction(reaction, msg.id)
+                            } else {
+                                //TODO: Redact the reaction
+                            }
+                        }
+                    )
+                }
+                //Space between reaction bubbles
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+        }
+        //Space after row of reactions
+        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 

@@ -3,7 +3,8 @@ import org.jetbrains.compose.compose
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
-    id("org.jetbrains.compose") version "1.0.0-alpha1"
+    //id("org.jetbrains.compose") version "1.0.0-alpha1"
+    id("org.jetbrains.compose") version "1.0.0-beta5"
 }
 
 repositories {
