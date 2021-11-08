@@ -72,7 +72,7 @@ abstract class SharedUiMessage() {
     abstract val id: String
     abstract val timestamp: Long
     abstract val replied_event: SharedUiMessage?
-    abstract val reactions: Map<String, Set<String>>
+    abstract val reactions: Map<String, Set<RoomMessageEvent>>
 }
 
 data class SharedUiRoom(
@@ -83,7 +83,7 @@ data class SharedUiRoom(
     override val formatted_message: String? = null,
     override val id: String,
     override val timestamp: Long = 0,
-    override val reactions: Map<String, Set<String>> = mapOf(),
+    override val reactions: Map<String, Set<RoomMessageEvent>> = mapOf(),
     override val replied_event: SharedUiMessage? = null,
 
     val unreadCount: Int,
@@ -100,7 +100,7 @@ data class SharedUiMessagePlain(
     override val formatted_message: String? = null,
     override val id: String,
     override val timestamp: Long,
-    override val reactions: Map<String, Set<String>>,
+    override val reactions: Map<String, Set<RoomMessageEvent>>,
     override val replied_event: SharedUiMessage? = null
 ) : SharedUiMessage()
 class SharedUiImgMessage(
@@ -110,7 +110,7 @@ class SharedUiImgMessage(
     override val message: String,
     override val id: String,
     override val timestamp: Long,
-    override val reactions: Map<String, Set<String>>,
+    override val reactions: Map<String, Set<RoomMessageEvent>>,
     override val replied_event: SharedUiMessage? = null,
     val url: String,
     override val formatted_message: String? = null
@@ -122,7 +122,7 @@ class SharedUiAudioMessage(
     override val message: String,
     override val id: String,
     override val timestamp: Long,
-    override val reactions: Map<String, Set<String>>,
+    override val reactions: Map<String, Set<RoomMessageEvent>>,
     override val replied_event: SharedUiMessage? = null,
     val url: String,
     override val formatted_message: String? = null
@@ -134,7 +134,7 @@ class SharedUiVideoMessage(
     override val message: String,
     override val id: String,
     override val timestamp: Long,
-    override val reactions: Map<String, Set<String>>,
+    override val reactions: Map<String, Set<RoomMessageEvent>>,
     override val replied_event: SharedUiMessage? = null,
     val url: String,
     override val formatted_message: String? = null
@@ -146,7 +146,7 @@ class SharedUiFileMessage(
     override val message: String,
     override val id: String,
     override val timestamp: Long,
-    override val reactions: Map<String, Set<String>>,
+    override val reactions: Map<String, Set<RoomMessageEvent>>,
     val filename: String,
     val mimetype: String,
     val url: String,
@@ -160,7 +160,7 @@ class SharedUiLocationMessage(
     override val message: String,
     override val id: String,
     override val timestamp: Long,
-    override val reactions: Map<String, Set<String>>,
+    override val reactions: Map<String, Set<RoomMessageEvent>>,
     val location: String,
     override val replied_event: SharedUiMessage? = null,
     override val formatted_message: String? = null
@@ -168,7 +168,7 @@ class SharedUiLocationMessage(
 
 fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: String, window_back_length: Int, message_window_base: String?, window_forward_length: Int, force_event: Boolean): Pair<List<SharedUiMessage>, Boolean> {
     val edit_maps: MutableMap<String,ArrayList<SharedUiMessage>> = mutableMapOf()
-    val reaction_maps: MutableMap<String, MutableMap<String, MutableSet<String>>> = mutableMapOf()
+    val reaction_maps: MutableMap<String, MutableMap<String, MutableSet<RoomMessageEvent>>> = mutableMapOf()
 
     val (event_range, tracking_live) = msession.getReleventRoomEventsForWindow(room_id, window_back_length, message_window_base, window_forward_length, force_event)
 
@@ -180,7 +180,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                 val relates_to = msg_content.relates_to.event_id!!
                 val key = msg_content.relates_to.key!!
                 val reactions_for_msg = reaction_maps.getOrPut(relates_to, { mutableMapOf() })
-                reactions_for_msg.getOrPut(key, { mutableSetOf() }).add(it.sender)
+                reactions_for_msg.getOrPut(key, { mutableSetOf() }).add(it)
             } else if (msg_content is TextRMEC) {
                 if (is_edit_content(msg_content)) {
                     // This is an edit
@@ -218,7 +218,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                 toSharedUiMessageList(msession, username, room_id, 0, in_reply_to_id, 0, true).first.firstOrNull()
             }
 
-            var generate_media_msg = { url: String, func: (String, String?, String?, String,String,Long,Map<String,Set<String>>,SharedUiMessage?,String) -> SharedUiMessage ->
+            var generate_media_msg = { url: String, func: (String, String?, String?, String,String,Long,Map<String,Set<RoomMessageEvent>>,SharedUiMessage?,String) -> SharedUiMessage ->
                 when (val url_local = msession.getLocalMediaPathFromUrl(url)) {
                     is Success -> {
                         func(

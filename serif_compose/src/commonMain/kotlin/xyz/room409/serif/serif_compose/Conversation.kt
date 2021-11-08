@@ -482,7 +482,7 @@ fun AuthorAndTextMessage(
             // Between bubbles
             Spacer(modifier = Modifier.height(4.dp))
         }
-        MessageReactions(msg, modifier, ourUserId, sendReaction)
+        MessageReactions(msg, modifier, ourUserId, sendReaction, sendRedaction)
     }
 }
 
@@ -509,7 +509,7 @@ private fun AuthorNameTimestamp(msg: SharedUiMessage) {
 }
 
 @Composable
-private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId: String, sendReaction: (String,String) -> Unit) {
+private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId: String, sendReaction: (String,String) -> Unit, sendRedaction: (String) -> Unit) {
     val backgroundBubbleColor =
         if (MaterialTheme.colors.isLight) {
             Color(0xFFF5F5F5)
@@ -534,11 +534,17 @@ private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId
                         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                         //modifier = Modifier.padding(8.dp),
                         onClick = {
-                            if(!senders.contains(ourUserId)) {
+                            val sender_ids = senders.map { it.sender }.toSet()
+                            if(!sender_ids.contains(ourUserId)) {
                                 //Send reaction message
                                 sendReaction(reaction, msg.id)
                             } else {
-                                //TODO: Redact the reaction
+                                //Redact the reaction event we previously sent
+                                senders.forEach {
+                                    if(it.sender == ourUserId) {
+                                        sendRedaction(it.event_id)
+                                    }
+                                }
                             }
                         }
                     )
