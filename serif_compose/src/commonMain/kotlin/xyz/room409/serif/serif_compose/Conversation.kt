@@ -85,7 +85,6 @@ import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
-import xyz.room409.serif.serif_shared.Platform
 import java.io.File
 import java.text.DateFormat
 import java.util.*
@@ -702,7 +701,7 @@ fun ChatItemBubble(
                         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                         modifier = Modifier.padding(8.dp),
                         onClick = {
-                            val other_opener = Platform.getOpenUrl()
+                            val other_opener = UiPlatform.getOpenUrl()
                             if (other_opener != null) {
                                 other_opener(href)
                             } else {
@@ -744,7 +743,7 @@ fun ClickableMessage(message: SharedUiMessage, roomClicked: (String) -> Unit, au
                     ?.let { annotation ->
                         when (annotation.tag) {
                             SymbolAnnotationType.LINK.name -> {
-                                val other_opener = Platform.getOpenUrl()
+                                val other_opener = UiPlatform.getOpenUrl()
                                 if (other_opener != null) {
                                     other_opener(annotation.item)
                                 } else {
