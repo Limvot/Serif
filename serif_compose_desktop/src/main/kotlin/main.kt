@@ -59,6 +59,8 @@ class FakeViewModel {
         get() = inter.roomPath
     val roomName: MutableState<String>
         get() = inter.roomName
+    val pinned: MutableState<List<String>>
+        get() = inter.pinned
 }
 
 
@@ -74,7 +76,7 @@ fun main() = application {
         JetchatTheme(false) {
             ConversationContent(
                 bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
-                uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed()),
+                uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(), fakeViewModel.pinned.value),
                 runInViewModel = { fakeViewModel.runInViewModel(it) },
                 navigateToProfile = { user -> println("clicked on user $user"); },
                 onNavIconPressed = { println("Pressed nav icon..."); },

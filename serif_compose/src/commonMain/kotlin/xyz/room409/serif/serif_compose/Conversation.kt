@@ -118,6 +118,7 @@ fun ConversationContent(
     val sendReply = { message: String, eventid: String -> runInViewModel { inter -> inter.sendReply(message, eventid) } }
     val sendEdit = { message: String, eventid: String -> runInViewModel { inter -> inter.sendEdit(message, eventid) } }
     val sendReaction = { reaction: String, eventid: String -> runInViewModel { inter -> inter.sendReaction(reaction, eventid) } }
+    val togglePinnedEvent = { event_id: String -> runInViewModel { inter -> inter.togglePinnedEvent(event_id) } }
     val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
     val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
 
@@ -153,6 +154,8 @@ fun ConversationContent(
                     navigateToProfile = navigateToProfile,
                     updateMsgType = change_message_type,
                     sendReaction = sendReaction,
+                    togglePinnedEvent = togglePinnedEvent,
+                    pinned = uiState.pinned,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
@@ -296,6 +299,8 @@ fun Messages(
     navigateToProfile: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
     sendReaction: (String,String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    pinned: List<String>,
     scrollState: LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -350,6 +355,8 @@ fun Messages(
                         onAuthorClick = { name -> navigateToProfile(name) },
                         updateMsgType = updateMsgType,
                         sendReaction = sendReaction,
+                        togglePinnedEvent = togglePinnedEvent,
+                        pinned = pinned,
                         msg = content,
                         ourUserId = ourUserId,
                         isUserMe = content.sender == ourUserId,
@@ -394,6 +401,8 @@ fun Message(
     onAuthorClick: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
     sendReaction: (String,String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    pinned: List<String>,
     msg: SharedUiMessage,
     ourUserId: String,
     isUserMe: Boolean,
@@ -443,6 +452,8 @@ fun Message(
             updateMsgType = updateMsgType,
             ourUserId = ourUserId,
             sendReaction = sendReaction,
+            togglePinnedEvent = togglePinnedEvent,
+            pinned = pinned,
             modifier = Modifier
                 .padding(end = 16.dp)
                 .weight(1f)
@@ -461,13 +472,21 @@ fun AuthorAndTextMessage(
     updateMsgType: (MessageSendType) -> Unit,
     ourUserId: String,
     sendReaction: (String,String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    pinned: List<String>,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
         if (isLastMessageByAuthor) {
             AuthorNameTimestamp(msg)
         }
-        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked, updateMsgType = updateMsgType, isUserMe = isUserMe)
+        ChatItemBubble(msg, isFirstMessageByAuthor,
+                    roomClicked = roomClicked,
+                    authorClicked = authorClicked,
+                    updateMsgType = updateMsgType,
+                    togglePinnedEvent = togglePinnedEvent,
+                    pinned = pinned,
+                    isUserMe = isUserMe)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -583,7 +602,9 @@ fun ChatItemBubble(
     lastMessageByAuthor: Boolean,
     roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    pinned: List<String>,
     isUserMe: Boolean
 ) {
 
@@ -617,6 +638,15 @@ fun ChatItemBubble(
             onClick = { updateMsgType(MstReaction(message)); show_menu = false }
         ) {
             Text("Reaction")
+        }
+        DropdownMenuItem(
+            onClick = { togglePinnedEvent(message.id); show_menu = false }
+        ) {
+            if(pinned.contains(message.id)) {
+                Text("Unpin Message")
+            } else {
+                Text("Pin Message")
+            }
         }
         //TODO(marcus): Implement deletion logic
         DropdownMenuItem(
