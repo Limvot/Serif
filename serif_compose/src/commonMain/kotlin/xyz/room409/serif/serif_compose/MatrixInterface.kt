@@ -60,12 +60,14 @@ class MatrixInterface {
                 messages.value = fake_messages
                 roomPath.value = listOf()
                 roomName.value = "Login"
+                pinned.value = listOf()
             }
             is MatrixChatRoom -> {
                 messages.value = _m.messages
                 roomPath.value = _m.room_ids
                 roomName.value = _m.name
                 ourUserId.value = _m.username
+                pinned.value = _m.pinned
             }
         }
     }
