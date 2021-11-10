@@ -265,7 +265,7 @@ fun toSharedUiMessageList(msession: MatrixSession, username: String, room_id: St
                             //This is a text message, check for any edits of this message
                             if(edits.contains(it.event_id)) {
                                 val possible_edits = edits.get(it.event_id)!!
-                                val edited = possible_edits.lastOrNull { it.sender.contains(username) }
+                                val edited = possible_edits.lastOrNull { possible_edit -> possible_edit.sender == it.sender }
                                 if(edited != null) {
                                     SharedUiMessagePlain(
                                         it.sender, 
