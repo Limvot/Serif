@@ -72,4 +72,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         get() = inter.roomPath
     val roomName: MutableState<String>
         get() = inter.roomName
+    val pinned: MutableState<List<String>>
+        get() = inter.pinned
 }
