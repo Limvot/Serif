@@ -30,7 +30,9 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.paddingFrom
 import androidx.compose.foundation.layout.size
@@ -718,11 +720,34 @@ fun ChatItemBubble(
                 }
             } else {
                 Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-                    ClickableMessage(
-                        message = message,
-                        roomClicked = roomClicked,
-                        authorClicked = authorClicked
-                    )
+                    Column(modifier = Modifier.width(IntrinsicSize.Max)) {
+                        if(message.replied_event != null) {
+                            val parent = message.replied_event!!
+                            val text = if(parent.message.length > 80) {
+                                "${parent.message.take(80)}..."
+                            } else {
+                                parent.message
+                            }
+                            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Divider(modifier = Modifier.fillMaxHeight().width(8.dp).background(Color(0x44444444)))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                ClickableText(text = AnnotatedString(text),
+                                         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                                         modifier = Modifier.padding(8.dp),
+                                         onClick = {}
+                                     )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Divider(modifier = Modifier.height(2.dp))
+                        }
+                        ClickableMessage(
+                            message = message,
+                            roomClicked = roomClicked,
+                            authorClicked = authorClicked
+                        )
+                    }
                 }
             }
         }
