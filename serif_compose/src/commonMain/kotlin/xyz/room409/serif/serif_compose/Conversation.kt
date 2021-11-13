@@ -30,7 +30,9 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.paddingFrom
 import androidx.compose.foundation.layout.size
@@ -53,6 +55,7 @@ import androidx.compose.material.LocalContentColor
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
+import androidx.compose.material.TextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
@@ -84,7 +87,6 @@ import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
-import xyz.room409.serif.serif_shared.Platform
 import java.io.File
 import java.text.DateFormat
 import java.util.*
@@ -118,6 +120,8 @@ fun ConversationContent(
     val sendReply = { message: String, eventid: String -> runInViewModel { inter -> inter.sendReply(message, eventid) } }
     val sendEdit = { message: String, eventid: String -> runInViewModel { inter -> inter.sendEdit(message, eventid) } }
     val sendReaction = { reaction: String, eventid: String -> runInViewModel { inter -> inter.sendReaction(reaction, eventid) } }
+    val togglePinnedEvent = { event_id: String -> runInViewModel { inter -> inter.togglePinnedEvent(event_id) } }
+    val sendRedaction = { eventid: String -> runInViewModel { inter -> inter.sendRedaction(eventid) } }
     val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
     val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
 
@@ -152,8 +156,11 @@ fun ConversationContent(
                     navigateToRoom = navigateToRoom,
                     navigateToProfile = navigateToProfile,
                     updateMsgType = change_message_type,
+                    sendRedaction = sendRedaction,
                     sendReaction = sendReaction,
                     sendMessage = sendMessage,
+                    togglePinnedEvent = togglePinnedEvent,
+                    pinned = uiState.pinned,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
@@ -296,8 +303,11 @@ fun Messages(
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     sendReaction: (String,String) -> Unit,
     sendMessage: (String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    pinned: List<String>,
     scrollState: LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -351,8 +361,11 @@ fun Messages(
                         onRoomClick = navigateToRoom,
                         onAuthorClick = { name -> navigateToProfile(name) },
                         updateMsgType = updateMsgType,
+                        sendRedaction = sendRedaction,
                         sendReaction = sendReaction,
                         sendMessage = sendMessage,
+                        togglePinnedEvent = togglePinnedEvent,
+                        pinned = pinned,
                         msg = content,
                         ourUserId = ourUserId,
                         isUserMe = content.sender == ourUserId,
@@ -396,8 +409,11 @@ fun Message(
     onRoomClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     sendReaction: (String,String) -> Unit,
     sendMessage: (String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    pinned: List<String>,
     msg: SharedUiMessage,
     ourUserId: String,
     isUserMe: Boolean,
@@ -445,9 +461,12 @@ fun Message(
             authorClicked = onAuthorClick,
             isUserMe = isUserMe,
             updateMsgType = updateMsgType,
+            sendRedaction = sendRedaction,
             ourUserId = ourUserId,
             sendReaction = sendReaction,
             sendMessage = sendMessage,
+            togglePinnedEvent = togglePinnedEvent,
+            pinned = pinned,
             modifier = Modifier
                 .padding(end = 16.dp)
                 .weight(1f)
@@ -464,9 +483,12 @@ fun AuthorAndTextMessage(
     authorClicked: (String) -> Unit,
     isUserMe: Boolean,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     ourUserId: String,
     sendReaction: (String,String) -> Unit,
     sendMessage: (String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    pinned: List<String>,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
@@ -480,6 +502,14 @@ fun AuthorAndTextMessage(
                        updateMsgType = updateMsgType,
                        isUserMe = isUserMe,
                        sendMessage = sendMessage)
+        ChatItemBubble(msg, isFirstMessageByAuthor,
+                    roomClicked = roomClicked,
+                    authorClicked = authorClicked,
+                    updateMsgType = updateMsgType,
+                    sendRedaction = sendRedaction,
+                    togglePinnedEvent = togglePinnedEvent,
+                    pinned = pinned,
+                    isUserMe = isUserMe)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -487,7 +517,7 @@ fun AuthorAndTextMessage(
             // Between bubbles
             Spacer(modifier = Modifier.height(4.dp))
         }
-        MessageReactions(msg, modifier, ourUserId, sendReaction)
+        MessageReactions(msg, modifier, ourUserId, sendReaction, sendRedaction)
     }
 }
 
@@ -514,7 +544,7 @@ private fun AuthorNameTimestamp(msg: SharedUiMessage) {
 }
 
 @Composable
-private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId: String, sendReaction: (String,String) -> Unit) {
+private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId: String, sendReaction: (String,String) -> Unit, sendRedaction: (String) -> Unit) {
     val backgroundBubbleColor =
         if (MaterialTheme.colors.isLight) {
             Color(0xFFF5F5F5)
@@ -539,11 +569,17 @@ private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId
                         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                         //modifier = Modifier.padding(8.dp),
                         onClick = {
-                            if(!senders.contains(ourUserId)) {
+                            val sender_ids = senders.map { it.sender }.toSet()
+                            if(!sender_ids.contains(ourUserId)) {
                                 //Send reaction message
                                 sendReaction(reaction, msg.id)
                             } else {
-                                //TODO: Redact the reaction
+                                //Redact the reaction event we previously sent
+                                senders.forEach {
+                                    if(it.sender == ourUserId) {
+                                        sendRedaction(it.event_id)
+                                    }
+                                }
                             }
                         }
                     )
@@ -595,9 +631,13 @@ fun ChatItemBubble(
     lastMessageByAuthor: Boolean,
     roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
     isUserMe: Boolean,
     sendMessage: (String) -> Unit,
+    pinned: List<String>,
+    sendRedaction: (String) -> Unit,
+    isUserMe: Boolean
 ) {
 
     val uriHandler = LocalUriHandler.current
@@ -608,6 +648,11 @@ fun ChatItemBubble(
             Color(0x22222222)
             //MaterialTheme.colors.elevatedSurface(2.dp)
         }
+
+    var show_deletion_dialog by remember { mutableStateOf(false) }
+    if(show_deletion_dialog) {
+        DeletionDialog(message, sendRedaction, { show_deletion_dialog = false })
+    }
 
     var show_menu by remember { mutableStateOf(false) }
     DropdownMenu(
@@ -631,9 +676,21 @@ fun ChatItemBubble(
         ) {
             Text("Reaction")
         }
+        DropdownMenuItem(
+            onClick = { togglePinnedEvent(message.id); show_menu = false }
+        ) {
+            if(pinned.contains(message.id)) {
+                Text("Unpin Message")
+            } else {
+                Text("Pin Message")
+            }
+        }
         //TODO(marcus): Implement deletion logic
         DropdownMenuItem(
-            onClick = { println("Deleting Message"); show_menu = false }
+            onClick = {
+                show_deletion_dialog = true
+                show_menu = false
+            }
         ) {
             Text("Delete")
         }
@@ -699,7 +756,7 @@ fun ChatItemBubble(
                         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                         modifier = Modifier.padding(8.dp),
                         onClick = {
-                            val other_opener = Platform.getOpenUrl()
+                            val other_opener = UiPlatform.getOpenUrl()
                             if (other_opener != null) {
                                 other_opener(href)
                             } else {
@@ -718,6 +775,28 @@ fun ChatItemBubble(
                         )
                     } else {
                         //Normal Text message
+                        Column(modifier = Modifier.width(IntrinsicSize.Max)) {
+                            if(message.replied_event != null) {
+                                val parent = message.replied_event!!
+                                val text = if(parent.message.length > 80) {
+                                    "${parent.message.take(80)}..."
+                                } else {
+                                    parent.message
+                                }
+                                Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Divider(modifier = Modifier.fillMaxHeight().width(8.dp).background(Color(0x44444444)))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    ClickableText(text = AnnotatedString(text),
+                                             style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                                             modifier = Modifier.padding(8.dp),
+                                             onClick = {}
+                                         )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Divider(modifier = Modifier.height(2.dp))
+                        }
                         ClickableMessage(
                             message = message,
                             roomClicked = roomClicked,
@@ -786,7 +865,7 @@ fun ClickableMessage(message: SharedUiMessage, roomClicked: (String) -> Unit, au
                     ?.let { annotation ->
                         when (annotation.tag) {
                             SymbolAnnotationType.LINK.name -> {
-                                val other_opener = Platform.getOpenUrl()
+                                val other_opener = UiPlatform.getOpenUrl()
                                 if (other_opener != null) {
                                     other_opener(annotation.item)
                                 } else {

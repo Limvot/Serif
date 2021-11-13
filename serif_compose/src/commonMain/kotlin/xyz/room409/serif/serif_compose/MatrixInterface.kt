@@ -37,6 +37,7 @@ class MatrixInterface {
     val messages: MutableState<List<SharedUiMessage>> = mutableStateOf(listOf())
     val roomPath: MutableState<List<String>> = mutableStateOf(listOf())
     val roomName: MutableState<String> = mutableStateOf("<>")
+    val pinned: MutableState<List<String>> = mutableStateOf(listOf())
     val lock = ReentrantLock()
     val actions: MutableList<Action> = mutableListOf()
     var already_a_background_thread_running = false
@@ -59,12 +60,14 @@ class MatrixInterface {
                 messages.value = fake_messages
                 roomPath.value = listOf()
                 roomName.value = "Login"
+                pinned.value = listOf()
             }
             is MatrixChatRoom -> {
                 messages.value = _m.messages
                 roomPath.value = _m.room_ids
                 roomName.value = _m.name
                 ourUserId.value = _m.username
+                pinned.value = _m.pinned
             }
         }
     }
@@ -110,6 +113,18 @@ class MatrixInterface {
         return { ->
             val _m = m
             if (_m is MatrixChatRoom) { _m.sendReaction(message, eventid) }
+        }
+    }
+    fun togglePinnedEvent(event_id: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.togglePinnedEvent(event_id) }
+        }
+    }
+    fun sendRedaction(msgid: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.sendRedaction(msgid) }
         }
     }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))

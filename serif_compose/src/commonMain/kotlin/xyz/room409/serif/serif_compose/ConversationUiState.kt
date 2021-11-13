@@ -23,7 +23,8 @@ class ConversationUiState(
     val channelName: String,
     val ourUserId: String,
     val channelMembers: Int,
-    initialMessages: List<SharedUiMessage>
+    initialMessages: List<SharedUiMessage>,
+    val pinned: List<String>
 ) {
     private val _messages: MutableList<SharedUiMessage> =
         mutableStateListOf(*initialMessages.toTypedArray())

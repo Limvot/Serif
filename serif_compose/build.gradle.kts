@@ -32,10 +32,10 @@ kotlin {
             dependencies {
             }
         }
-        //val jvmMain by getting {
-        //    dependencies {
-        //    }
-        //}
+        val jvmMain by getting {
+            dependencies {
+            }
+        }
     }
 }
 android {
