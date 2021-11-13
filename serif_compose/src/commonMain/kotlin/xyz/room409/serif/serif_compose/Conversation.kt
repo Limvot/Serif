@@ -158,6 +158,7 @@ fun ConversationContent(
                     updateMsgType = change_message_type,
                     sendRedaction = sendRedaction,
                     sendReaction = sendReaction,
+                    sendMessage = sendMessage,
                     togglePinnedEvent = togglePinnedEvent,
                     pinned = uiState.pinned,
                     modifier = Modifier.weight(1f),
@@ -304,6 +305,7 @@ fun Messages(
     updateMsgType: (MessageSendType) -> Unit,
     sendRedaction: (String) -> Unit,
     sendReaction: (String,String) -> Unit,
+    sendMessage: (String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     pinned: List<String>,
     scrollState: LazyListState,
@@ -361,6 +363,7 @@ fun Messages(
                         updateMsgType = updateMsgType,
                         sendRedaction = sendRedaction,
                         sendReaction = sendReaction,
+                        sendMessage = sendMessage,
                         togglePinnedEvent = togglePinnedEvent,
                         pinned = pinned,
                         msg = content,
@@ -408,6 +411,7 @@ fun Message(
     updateMsgType: (MessageSendType) -> Unit,
     sendRedaction: (String) -> Unit,
     sendReaction: (String,String) -> Unit,
+    sendMessage: (String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     pinned: List<String>,
     msg: SharedUiMessage,
@@ -460,6 +464,7 @@ fun Message(
             sendRedaction = sendRedaction,
             ourUserId = ourUserId,
             sendReaction = sendReaction,
+            sendMessage = sendMessage,
             togglePinnedEvent = togglePinnedEvent,
             pinned = pinned,
             modifier = Modifier
@@ -481,6 +486,7 @@ fun AuthorAndTextMessage(
     sendRedaction: (String) -> Unit,
     ourUserId: String,
     sendReaction: (String,String) -> Unit,
+    sendMessage: (String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     pinned: List<String>,
     modifier: Modifier = Modifier
@@ -489,14 +495,16 @@ fun AuthorAndTextMessage(
         if (isLastMessageByAuthor) {
             AuthorNameTimestamp(msg)
         }
-        ChatItemBubble(msg, isFirstMessageByAuthor,
-                    roomClicked = roomClicked,
-                    authorClicked = authorClicked,
-                    updateMsgType = updateMsgType,
-                    sendRedaction = sendRedaction,
-                    togglePinnedEvent = togglePinnedEvent,
-                    pinned = pinned,
-                    isUserMe = isUserMe)
+        ChatItemBubble(msg,
+                isFirstMessageByAuthor,
+                roomClicked = roomClicked,
+                authorClicked = authorClicked,
+                updateMsgType = updateMsgType,
+                sendRedaction = sendRedaction,
+                togglePinnedEvent = togglePinnedEvent,
+                pinned = pinned,
+                isUserMe = isUserMe,
+                sendMessage = sendMessage)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -620,6 +628,7 @@ fun ChatItemBubble(
     authorClicked: (String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendMessage: (String) -> Unit,
     pinned: List<String>,
     sendRedaction: (String) -> Unit,
     isUserMe: Boolean
@@ -752,27 +761,36 @@ fun ChatItemBubble(
                 }
             } else {
                 Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-                    Column(modifier = Modifier.width(IntrinsicSize.Max)) {
-                        if(message.replied_event != null) {
-                            val parent = message.replied_event!!
-                            val text = if(parent.message.length > 80) {
-                                "${parent.message.take(80)}..."
-                            } else {
-                                parent.message
+                    if(isTelegramPollMessage(message)) {
+                        //Telegram Poll message
+                        TelegramPollMessage(
+                            message = message,
+                            sendMessage = sendMessage
+                        )
+                    } else {
+                        //Normal Text message
+                        Column(modifier = Modifier.width(IntrinsicSize.Max)) {
+                            if(message.replied_event != null) {
+                                val parent = message.replied_event!!
+                                val text = if(parent.message.length > 80) {
+                                    "${parent.message.take(80)}..."
+                                } else {
+                                    parent.message
+                                }
+                                Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Divider(modifier = Modifier.fillMaxHeight().width(8.dp).background(Color(0x44444444)))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    ClickableText(text = AnnotatedString(text),
+                                             style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                                             modifier = Modifier.padding(8.dp),
+                                             onClick = {}
+                                         )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Divider(modifier = Modifier.height(2.dp))
                             }
-                            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Divider(modifier = Modifier.fillMaxHeight().width(8.dp).background(Color(0x44444444)))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                ClickableText(text = AnnotatedString(text),
-                                         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
-                                         modifier = Modifier.padding(8.dp),
-                                         onClick = {}
-                                     )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Divider(modifier = Modifier.height(2.dp))
                         }
                         ClickableMessage(
                             message = message,
@@ -783,6 +801,42 @@ fun ChatItemBubble(
                 }
             }
         }
+    }
+}
+
+fun isTelegramPollMessage(message: SharedUiMessage): Boolean {
+    var isPoll = true
+    if(message.formatted_message != null) {
+        //Message needs to have a !tg voting code and it has to not be in a reply
+        isPoll = message.formatted_message!!.contains("Vote with <code>!tg vote") && !(message.formatted_message!!.contains("<mx-reply>"))
+    } else {
+        isPoll = false
+    }
+    return isPoll
+}
+
+val tg_code_rgx = Regex("<code>(.*?) &.*</code>")
+val tg_option_rgx = Regex("<li>(.*?)</li>")
+val title_opt_rgx = Regex("""<br/>""")
+val opt_code_rgx = Regex("""</ol>""")
+@Composable
+fun TelegramPollMessage(message: SharedUiMessage, sendMessage: (String) -> Unit) {
+    val msg = message.formatted_message!!
+    val (title, rest) = msg.split(title_opt_rgx)
+    val (opts, code) = rest.split(opt_code_rgx)
+    val options = tg_option_rgx.findAll(opts)!!
+    val code_link = tg_code_rgx.find(code)!!.destructured.toList()[0]
+    Column {
+        Text(title)
+        options.forEachIndexed {
+        i, opt ->
+            val idx = i+1
+            val str = opt.destructured.toList()[0]
+            Button(onClick = { sendMessage("$code_link $idx"); println("Clicked $idx ${str}") } ) {
+                Text("$idx. ${str}")
+            }
+        }
+        Text("\nOr\nVote with $code_link <choice number>")
     }
 }
 
