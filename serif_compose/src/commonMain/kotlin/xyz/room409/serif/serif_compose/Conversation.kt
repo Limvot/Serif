@@ -711,7 +711,7 @@ fun ChatItemBubble(
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Divider(modifier = Modifier.fillMaxHeight().width(8.dp).background(Color(0x44444444)))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                ClickableText(text = AnnotatedString(text)),
+                                ClickableText(text = AnnotatedString(text),
                                          style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                                          modifier = Modifier.padding(8.dp),
                                          onClick = {}
