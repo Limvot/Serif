@@ -702,24 +702,20 @@ fun ChatItemBubble(
                     Column(modifier = Modifier.width(IntrinsicSize.Max)) {
                         if(message.replied_event != null) {
                             val parent = message.replied_event!!
-                            val text = parent.formatted_message?.split("</mx-reply>")?.last() ?: parent.message
+                            val text = if(parent.message.length > 80) {
+                                "${parent.message.take(80)}..."
+                            } else {
+                                parent.message
+                            }
                             Row(modifier = Modifier.height(IntrinsicSize.Min)) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Divider(modifier = Modifier.fillMaxHeight().width(8.dp).background(Color(0x44444444)))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                if(text.length > 80) {
-                                     ClickableText(text = AnnotatedString("${text.take(80)}..."),
+                                ClickableText(text = AnnotatedString(text)),
                                          style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                                          modifier = Modifier.padding(8.dp),
                                          onClick = {}
                                      )
-                                } else {
-                                     ClickableText(text = AnnotatedString(text),
-                                         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
-                                         modifier = Modifier.padding(8.dp),
-                                         onClick = {}
-                                     )
-                                }
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
                             Spacer(modifier = Modifier.height(4.dp))
@@ -741,11 +737,7 @@ fun ChatItemBubble(
 fun ClickableMessage(message: SharedUiMessage, roomClicked: (String) -> Unit, authorClicked: (String) -> Unit) {
     val uriHandler = LocalUriHandler.current
 
-    val styledMessage = if(message.replied_event!=null) {
-        messageFormatter(text = message.formatted_message?.split("</mx-reply>")?.last() ?: message.message)
-    } else {
-        messageFormatter(text = message.message)
-    }
+    val styledMessage = messageFormatter(text = message.message)
 
     ClickableText(
         text = styledMessage,
