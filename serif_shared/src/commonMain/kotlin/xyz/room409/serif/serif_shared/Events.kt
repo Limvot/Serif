@@ -91,7 +91,7 @@ data class PresenceEvent(
 data class PresenceEventContent(
     val avatar_url: String? = null,
     val displayname: String? = null,
-    val last_active_ago: Int? = null,
+    val last_active_ago: Long? = null,
     val presence: PresenceState,
     val currently_active: Boolean? = false,
     val status_msg: String? = null
