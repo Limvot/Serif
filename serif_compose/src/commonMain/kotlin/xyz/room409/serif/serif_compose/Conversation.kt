@@ -153,6 +153,7 @@ fun ConversationContent(
                     navigateToProfile = navigateToProfile,
                     updateMsgType = change_message_type,
                     sendReaction = sendReaction,
+                    sendMessage = sendMessage,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
@@ -296,6 +297,7 @@ fun Messages(
     navigateToProfile: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
     sendReaction: (String,String) -> Unit,
+    sendMessage: (String) -> Unit,
     scrollState: LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -350,6 +352,7 @@ fun Messages(
                         onAuthorClick = { name -> navigateToProfile(name) },
                         updateMsgType = updateMsgType,
                         sendReaction = sendReaction,
+                        sendMessage = sendMessage,
                         msg = content,
                         ourUserId = ourUserId,
                         isUserMe = content.sender == ourUserId,
@@ -394,6 +397,7 @@ fun Message(
     onAuthorClick: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
     sendReaction: (String,String) -> Unit,
+    sendMessage: (String) -> Unit,
     msg: SharedUiMessage,
     ourUserId: String,
     isUserMe: Boolean,
@@ -443,6 +447,7 @@ fun Message(
             updateMsgType = updateMsgType,
             ourUserId = ourUserId,
             sendReaction = sendReaction,
+            sendMessage = sendMessage,
             modifier = Modifier
                 .padding(end = 16.dp)
                 .weight(1f)
@@ -461,13 +466,20 @@ fun AuthorAndTextMessage(
     updateMsgType: (MessageSendType) -> Unit,
     ourUserId: String,
     sendReaction: (String,String) -> Unit,
+    sendMessage: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
         if (isLastMessageByAuthor) {
             AuthorNameTimestamp(msg)
         }
-        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked, updateMsgType = updateMsgType, isUserMe = isUserMe)
+        ChatItemBubble(msg,
+                       isFirstMessageByAuthor,
+                       roomClicked = roomClicked,
+                       authorClicked = authorClicked,
+                       updateMsgType = updateMsgType,
+                       isUserMe = isUserMe,
+                       sendMessage = sendMessage)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -584,7 +596,8 @@ fun ChatItemBubble(
     roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
-    isUserMe: Boolean
+    isUserMe: Boolean,
+    sendMessage: (String) -> Unit,
 ) {
 
     val uriHandler = LocalUriHandler.current
@@ -697,14 +710,59 @@ fun ChatItemBubble(
                 }
             } else {
                 Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-                    ClickableMessage(
-                        message = message,
-                        roomClicked = roomClicked,
-                        authorClicked = authorClicked
-                    )
+                    if(isTelegramPollMessage(message)) {
+                        //Telegram Poll message
+                        TelegramPollMessage(
+                            message = message,
+                            sendMessage = sendMessage
+                        )
+                    } else {
+                        //Normal Text message
+                        ClickableMessage(
+                            message = message,
+                            roomClicked = roomClicked,
+                            authorClicked = authorClicked
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+fun isTelegramPollMessage(message: SharedUiMessage): Boolean {
+    var isPoll = true
+    if(message.formatted_message != null) {
+        //Message needs to have a !tg voting code and it has to not be in a reply
+        isPoll = message.formatted_message!!.contains("Vote with <code>!tg vote") && !(message.formatted_message!!.contains("<mx-reply>"))
+    } else {
+        isPoll = false
+    }
+    return isPoll
+}
+
+val tg_code_rgx = Regex("<code>(.*?) &.*</code>")
+val tg_option_rgx = Regex("<li>(.*?)</li>")
+val title_opt_rgx = Regex("""<br/>""")
+val opt_code_rgx = Regex("""</ol>""")
+@Composable
+fun TelegramPollMessage(message: SharedUiMessage, sendMessage: (String) -> Unit) {
+    val msg = message.formatted_message!!
+    val (title, rest) = msg.split(title_opt_rgx)
+    val (opts, code) = rest.split(opt_code_rgx)
+    val options = tg_option_rgx.findAll(opts)!!
+    val code_link = tg_code_rgx.find(code)!!.destructured.toList()[0]
+    Column {
+        Text(title)
+        options.forEachIndexed {
+        i, opt ->
+            val idx = i+1
+            val str = opt.destructured.toList()[0]
+            Button(onClick = { sendMessage("$code_link $idx"); println("Clicked $idx ${str}") } ) {
+                Text("$idx. ${str}")
+            }
+        }
+        Text("\nOr\nVote with $code_link <choice number>")
     }
 }
 
