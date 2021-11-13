@@ -53,6 +53,7 @@ import androidx.compose.material.LocalContentColor
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
+import androidx.compose.material.TextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
@@ -84,7 +85,6 @@ import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
-import xyz.room409.serif.serif_shared.Platform
 import java.io.File
 import java.text.DateFormat
 import java.util.*
@@ -119,6 +119,7 @@ fun ConversationContent(
     val sendEdit = { message: String, eventid: String -> runInViewModel { inter -> inter.sendEdit(message, eventid) } }
     val sendReaction = { reaction: String, eventid: String -> runInViewModel { inter -> inter.sendReaction(reaction, eventid) } }
     val togglePinnedEvent = { event_id: String -> runInViewModel { inter -> inter.togglePinnedEvent(event_id) } }
+    val sendRedaction = { eventid: String -> runInViewModel { inter -> inter.sendRedaction(eventid) } }
     val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
     val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
 
@@ -153,6 +154,7 @@ fun ConversationContent(
                     navigateToRoom = navigateToRoom,
                     navigateToProfile = navigateToProfile,
                     updateMsgType = change_message_type,
+                    sendRedaction = sendRedaction,
                     sendReaction = sendReaction,
                     togglePinnedEvent = togglePinnedEvent,
                     pinned = uiState.pinned,
@@ -298,6 +300,7 @@ fun Messages(
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     sendReaction: (String,String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     pinned: List<String>,
@@ -354,6 +357,7 @@ fun Messages(
                         onRoomClick = navigateToRoom,
                         onAuthorClick = { name -> navigateToProfile(name) },
                         updateMsgType = updateMsgType,
+                        sendRedaction = sendRedaction,
                         sendReaction = sendReaction,
                         togglePinnedEvent = togglePinnedEvent,
                         pinned = pinned,
@@ -400,6 +404,7 @@ fun Message(
     onRoomClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     sendReaction: (String,String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     pinned: List<String>,
@@ -450,6 +455,7 @@ fun Message(
             authorClicked = onAuthorClick,
             isUserMe = isUserMe,
             updateMsgType = updateMsgType,
+            sendRedaction = sendRedaction,
             ourUserId = ourUserId,
             sendReaction = sendReaction,
             togglePinnedEvent = togglePinnedEvent,
@@ -470,6 +476,7 @@ fun AuthorAndTextMessage(
     authorClicked: (String) -> Unit,
     isUserMe: Boolean,
     updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
     ourUserId: String,
     sendReaction: (String,String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
@@ -484,6 +491,7 @@ fun AuthorAndTextMessage(
                     roomClicked = roomClicked,
                     authorClicked = authorClicked,
                     updateMsgType = updateMsgType,
+                    sendRedaction = sendRedaction,
                     togglePinnedEvent = togglePinnedEvent,
                     pinned = pinned,
                     isUserMe = isUserMe)
@@ -494,7 +502,7 @@ fun AuthorAndTextMessage(
             // Between bubbles
             Spacer(modifier = Modifier.height(4.dp))
         }
-        MessageReactions(msg, modifier, ourUserId, sendReaction)
+        MessageReactions(msg, modifier, ourUserId, sendReaction, sendRedaction)
     }
 }
 
@@ -521,7 +529,7 @@ private fun AuthorNameTimestamp(msg: SharedUiMessage) {
 }
 
 @Composable
-private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId: String, sendReaction: (String,String) -> Unit) {
+private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId: String, sendReaction: (String,String) -> Unit, sendRedaction: (String) -> Unit) {
     val backgroundBubbleColor =
         if (MaterialTheme.colors.isLight) {
             Color(0xFFF5F5F5)
@@ -546,11 +554,17 @@ private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId
                         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                         //modifier = Modifier.padding(8.dp),
                         onClick = {
-                            if(!senders.contains(ourUserId)) {
+                            val sender_ids = senders.map { it.sender }.toSet()
+                            if(!sender_ids.contains(ourUserId)) {
                                 //Send reaction message
                                 sendReaction(reaction, msg.id)
                             } else {
-                                //TODO: Redact the reaction
+                                //Redact the reaction event we previously sent
+                                senders.forEach {
+                                    if(it.sender == ourUserId) {
+                                        sendRedaction(it.event_id)
+                                    }
+                                }
                             }
                         }
                     )
@@ -605,6 +619,7 @@ fun ChatItemBubble(
     togglePinnedEvent: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
     pinned: List<String>,
+    sendRedaction: (String) -> Unit,
     isUserMe: Boolean
 ) {
 
@@ -616,6 +631,11 @@ fun ChatItemBubble(
             Color(0x22222222)
             //MaterialTheme.colors.elevatedSurface(2.dp)
         }
+
+    var show_deletion_dialog by remember { mutableStateOf(false) }
+    if(show_deletion_dialog) {
+        DeletionDialog(message, sendRedaction, { show_deletion_dialog = false })
+    }
 
     var show_menu by remember { mutableStateOf(false) }
     DropdownMenu(
@@ -650,7 +670,10 @@ fun ChatItemBubble(
         }
         //TODO(marcus): Implement deletion logic
         DropdownMenuItem(
-            onClick = { println("Deleting Message"); show_menu = false }
+            onClick = {
+                show_deletion_dialog = true
+                show_menu = false
+            }
         ) {
             Text("Delete")
         }
@@ -716,7 +739,7 @@ fun ChatItemBubble(
                         style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
                         modifier = Modifier.padding(8.dp),
                         onClick = {
-                            val other_opener = Platform.getOpenUrl()
+                            val other_opener = UiPlatform.getOpenUrl()
                             if (other_opener != null) {
                                 other_opener(href)
                             } else {
@@ -758,7 +781,7 @@ fun ClickableMessage(message: SharedUiMessage, roomClicked: (String) -> Unit, au
                     ?.let { annotation ->
                         when (annotation.tag) {
                             SymbolAnnotationType.LINK.name -> {
-                                val other_opener = Platform.getOpenUrl()
+                                val other_opener = UiPlatform.getOpenUrl()
                                 if (other_opener != null) {
                                     other_opener(annotation.item)
                                 } else {

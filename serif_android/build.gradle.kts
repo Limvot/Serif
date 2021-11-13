@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
     //kotlin("android")
     id("org.jetbrains.kotlin.android") //version "1.5.10"
-    id("org.jetbrains.compose") version "1.0.0-alpha1"
+    id("org.jetbrains.compose") version "1.0.0-beta5"
 
     id("kotlin-android-extensions")
     id("kotlin-android")
@@ -54,7 +54,7 @@ dependencies {
 }
 
 android {
-    compileSdk = 30
+    compileSdk = 31
     defaultConfig {
         applicationId = "xyz.room409.serif.serif_android"
         minSdk = 24
