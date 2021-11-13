@@ -496,20 +496,15 @@ fun AuthorAndTextMessage(
             AuthorNameTimestamp(msg)
         }
         ChatItemBubble(msg,
-                       isFirstMessageByAuthor,
-                       roomClicked = roomClicked,
-                       authorClicked = authorClicked,
-                       updateMsgType = updateMsgType,
-                       isUserMe = isUserMe,
-                       sendMessage = sendMessage)
-        ChatItemBubble(msg, isFirstMessageByAuthor,
-                    roomClicked = roomClicked,
-                    authorClicked = authorClicked,
-                    updateMsgType = updateMsgType,
-                    sendRedaction = sendRedaction,
-                    togglePinnedEvent = togglePinnedEvent,
-                    pinned = pinned,
-                    isUserMe = isUserMe)
+                isFirstMessageByAuthor,
+                roomClicked = roomClicked,
+                authorClicked = authorClicked,
+                updateMsgType = updateMsgType,
+                sendRedaction = sendRedaction,
+                togglePinnedEvent = togglePinnedEvent,
+                pinned = pinned,
+                isUserMe = isUserMe,
+                sendMessage = sendMessage)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -633,7 +628,6 @@ fun ChatItemBubble(
     authorClicked: (String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     updateMsgType: (MessageSendType) -> Unit,
-    isUserMe: Boolean,
     sendMessage: (String) -> Unit,
     pinned: List<String>,
     sendRedaction: (String) -> Unit,
@@ -796,6 +790,7 @@ fun ChatItemBubble(
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Divider(modifier = Modifier.height(2.dp))
+                            }
                         }
                         ClickableMessage(
                             message = message,
