@@ -636,10 +636,10 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
                val (displayname, _) = getDiplayNameAndAvatarFilePath(sender, id)
                displayname ?: sender
            })
-        var tmp : String? = null
+        var tmp : String = ""
         val max_name_length = 80
         members.forEachIndexed {idx, member ->
-            if((tmp?.length ?: 0)+member.length+2 > max_name_length) {
+            if(tmp.length+member.length+2 > max_name_length) {
                 val remaining = members.size - idx
                 val rem_str = if(remaining == 1) { "other" } else { "others" }
                 tmp = "$tmp and $remaining $rem_str"
