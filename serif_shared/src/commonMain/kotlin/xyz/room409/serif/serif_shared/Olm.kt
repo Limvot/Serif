@@ -1,10 +1,15 @@
-
 package xyz.room409.serif.serif_shared
 
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.charset.Charset
 import java.lang.invoke.MethodHandle
 import java.security.SecureRandom
+
+import com.fasterxml.jackson.databind.*
+import com.fasterxml.jackson.databind.json.*
+import com.fasterxml.jackson.databind.node.*
+import java.util.TreeMap
 
 import xyz.room409.WasmOlm
 
@@ -15,12 +20,15 @@ data class EncryptedMessage(val ciphertext: String, val mac: String, val ephemer
 class Olm() {
     val random = SecureRandom()
     val memory = ByteBuffer.allocate(65536*4)
+    init {
+        memory.order(ByteOrder.LITTLE_ENDIAN)
+    }
     //(import "env" "__assert_fail" (func $__assert_fail (type 11)))
     //(import "env" "emscripten_resize_heap" (func $emscripten_resize_heap (type 0)))
     //(import "env" "emscripten_memcpy_big" (func $emscripten_memcpy_big (type 1)))
     //(import "env" "memory" (memory (;0;) 4 4))
     //(import "env" "table" (table (;0;) 9 funcref))
-    val olm = WasmOlm(memory, null, null, null, Array(9) { null as? MethodHandle })
+    val olm = WasmOlm(memory, null, null, Array(9) { null as? MethodHandle })
 
     val OLM_ERROR = olm.olm_error()
     val PRIVATE_KEY_LENGTH = olm.olm_pk_private_key_length()
@@ -1025,6 +1033,22 @@ class Olm() {
             }
         }
     }
+    class SortingNodeFactory(): JsonNodeFactory() {
+        override fun objectNode(): ObjectNode {
+            return ObjectNode(this, TreeMap<String, JsonNode>());
+        }
+    }
+    val mapper = JsonMapper.builder().nodeFactory(SortingNodeFactory()).build()
+    fun sign_with(json_in: String, sign: (String) -> String): String {
+        val root = mapper.readTree(json_in) as ObjectNode
+        val left = root.remove("unsigned");
+        val canonical = mapper.writeValueAsString(root)
+        root.put("signed", sign(canonical))
+        if (left != null) {
+            root.put("unsigned", left)
+        }
+        return mapper.writeValueAsString(root)
+    }
 }
 // olm.js errors?
 //  - one of the inbound session methods uses outbound's error check
@@ -1034,6 +1058,14 @@ fun olm_test() {
     println("Testing WasmOlm")
     val olm = Olm()
     println("\tOlm ${olm.version()}")
+
+    val a = olm.Account()
+    a.create()
+    val keys = a.identity_keys()
+    println("Keys: $keys")
+
+    val signed_bad = olm.sign_with(keys) { a.sign(it) }
+    println("Signed bad: $signed_bad")
 }
 
 
