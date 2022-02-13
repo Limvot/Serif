@@ -38,3 +38,10 @@ actual object UiPlatform {
         }
     }
 }
+
+actual object AudioPlayer {
+    actual fun loadAudio(audio_url: String) { }
+    actual fun play() { }
+    actual fun isPlaying(): Boolean { return false }
+    actual fun getActiveUrl(): String { return "" }
+}

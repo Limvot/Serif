@@ -4,7 +4,6 @@ import org.jetbrains.compose.compose
 plugins {
     id("com.android.library")
     kotlin("multiplatform")
-    //id("org.jetbrains.compose") version "1.0.0-alpha1"
     id("org.jetbrains.compose") version "1.0.0-beta5"
 }
 
@@ -34,6 +33,7 @@ kotlin {
         }
         val jvmMain by getting {
             dependencies {
+                implementation("uk.co.caprica:vlcj:4.7.1")
             }
         }
     }

@@ -7,5 +7,12 @@ expect object UiPlatform {
     fun getOpenUrl(): ((url: String) -> Unit)?
 }
 
+expect object AudioPlayer {
+    fun loadAudio(audio_url: String)
+    fun play()
+    fun isPlaying(): Boolean
+    fun getActiveUrl(): String
+}
+
 @Composable expect fun DeletionDialog(message: SharedUiMessage, sendRedaction: (String)->Unit, close_deletion_dialog: () -> Unit): Unit
 

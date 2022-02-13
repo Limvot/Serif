@@ -12,6 +12,8 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberDialogState
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import uk.co.caprica.vlcj.player.base.MediaPlayer;
+import uk.co.caprica.vlcj.player.component.AudioPlayerComponent;
 import kotlin.concurrent.thread
 import xyz.room409.serif.serif_shared.SharedUiMessage
 
@@ -51,27 +53,52 @@ actual object UiPlatform {
 }
 
 @Composable actual fun DeletionDialog(message: SharedUiMessage, sendRedaction: (String)->Unit, close_deletion_dialog: () -> Unit): Unit {
-        var reason by remember { mutableStateOf("") }
-        Dialog(
-            onCloseRequest = { close_deletion_dialog(); reason = "" },
-            state = rememberDialogState(position = WindowPosition(Alignment.Center))
-        ) {
-                Column() {
-                    Text("Deleting: ${message.message}")
-                    Text("Reason:")
-                    TextField(
-                        value = reason,
-                        onValueChange = { reason = it })
-                    Row() {
-                        Button(onClick = { sendRedaction(message.id); close_deletion_dialog(); reason = "" }) {
-                            Text("Confirm")
-                        }
-                        Button(onClick = { close_deletion_dialog(); reason = "" }) {
-                            Text("Cancel")
-                        }
+    var reason by remember { mutableStateOf("") }
+    Dialog(
+        onCloseRequest = { close_deletion_dialog(); reason = "" },
+        state = rememberDialogState(position = WindowPosition(Alignment.Center))
+    ) {
+            Column() {
+                Text("Deleting: ${message.message}")
+                Text("Reason:")
+                TextField(
+                    value = reason,
+                    onValueChange = { reason = it })
+                Row() {
+                    Button(onClick = { sendRedaction(message.id); close_deletion_dialog(); reason = "" }) {
+                        Text("Confirm")
+                    }
+                    Button(onClick = { close_deletion_dialog(); reason = "" }) {
+                        Text("Cancel")
                     }
                 }
             }
+        }
+}
+
+actual object AudioPlayer {
+    var url = ""
+    var vp_audioPlayer = AudioPlayerComponent()
+    actual fun loadAudio(audio_url: String) {
+        if(audio_url != url) {
+            //Load audio data
+            vp_audioPlayer.mediaPlayer().media().prepare(audio_url)
+
+            //Update URL
+            url = audio_url
+        }
     }
-/*
-    */
+    actual fun play() {
+        if(isPlaying()) {
+            vp_audioPlayer.mediaPlayer().controls().pause()
+        } else {
+            vp_audioPlayer.mediaPlayer().controls().play()
+        }
+    }
+    actual fun isPlaying(): Boolean {
+        return vp_audioPlayer.mediaPlayer().status().isPlaying()
+    }
+    actual fun getActiveUrl(): String {
+        return url
+    }
+}

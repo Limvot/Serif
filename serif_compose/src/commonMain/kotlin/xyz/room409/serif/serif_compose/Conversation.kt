@@ -85,6 +85,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
+import xyz.room409.serif.serif_shared.SharedUiAudioMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
 import java.io.File
@@ -758,6 +759,25 @@ fun ChatItemBubble(
                             }
                         }
                     )
+                }
+            } else if (message is SharedUiAudioMessage) {
+                val audio_title = message.message
+                val audio_url = message.url
+                var isPlaying by remember { mutableStateOf((AudioPlayer.isPlaying() && (audio_url == AudioPlayer.getActiveUrl()))) }
+                var msg_button_text = mutableStateOf(if(isPlaying) { "Pause" } else { "Play" })
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    Column(modifier = Modifier.width(IntrinsicSize.Max)) {
+                        Text("${audio_title}\n${audio_url}")
+                        Button(onClick = {
+                            AudioPlayer.loadAudio(audio_url)
+                            AudioPlayer.play()
+                            isPlaying = !isPlaying
+                            msg_button_text.value = if(isPlaying) { "Pause" } else { "Play" }
+                        }) {
+                            Text(msg_button_text.value)
+                        }
+                    }
                 }
             } else {
                 Surface(color = backgroundBubbleColor, shape = bubbleShape) {
