@@ -36,6 +36,7 @@ class MatrixInterface {
     val roomPath: MutableState<List<String>> = mutableStateOf(listOf())
     val roomName: MutableState<String> = mutableStateOf("<>")
     val sessions: MutableState<List<String>> = mutableStateOf(listOf())
+    val pinned: MutableState<List<String>> = mutableStateOf(listOf())
     val lock = ReentrantLock()
     val actions: MutableList<Action> = mutableListOf()
     var already_a_background_thread_running = false
@@ -49,8 +50,9 @@ class MatrixInterface {
             is MatrixLogin -> {
                 messages.value = listOf()
                 roomPath.value = listOf()
-                roomName.value = ""
+                roomName.value = "Login"
                 sessions.value = _m.getSessions()
+                pinned.value = listOf()
             }
             is MatrixChatRoom -> {
                 messages.value = _m.messages
@@ -58,6 +60,7 @@ class MatrixInterface {
                 roomName.value = _m.name
                 ourUserId.value = _m.username
                 sessions.value = listOf()
+                pinned.value = _m.pinned
             }
         }
     }
@@ -101,6 +104,36 @@ class MatrixInterface {
                     refresh()
                 }
             }
+        }
+    }
+    fun sendReply(message: String, eventid: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.sendReply(message, eventid) }
+        }
+    }
+    fun sendEdit(message: String, eventid: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.sendEdit(message, eventid) }
+        }
+    }
+    fun sendReaction(message: String, eventid: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.sendReaction(message, eventid) }
+        }
+    }
+    fun togglePinnedEvent(event_id: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.togglePinnedEvent(event_id) }
+        }
+    }
+    fun sendRedaction(msgid: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.sendRedaction(msgid) }
         }
     }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))

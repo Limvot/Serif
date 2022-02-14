@@ -53,7 +53,9 @@ class FakeViewModel {
     fun sendMessage(message: String) = backgroundInvoke(inter.sendMessage(message))
     fun navigateToRoom(id: String) = backgroundInvoke(inter.navigateToRoom(id))
     fun exitRoom() = backgroundInvoke(inter.exitRoom())
+    fun runInViewModel(f: (MatrixInterface) -> (() -> Unit)) = backgroundInvoke(f(inter))
     fun bumpWindow(id: String?) = backgroundInvoke(inter.bumpWindow(id))
+
     val ourUserId: MutableState<String>
         get() = inter.ourUserId
     val messages: MutableState<List<SharedUiMessage>>
@@ -66,6 +68,8 @@ class FakeViewModel {
         get() = inter.sessions
     val uistate: MutableState<UiScreenState>
         get() = inter.uistate
+    val pinned: MutableState<List<String>>
+        get() = inter.pinned
 }
 
 
@@ -89,10 +93,8 @@ fun main() = application {
             } else {
                 ConversationContent(
                     bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
-                    uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed()),
-                    sendMessage = { message -> fakeViewModel.sendMessage(message); },
-                    navigateToRoom = { room -> fakeViewModel.navigateToRoom(room); },
-                    exitRoom = { fakeViewModel.exitRoom(); },
+                    uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(), fakeViewModel.pinned.value),
+                    runInViewModel = { fakeViewModel.runInViewModel(it) },
                     navigateToProfile = { user -> println("clicked on user $user"); },
                     onNavIconPressed = { println("Pressed nav icon..."); },
                 )

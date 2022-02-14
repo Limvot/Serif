@@ -4,7 +4,8 @@ import org.jetbrains.compose.compose
 plugins {
     id("com.android.library")
     kotlin("multiplatform")
-    id("org.jetbrains.compose") version "1.0.0-alpha1"
+    //id("org.jetbrains.compose") version "1.0.0-alpha1"
+    id("org.jetbrains.compose") version "1.0.0-beta5"
 }
 
 repositories {
@@ -31,10 +32,10 @@ kotlin {
             dependencies {
             }
         }
-        //val jvmMain by getting {
-        //    dependencies {
-        //    }
-        //}
+        val jvmMain by getting {
+            dependencies {
+            }
+        }
     }
 }
 android {

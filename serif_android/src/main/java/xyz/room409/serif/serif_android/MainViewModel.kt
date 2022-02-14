@@ -66,6 +66,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun navigateToRoom(id: String) = backgroundInvoke(inter.navigateToRoom(id))
     fun exitRoom() = backgroundInvoke(inter.exitRoom())
     fun bumpWindow(id: String?) = backgroundInvoke(inter.bumpWindow(id))
+    fun runInViewModel(f: (MatrixInterface) -> (() -> Unit)) = backgroundInvoke(f(inter))
+
     val ourUserId: MutableState<String>
         get() = inter.ourUserId
     val messages: MutableState<List<SharedUiMessage>>
@@ -78,4 +80,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         get() = inter.sessions
     val uistate: MutableState<UiScreenState>
         get() = inter.uistate
+    val pinned: MutableState<List<String>>
+        get() = inter.pinned
 }

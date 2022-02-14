@@ -81,7 +81,7 @@ class MainActivity : AppCompatActivity() {
                     } else if (roomPath.size > 0) {
                         BackPressHandler {
                             scope.launch {
-                                viewModel.exitRoom()
+                                viewModel.runInViewModel { it.exitRoom() }
                             }
                         }
                     }

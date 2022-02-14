@@ -70,12 +70,11 @@ class ConversationFragment : Fragment() {
                     val roomName by activityViewModel.roomName
                     val ourUserId by activityViewModel.ourUserId
                     val messages by activityViewModel.messages
+                    val pinned by activityViewModel.pinned
                     ConversationContent(
                         bumpWindowBase = { idx -> activityViewModel.bumpWindow(idx?.let { idx -> activityViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
-                        uiState = ConversationUiState(roomName, ourUserId, 0, messages.reversed()),
-                        sendMessage = { message -> activityViewModel.sendMessage(message); },
-                        navigateToRoom = { room -> activityViewModel.navigateToRoom(room); },
-                        exitRoom = { activityViewModel.exitRoom(); },
+                        uiState = ConversationUiState(roomName, ourUserId, 0, messages.reversed(), pinned),
+                        runInViewModel = { activityViewModel.runInViewModel(it) },
                         navigateToProfile = { user ->
                             // Click callback
                             val bundle = bundleOf("userId" to user)

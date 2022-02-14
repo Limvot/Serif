@@ -20,13 +20,19 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.paddingFrom
 import androidx.compose.foundation.layout.size
@@ -41,12 +47,15 @@ import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.Button
 import androidx.compose.material.ContentAlpha
 import androidx.compose.material.Divider
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.LocalContentAlpha
 import androidx.compose.material.LocalContentColor
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
+import androidx.compose.material.TextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
@@ -63,6 +72,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 //import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 //import xyz.room409.serif.serif_android.FunctionalityNotAvailablePopup
 //import xyz.room409.serif.serif_android.R
@@ -73,12 +83,19 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
 import java.io.File
 import java.text.DateFormat
 import java.util.*
+
+abstract sealed class MessageSendType
+class MstMessage() : MessageSendType()
+data class MstReply(val msg: SharedUiMessage): MessageSendType()
+data class MstEdit(val msg: SharedUiMessage): MessageSendType()
+data class MstReaction(val msg: SharedUiMessage): MessageSendType()
 
 /**
  * Entry point for a conversation screen.
@@ -92,16 +109,39 @@ import java.util.*
 fun ConversationContent(
     uiState: ConversationUiState,
     bumpWindowBase: (Int?) -> Unit,
-    sendMessage: (String) -> Unit,
-    navigateToRoom: (String) -> Unit,
-    exitRoom: () -> Unit,
+    runInViewModel: ((MatrixInterface) -> (() -> Unit)) -> Unit,
     navigateToProfile: (String) -> Unit,
     modifier: Modifier = Modifier,
     uiInputModifier: Modifier = Modifier,
     onNavIconPressed: () -> Unit = { },
 ) {
+
+    val sendMessage = { message: String -> runInViewModel { inter -> inter.sendMessage(message) } }
+    val sendReply = { message: String, eventid: String -> runInViewModel { inter -> inter.sendReply(message, eventid) } }
+    val sendEdit = { message: String, eventid: String -> runInViewModel { inter -> inter.sendEdit(message, eventid) } }
+    val sendReaction = { reaction: String, eventid: String -> runInViewModel { inter -> inter.sendReaction(reaction, eventid) } }
+    val togglePinnedEvent = { event_id: String -> runInViewModel { inter -> inter.togglePinnedEvent(event_id) } }
+    val sendRedaction = { eventid: String -> runInViewModel { inter -> inter.sendRedaction(eventid) } }
+    val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
+    val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
+
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var msg_type : MutableState<MessageSendType> = remember { mutableStateOf(MstMessage()) }
+
+    // Helper lambda to decide which message type we are trying to send
+    val determine_message_send_callback = { message : String ->
+        when(val _mt : MessageSendType = msg_type.value) {
+            is MstMessage -> { sendMessage(message) }
+            is MstReply -> { sendReply(message, _mt.msg.id) }
+            is MstEdit -> { sendEdit(message, _mt.msg.id) }
+            is MstReaction -> { sendReaction(message, _mt.msg.id) }
+        }
+        msg_type.value = MstMessage()
+    }
+
+    // Helper lambda to let popup change msg_type
+    val change_message_type = { new_type : MessageSendType -> msg_type.value = new_type }
 
     Surface(modifier = modifier) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -115,12 +155,30 @@ fun ConversationContent(
                     bumpWindowBase = bumpWindowBase,
                     navigateToRoom = navigateToRoom,
                     navigateToProfile = navigateToProfile,
+                    updateMsgType = change_message_type,
+                    sendRedaction = sendRedaction,
+                    sendReaction = sendReaction,
+                    sendMessage = sendMessage,
+                    togglePinnedEvent = togglePinnedEvent,
+                    pinned = uiState.pinned,
                     modifier = Modifier.weight(1f),
                     scrollState = scrollState
                 )
+                when(val _mt : MessageSendType = msg_type.value) {
+                    is MstMessage -> {  }
+                    is MstReply -> {
+                        MessageTypeContextBar(text = "Replying to: ${_mt.msg.message}", updateMsgType = change_message_type)
+                    }
+                    is MstEdit -> {
+                        MessageTypeContextBar(text = "Editing: ${_mt.msg.message}", updateMsgType = change_message_type)
+                    }
+                    is MstReaction -> {
+                        MessageTypeContextBar(text = "Reacting to: ${_mt.msg.message}", updateMsgType = change_message_type)
+                    }
+                }
                 UserInput(
                     uiState.channelName,
-                    sendMessage,
+                    determine_message_send_callback,
                     {
                         scope.launch {
                             scrollState.scrollToItem(0)
@@ -151,6 +209,23 @@ fun ConversationContent(
                 println("LOOKING TO BUMP $it - ${scrollState.firstVisibleItemIndex} / ${scrollState.layoutInfo.totalItemsCount}")
                 bumpWindowBase(scrollState.firstVisibleItemIndex)
             }
+    }
+}
+
+@Composable
+fun MessageTypeContextBar(
+    text: String,
+    modifier: Modifier = Modifier,
+    updateMsgType: (MessageSendType) -> Unit,
+) {
+    Divider()
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Button( onClick = { updateMsgType(MstMessage()) }) {
+            Text("Cancel")
+        }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Text(text)
+        }
     }
 }
 
@@ -227,6 +302,12 @@ fun Messages(
     bumpWindowBase: (Int?) -> Unit,
     navigateToRoom: (String) -> Unit,
     navigateToProfile: (String) -> Unit,
+    updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
+    sendReaction: (String,String) -> Unit,
+    sendMessage: (String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    pinned: List<String>,
     scrollState: LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -279,7 +360,14 @@ fun Messages(
                     Message(
                         onRoomClick = navigateToRoom,
                         onAuthorClick = { name -> navigateToProfile(name) },
+                        updateMsgType = updateMsgType,
+                        sendRedaction = sendRedaction,
+                        sendReaction = sendReaction,
+                        sendMessage = sendMessage,
+                        togglePinnedEvent = togglePinnedEvent,
+                        pinned = pinned,
                         msg = content,
+                        ourUserId = ourUserId,
                         isUserMe = content.sender == ourUserId,
                         isFirstMessageByAuthor = isFirstMessageByAuthor,
                         isLastMessageByAuthor = isLastMessageByAuthor
@@ -320,7 +408,14 @@ fun Messages(
 fun Message(
     onRoomClick: (String) -> Unit,
     onAuthorClick: (String) -> Unit,
+    updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
+    sendReaction: (String,String) -> Unit,
+    sendMessage: (String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    pinned: List<String>,
     msg: SharedUiMessage,
+    ourUserId: String,
     isUserMe: Boolean,
     isFirstMessageByAuthor: Boolean,
     isLastMessageByAuthor: Boolean
@@ -364,6 +459,14 @@ fun Message(
             isLastMessageByAuthor = isLastMessageByAuthor,
             roomClicked = onRoomClick,
             authorClicked = onAuthorClick,
+            isUserMe = isUserMe,
+            updateMsgType = updateMsgType,
+            sendRedaction = sendRedaction,
+            ourUserId = ourUserId,
+            sendReaction = sendReaction,
+            sendMessage = sendMessage,
+            togglePinnedEvent = togglePinnedEvent,
+            pinned = pinned,
             modifier = Modifier
                 .padding(end = 16.dp)
                 .weight(1f)
@@ -378,13 +481,30 @@ fun AuthorAndTextMessage(
     isLastMessageByAuthor: Boolean,
     roomClicked: (String) -> Unit,
     authorClicked: (String) -> Unit,
+    isUserMe: Boolean,
+    updateMsgType: (MessageSendType) -> Unit,
+    sendRedaction: (String) -> Unit,
+    ourUserId: String,
+    sendReaction: (String,String) -> Unit,
+    sendMessage: (String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    pinned: List<String>,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
         if (isLastMessageByAuthor) {
             AuthorNameTimestamp(msg)
         }
-        ChatItemBubble(msg, isFirstMessageByAuthor, roomClicked = roomClicked, authorClicked = authorClicked)
+        ChatItemBubble(msg,
+                isFirstMessageByAuthor,
+                roomClicked = roomClicked,
+                authorClicked = authorClicked,
+                updateMsgType = updateMsgType,
+                sendRedaction = sendRedaction,
+                togglePinnedEvent = togglePinnedEvent,
+                pinned = pinned,
+                isUserMe = isUserMe,
+                sendMessage = sendMessage)
         if (isFirstMessageByAuthor) {
             // Last bubble before next author
             Spacer(modifier = Modifier.height(8.dp))
@@ -392,6 +512,7 @@ fun AuthorAndTextMessage(
             // Between bubbles
             Spacer(modifier = Modifier.height(4.dp))
         }
+        MessageReactions(msg, modifier, ourUserId, sendReaction, sendRedaction)
     }
 }
 
@@ -414,6 +535,56 @@ private fun AuthorNameTimestamp(msg: SharedUiMessage) {
                 modifier = Modifier.alignBy(LastBaseline)
             )
         }
+    }
+}
+
+@Composable
+private fun MessageReactions(msg: SharedUiMessage, modifier: Modifier, ourUserId: String, sendReaction: (String,String) -> Unit, sendRedaction: (String) -> Unit) {
+    val backgroundBubbleColor =
+        if (MaterialTheme.colors.isLight) {
+            Color(0xFFF5F5F5)
+        } else {
+            Color(0x22222222)
+        }
+    val bubbleShape = ChatBubbleShape
+    if (msg.reactions.size > 0 ) {
+        Spacer(modifier = Modifier.height(2.dp))
+        //This message has reaction, render them all
+        Row(modifier = Modifier) {
+            for((reaction,senders) in msg.reactions.entries) {
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    val reaction_text =
+                    if(senders.size > 1) {
+                        "${reaction} ${senders.size}"
+                    } else {
+                        "${reaction}"
+                    }
+                    ClickableText(
+                        text = AnnotatedString(reaction_text),
+                        style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                        //modifier = Modifier.padding(8.dp),
+                        onClick = {
+                            val sender_ids = senders.map { it.sender }.toSet()
+                            if(!sender_ids.contains(ourUserId)) {
+                                //Send reaction message
+                                sendReaction(reaction, msg.id)
+                            } else {
+                                //Redact the reaction event we previously sent
+                                senders.forEach {
+                                    if(it.sender == ourUserId) {
+                                        sendRedaction(it.event_id)
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
+                //Space between reaction bubbles
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+        }
+        //Space after row of reactions
+        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
@@ -454,9 +625,16 @@ fun ChatItemBubble(
     message: SharedUiMessage,
     lastMessageByAuthor: Boolean,
     roomClicked: (String) -> Unit,
-    authorClicked: (String) -> Unit
+    authorClicked: (String) -> Unit,
+    togglePinnedEvent: (String) -> Unit,
+    updateMsgType: (MessageSendType) -> Unit,
+    sendMessage: (String) -> Unit,
+    pinned: List<String>,
+    sendRedaction: (String) -> Unit,
+    isUserMe: Boolean
 ) {
 
+    val uriHandler = LocalUriHandler.current
     val backgroundBubbleColor =
         if (MaterialTheme.colors.isLight) {
             Color(0xFFF5F5F5)
@@ -465,29 +643,200 @@ fun ChatItemBubble(
             //MaterialTheme.colors.elevatedSurface(2.dp)
         }
 
-    val bubbleShape = if (lastMessageByAuthor) LastChatBubbleShape else ChatBubbleShape
-    Column {
-        Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-            ClickableMessage(
-                message = message,
-                roomClicked = roomClicked,
-                authorClicked = authorClicked
-            )
+    var show_deletion_dialog by remember { mutableStateOf(false) }
+    if(show_deletion_dialog) {
+        DeletionDialog(message, sendRedaction, { show_deletion_dialog = false })
+    }
+
+    var show_menu by remember { mutableStateOf(false) }
+    DropdownMenu(
+        expanded = show_menu,
+        onDismissRequest = {show_menu = false}
+    ) {
+        DropdownMenuItem(
+            onClick = { updateMsgType(MstReply(message)); show_menu = false }
+        ) {
+            Text("Reply")
         }
-        if (message is SharedUiImgMessage) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Surface(color = backgroundBubbleColor, shape = bubbleShape) {
-                Spacer(modifier = Modifier.width(74.dp).height(74.dp))
-                /*
-                Image(
-                    painter = rememberImagePainter(File(message.url)),
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(160.dp),
-                    contentDescription = message.message
-                )
-                */
+        if(isUserMe) {
+            DropdownMenuItem(
+                onClick = { updateMsgType(MstEdit(message)); show_menu = false }
+            ) {
+                Text("Edit")
             }
         }
+        DropdownMenuItem(
+            onClick = { updateMsgType(MstReaction(message)); show_menu = false }
+        ) {
+            Text("Reaction")
+        }
+        DropdownMenuItem(
+            onClick = { togglePinnedEvent(message.id); show_menu = false }
+        ) {
+            if(pinned.contains(message.id)) {
+                Text("Unpin Message")
+            } else {
+                Text("Pin Message")
+            }
+        }
+        //TODO(marcus): Implement deletion logic
+        DropdownMenuItem(
+            onClick = {
+                show_deletion_dialog = true
+                show_menu = false
+            }
+        ) {
+            Text("Delete")
+        }
+        Divider()
+        //TODO(marcus): Implement show source logic
+        DropdownMenuItem(
+            onClick = {
+                println("Viewing Message Source")
+                show_menu = false
+            }
+        ) {
+            Text("View Source")
+        }
+    }
+
+    /* NOTE(marcus): The API is still being worked on for clickable callbacks,
+     * in particular right click handling which only really makes sense on desktop.
+     * For now we can just use some of the click events provided for combinedClickable,
+     * and we can add right click support later.
+     */
+    val bubbleShape = if (lastMessageByAuthor) LastChatBubbleShape else ChatBubbleShape
+    @OptIn(ExperimentalFoundationApi::class)
+    Box(
+        modifier = Modifier.combinedClickable(
+            onClick = {
+                println("NORMAL Press for message ${message.id}: ${message.message}")
+            },
+            onDoubleClick = {
+                println("DOUBLE Press for message ${message.id}: ${message.message}")
+                show_menu = true
+            },
+            onLongClick = {
+                println("LONG Press for message ${message.id}: ${message.message}")
+                show_menu = true
+            }
+        ).background(Color(0x22222222))
+    )
+    {
+        Column {
+            if (message is SharedUiImgMessage) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    Spacer(modifier = Modifier.width(74.dp).height(74.dp))
+                    /*
+                    Image(
+                        painter = rememberImagePainter(File(message.url)),
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(160.dp),
+                        contentDescription = message.message
+                    )
+                    */
+                }
+            } else if (message is SharedUiLocationMessage) {
+                val styledMessage = messageFormatter(text = message.message)
+                val parts = message.location.split(",")
+                val lat = parts[0].replace("geo:","")
+                val lon = parts[1]
+                val href = "https://maps.google.com/?q=$lat,$lon"
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    ClickableText(
+                        text = styledMessage,
+                        style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                        modifier = Modifier.padding(8.dp),
+                        onClick = {
+                            val other_opener = UiPlatform.getOpenUrl()
+                            if (other_opener != null) {
+                                other_opener(href)
+                            } else {
+                                uriHandler.openUri(href)
+                            }
+                        }
+                    )
+                }
+            } else {
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    if(isTelegramPollMessage(message)) {
+                        //Telegram Poll message
+                        TelegramPollMessage(
+                            message = message,
+                            sendMessage = sendMessage
+                        )
+                    } else {
+                        //Normal Text message
+                        Column(modifier = Modifier.width(IntrinsicSize.Max)) {
+                            if(message.replied_event != null) {
+                                val parent = message.replied_event!!
+                                val text = if(parent.message.length > 80) {
+                                    "${parent.message.take(80)}..."
+                                } else {
+                                    parent.message
+                                }
+                                Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Divider(modifier = Modifier.fillMaxHeight().width(8.dp).background(Color(0x44444444)))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    ClickableText(text = AnnotatedString(text),
+                                             style = MaterialTheme.typography.body1.copy(color = LocalContentColor.current),
+                                             modifier = Modifier.padding(8.dp),
+                                             onClick = {}
+                                         )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Divider(modifier = Modifier.height(2.dp))
+                            }
+                        }
+                        ClickableMessage(
+                            message = message,
+                            roomClicked = roomClicked,
+                            authorClicked = authorClicked
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun isTelegramPollMessage(message: SharedUiMessage): Boolean {
+    var isPoll = true
+    if(message.formatted_message != null) {
+        //Message needs to have a !tg voting code and it has to not be in a reply
+        isPoll = message.formatted_message!!.contains("Vote with <code>!tg vote") && !(message.formatted_message!!.contains("<mx-reply>"))
+    } else {
+        isPoll = false
+    }
+    return isPoll
+}
+
+val tg_code_rgx = Regex("<code>(.*?) &.*</code>")
+val tg_option_rgx = Regex("<li>(.*?)</li>")
+val title_opt_rgx = Regex("""<br/>""")
+val opt_code_rgx = Regex("""</ol>""")
+@Composable
+fun TelegramPollMessage(message: SharedUiMessage, sendMessage: (String) -> Unit) {
+    val msg = message.formatted_message!!
+    val (title, rest) = msg.split(title_opt_rgx)
+    val (opts, code) = rest.split(opt_code_rgx)
+    val options = tg_option_rgx.findAll(opts)!!
+    val code_link = tg_code_rgx.find(code)!!.destructured.toList()[0]
+    Column {
+        Text(title)
+        options.forEachIndexed {
+        i, opt ->
+            val idx = i+1
+            val str = opt.destructured.toList()[0]
+            Button(onClick = { sendMessage("$code_link $idx"); println("Clicked $idx ${str}") } ) {
+                Text("$idx. ${str}")
+            }
+        }
+        Text("\nOr\nVote with $code_link <choice number>")
     }
 }
 
@@ -510,7 +859,14 @@ fun ClickableMessage(message: SharedUiMessage, roomClicked: (String) -> Unit, au
                     .firstOrNull()
                     ?.let { annotation ->
                         when (annotation.tag) {
-                            SymbolAnnotationType.LINK.name -> uriHandler.openUri(annotation.item)
+                            SymbolAnnotationType.LINK.name -> {
+                                val other_opener = UiPlatform.getOpenUrl()
+                                if (other_opener != null) {
+                                    other_opener(annotation.item)
+                                } else {
+                                    uriHandler.openUri(annotation.item)
+                                }
+                            }
                             SymbolAnnotationType.PERSON.name -> authorClicked(annotation.item)
                             else -> Unit
                         }
