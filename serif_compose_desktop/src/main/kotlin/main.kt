@@ -48,6 +48,11 @@ class FakeViewModel {
             f()
         }
     }
+    fun login(server: String, username: String, password: String) = backgroundInvoke(inter.login(server, username, password))
+    fun login(session: String) = backgroundInvoke(inter.login(session))
+    fun sendMessage(message: String) = backgroundInvoke(inter.sendMessage(message))
+    fun navigateToRoom(id: String) = backgroundInvoke(inter.navigateToRoom(id))
+    fun exitRoom() = backgroundInvoke(inter.exitRoom())
     fun runInViewModel(f: (MatrixInterface) -> (() -> Unit)) = backgroundInvoke(f(inter))
     fun bumpWindow(id: String?) = backgroundInvoke(inter.bumpWindow(id))
 
@@ -59,6 +64,10 @@ class FakeViewModel {
         get() = inter.roomPath
     val roomName: MutableState<String>
         get() = inter.roomName
+    val sessions: MutableState<List<String>>
+        get() = inter.sessions
+    val uistate: MutableState<UiScreenState>
+        get() = inter.uistate
     val pinned: MutableState<List<String>>
         get() = inter.pinned
 }
@@ -74,13 +83,22 @@ fun main() = application {
         val fakeViewModel = remember { FakeViewModel() }
         val scrollState = rememberLazyListState()
         JetchatTheme(false) {
-            ConversationContent(
-                bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
-                uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(), fakeViewModel.pinned.value),
-                runInViewModel = { fakeViewModel.runInViewModel(it) },
-                navigateToProfile = { user -> println("clicked on user $user"); },
-                onNavIconPressed = { println("Pressed nav icon..."); },
-            )
+            if(fakeViewModel.uistate.value is UiLogin) {
+                LoginContent(
+                    loginMethod = { serv, user, pass -> fakeViewModel.login(serv, user, pass)},
+                    sessionLogin = { session -> fakeViewModel.login(session) },
+                    sessions = fakeViewModel.sessions.value,
+                    loginMessage = ((fakeViewModel.uistate.value) as UiLogin).message
+                )
+            } else {
+                ConversationContent(
+                    bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
+                    uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(), fakeViewModel.pinned.value),
+                    runInViewModel = { fakeViewModel.runInViewModel(it) },
+                    navigateToProfile = { user -> println("clicked on user $user"); },
+                    onNavIconPressed = { println("Pressed nav icon..."); },
+                )
+            }
         }
     }
 }
