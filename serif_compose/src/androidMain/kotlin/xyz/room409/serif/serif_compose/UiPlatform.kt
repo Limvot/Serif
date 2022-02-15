@@ -38,3 +38,8 @@ actual object UiPlatform {
         }
     }
 }
+
+actual fun ShowSaveDialog(filename: String, save_location_callback: (String)->Unit): Unit {
+    //TODO: implement this with native android file chooser
+    return
+}
