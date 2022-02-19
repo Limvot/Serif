@@ -31,35 +31,27 @@ import java.util.concurrent.locks.ReentrantLock
  */
 
 class MatrixInterface {
-    private var username: String? = null
-    private var password: String? = null
     val ourUserId: MutableState<String> = mutableStateOf("")
     val messages: MutableState<List<SharedUiMessage>> = mutableStateOf(listOf())
     val roomPath: MutableState<List<String>> = mutableStateOf(listOf())
     val roomName: MutableState<String> = mutableStateOf("<>")
+    val sessions: MutableState<List<String>> = mutableStateOf(listOf())
     val pinned: MutableState<List<String>> = mutableStateOf(listOf())
     val lock = ReentrantLock()
     val actions: MutableList<Action> = mutableListOf()
     var already_a_background_thread_running = false
     var m: MatrixState = MatrixLogin()
+    var uistate: MutableState<UiScreenState> = mutableStateOf(UiLogin())
     init {
         refresh()
     }
     fun refresh() {
         when (val _m = m) {
             is MatrixLogin -> {
-                val milli = Date().getTime()
-                var fake_messages: List<SharedUiMessage> = listOf(SharedUiMessagePlain("System Status", "System Status", null, _m.login_message, _m.login_message,"a", milli, mapOf(),null))
-                fake_messages += _m.getSessions().map { SharedUiRoom("System Status", "System Status", null, "Session: $it", "Session: $it",it,milli,mapOf(),null, 0, 0, null, listOf()) }
-                if (username != null) {
-                    fake_messages += listOf(SharedUiMessagePlain("You", "You", null, username!!, username!!,"b",milli,mapOf(),null))
-                }
-                if (password != null) {
-                    fake_messages += listOf(SharedUiMessagePlain("You", "You", null, password!!, password!!,"c",milli,mapOf(),null))
-                }
-                messages.value = fake_messages
+                messages.value = listOf()
                 roomPath.value = listOf()
                 roomName.value = "Login"
+                sessions.value = _m.getSessions()
                 pinned.value = listOf()
             }
             is MatrixChatRoom -> {
@@ -67,6 +59,7 @@ class MatrixInterface {
                 roomPath.value = _m.room_ids
                 roomName.value = _m.name
                 ourUserId.value = _m.username
+                sessions.value = listOf()
                 pinned.value = _m.pinned
             }
         }
@@ -80,18 +73,34 @@ class MatrixInterface {
                 is MatrixChatRoom -> {
                     _m.sendMessage(message)
                 }
+            }
+        }
+    }
+    fun login(session: String): () -> Unit {
+        return { ->
+            when(val _m = m) {
                 is MatrixLogin -> {
-                    if (username == null) {
-                        username = message
-                    } else if (password == null) {
-                        password = message
-                        m = _m.login(username!!, password!!) {
-                            m = m.refresh()
-                            refresh()
-                        }
-                        username = null
-                        password = null
+                    m = _m.loginFromSession(session) {
+                        m = m.refresh()
+                        refresh()
                     }
+                    if(m !is MatrixLogin) { uistate.value = UiChatRoom() }
+                    else if(m is MatrixLogin) { uistate.value = UiLogin((m as MatrixLogin).login_message) }
+                    refresh()
+                }
+            }
+        }
+    }
+    fun login(server: String, username: String, password: String): () -> Unit {
+        return { ->
+            when(val _m = m) {
+                is MatrixLogin -> {
+                    m = _m.login(username, password) {
+                        m = m.refresh()
+                        refresh()
+                    }
+                    if(m !is MatrixLogin) { uistate.value = UiChatRoom() }
+                    else if(m is MatrixLogin) { uistate.value = UiLogin((m as MatrixLogin).login_message) }
                     refresh()
                 }
             }
@@ -125,6 +134,12 @@ class MatrixInterface {
         return { ->
             val _m = m
             if (_m is MatrixChatRoom) { _m.sendRedaction(msgid) }
+        }
+    }
+    fun saveMediaToPath(path: String, url: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.saveMediaToPath(path,url) }
         }
     }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))
@@ -184,6 +199,7 @@ class MatrixInterface {
                     is MatrixChatRoom -> {
                         m = _m.exitRoom()
                         refresh()
+                        if(m is MatrixLogin) { uistate.value = UiLogin() }
                     }
                     else -> {
                         status_message("Tried to exit on not a chat room")
@@ -195,15 +211,6 @@ class MatrixInterface {
                     is MatrixChatRoom -> {
                         m = _m.getRoom(a.id)
                         refresh()
-                    }
-                    is MatrixLogin -> {
-                        if (_m.getSessions().contains(a.id)) {
-                            m = _m.loginFromSession(a.id) {
-                                m = m.refresh()
-                                refresh()
-                            }
-                            refresh()
-                        }
                     }
                     else -> {
                         status_message("Tried to navigate on not a chat room")
@@ -219,3 +226,13 @@ class MatrixInterface {
         data class NavigateToRoom(val id: String): Action()
     }
 }
+
+sealed class UiScreenState()
+class UiLogin(val message: String = ""): UiScreenState()
+class UiChatRoom(): UiScreenState()
+class UiRoomList(): UiScreenState()
+class UiConfig(): UiScreenState()
+class UiRoomInfo(): UiScreenState()
+class UiUserInfo(): UiScreenState()
+class UiRoomCreate(): UiScreenState()
+class UiInvitation(): UiScreenState()

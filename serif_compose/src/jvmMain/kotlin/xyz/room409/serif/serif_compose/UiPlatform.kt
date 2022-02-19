@@ -14,6 +14,8 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import uk.co.caprica.vlcj.player.base.MediaPlayer;
 import uk.co.caprica.vlcj.player.component.AudioPlayerComponent;
+import java.io.File
+import javax.swing.*
 import kotlin.concurrent.thread
 import xyz.room409.serif.serif_shared.SharedUiMessage
 
@@ -100,5 +102,15 @@ actual object AudioPlayer {
     }
     actual fun getActiveUrl(): String {
         return url
+    }
+}
+
+actual fun ShowSaveDialog(filename: String, save_location_callback: (String)->Unit): Unit {
+    val chooser = JFileChooser()
+    chooser.setSelectedFile(File(filename))
+    val ret = chooser.showSaveDialog(null)
+    if(ret == JFileChooser.APPROVE_OPTION) {
+        val user_file_path = chooser.getSelectedFile().getAbsolutePath()
+        save_location_callback(user_file_path)
     }
 }
