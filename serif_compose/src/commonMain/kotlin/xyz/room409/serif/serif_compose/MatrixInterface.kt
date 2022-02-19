@@ -136,6 +136,12 @@ class MatrixInterface {
             if (_m is MatrixChatRoom) { _m.sendRedaction(msgid) }
         }
     }
+    fun saveMediaToPath(path: String, url: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.saveMediaToPath(path,url) }
+        }
+    }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))
     fun exitRoom() = pushDo(Action.ExitRoom())
     fun bumpWindow(id: String?) = pushDo(Action.Refresh(50, id, 50))
