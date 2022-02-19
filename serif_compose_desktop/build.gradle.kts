@@ -17,6 +17,7 @@ dependencies {
     implementation(project(":serif_shared"))
     implementation(project(":serif_compose"))
     implementation(compose.desktop.currentOs)
+    implementation(compose.desktop.linux_arm64)
 }
 
 compose.desktop {
