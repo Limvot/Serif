@@ -11,9 +11,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberDialogState
 import java.io.BufferedReader
+import java.io.BufferedWriter
 import java.io.InputStreamReader
-import uk.co.caprica.vlcj.player.base.MediaPlayer;
-import uk.co.caprica.vlcj.player.component.AudioPlayerComponent;
+import java.io.OutputStreamWriter
 import java.io.File
 import javax.swing.*
 import kotlin.concurrent.thread
@@ -80,28 +80,93 @@ actual object UiPlatform {
 
 actual object AudioPlayer {
     var url = ""
-    var vp_audioPlayer = AudioPlayerComponent()
+    var audioPlayer_proc : Process? = null;
     actual fun loadAudio(audio_url: String) {
         if(audio_url != url) {
-            //Load audio data
-            vp_audioPlayer.mediaPlayer().media().prepare(audio_url)
+            // reload vlc process
+            restart_vlc(audio_url);
+            send_command("pause")
 
             //Update URL
             url = audio_url
         }
     }
     actual fun play() {
-        if(isPlaying()) {
-            vp_audioPlayer.mediaPlayer().controls().pause()
-        } else {
-            vp_audioPlayer.mediaPlayer().controls().play()
-        }
+        send_command("pause")
     }
     actual fun isPlaying(): Boolean {
-        return vp_audioPlayer.mediaPlayer().status().isPlaying()
+        if(audioPlayer_proc != null) {
+            val writer = BufferedWriter(OutputStreamWriter(audioPlayer_proc?.getOutputStream()))
+            val reader = BufferedReader(InputStreamReader(audioPlayer_proc?.getInputStream()))
+            /* NOTE: We can't just call readline on reader because vlc is not
+             * guaranteed to print out a new line in stdout while it is waiting
+             * for user input after the '>'. I wasn't able to get the input working
+             * using a cleaner method so for now we loop to clear out anything in
+             * the buffer from previous commands/startup, send the status command,
+             * and then read in the output.
+             *
+             * A better (future) solution would probably be to have vlc open up a local socket
+             * and talk to it over that.
+             */
+            //Toss out old stdout data
+            while(reader.ready()) {
+                if(reader.read().toChar() == '>')  break
+            }
+
+            //Send status command and wait for it to process
+            writer.write("status\n")
+            writer.flush()
+            Thread.sleep(5)
+
+            //read in status output
+            var status = ""
+            while(reader.ready()) {
+                val c = reader.read().toChar()
+                if(c == '>')  break
+                status = "$status$c"
+            }
+            val parts = status.trim().split('\n')
+            if(parts.size != 3) {
+                println("Didn't get back 3 status elements!")
+                println("STATUS: $status")
+                for(p in parts) {
+                    println("Part: $p")
+                }
+                println("----")
+            } else {
+                return (parts[2].trim() == "( state playing )")
+            }
+        }
+        return false;
     }
     actual fun getActiveUrl(): String {
         return url
+    }
+    fun restart_vlc(audio_url: String) {
+        if(audioPlayer_proc != null) {
+            send_command("stop");
+            send_command("quit");
+            audioPlayer_proc?.destroy()
+            audioPlayer_proc = null
+        }
+        try {
+                //println("Trying to open $audio_url with exec 'vlc -I rc $audio_url'")
+                val pb = ProcessBuilder("vlc","-I","rc","--rc-fake-tty",audio_url)
+                pb.redirectErrorStream(true)
+                audioPlayer_proc = pb.start()
+                //println("running vlc")
+            } catch (e1: Exception) {
+                println("Couldn't get ProcessBuilder('vlc -I rc --rc-fake-tty $audio_url') problem was $e1")
+            }
+    }
+    fun send_command(cmd: String) {
+        if(audioPlayer_proc != null) {
+            // Send vlc command
+            val writer = BufferedWriter(OutputStreamWriter(audioPlayer_proc?.getOutputStream()))
+            //println("Sending command '$cmd' to vlc process")
+            writer.write("$cmd\n")
+            writer.flush()
+        }
     }
 }
 

@@ -33,7 +33,6 @@ kotlin {
         }
         val jvmMain by getting {
             dependencies {
-                implementation("uk.co.caprica:vlcj:4.7.1")
             }
         }
     }
