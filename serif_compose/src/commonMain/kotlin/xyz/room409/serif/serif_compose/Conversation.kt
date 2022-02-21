@@ -126,7 +126,7 @@ fun ConversationContent(
     val sendRedaction = { eventid: String -> runInViewModel { inter -> inter.sendRedaction(eventid) } }
     val saveMediaToPath = { path: String, url: String -> runInViewModel { inter -> inter.saveMediaToPath(path, url) } }
     val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
-    val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
+    val exitRoom = { -> AudioPlayer.stop(); runInViewModel { inter -> inter.exitRoom() } }
 
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()

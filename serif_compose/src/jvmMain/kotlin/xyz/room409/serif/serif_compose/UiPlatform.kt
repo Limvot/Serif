@@ -94,6 +94,9 @@ actual object AudioPlayer {
     actual fun play() {
         send_command("pause")
     }
+    actual fun stop() {
+        send_command("stop")
+    }
     actual fun isPlaying(): Boolean {
         if(audioPlayer_proc != null) {
             val writer = BufferedWriter(OutputStreamWriter(audioPlayer_proc?.getOutputStream()))

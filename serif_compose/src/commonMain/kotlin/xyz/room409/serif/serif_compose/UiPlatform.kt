@@ -10,6 +10,7 @@ expect object UiPlatform {
 expect object AudioPlayer {
     fun loadAudio(audio_url: String)
     fun play()
+    fun stop()
     fun isPlaying(): Boolean
     fun getActiveUrl(): String
 }
