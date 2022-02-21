@@ -24,7 +24,9 @@ class ConversationUiState(
     val ourUserId: String,
     val channelMembers: Int,
     initialMessages: List<SharedUiMessage>,
-    val pinned: List<String>
+    val pinned: List<String>,
+    val members: List<String> = listOf(),
+    val roomTopic: String = ""
 ) {
     private val _messages: MutableList<SharedUiMessage> =
         mutableStateListOf(*initialMessages.toTypedArray())

@@ -124,7 +124,7 @@ fun ConversationContent(
     val sendRedaction = { eventid: String -> runInViewModel { inter -> inter.sendRedaction(eventid) } }
     val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
     val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
-    val onRoomSettingsPressed = { -> }
+    val onRoomSettingsPressed = { -> runInViewModel { inter -> inter.navigateToRoomInfo() } }
 
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -288,7 +288,12 @@ fun ChannelNameBar(
                     DropdownMenuItem(
                         onClick = { show_menu = false }
                     ) {
-                        Text("Invite")
+                        Text("Invite (Unimplemented)")
+                    }
+                    DropdownMenuItem(
+                        onClick = { show_menu = false }
+                    ) {
+                        Text("Leave Room (Unimplemented)")
                     }
                 }
                 /*

@@ -35,8 +35,10 @@ class MatrixInterface {
     val messages: MutableState<List<SharedUiMessage>> = mutableStateOf(listOf())
     val roomPath: MutableState<List<String>> = mutableStateOf(listOf())
     val roomName: MutableState<String> = mutableStateOf("<>")
+    val roomTopic: MutableState<String> = mutableStateOf("")
     val sessions: MutableState<List<String>> = mutableStateOf(listOf())
     val pinned: MutableState<List<String>> = mutableStateOf(listOf())
+    val members: MutableState<List<String>> = mutableStateOf(listOf())
     val lock = ReentrantLock()
     val actions: MutableList<Action> = mutableListOf()
     var already_a_background_thread_running = false
@@ -51,16 +53,20 @@ class MatrixInterface {
                 messages.value = listOf()
                 roomPath.value = listOf()
                 roomName.value = "Login"
+                roomTopic.value = ""
                 sessions.value = _m.getSessions()
                 pinned.value = listOf()
+                members.value = listOf()
             }
             is MatrixChatRoom -> {
                 messages.value = _m.messages
                 roomPath.value = _m.room_ids
                 roomName.value = _m.name
+                roomTopic.value = _m.roomTopic
                 ourUserId.value = _m.username
                 sessions.value = listOf()
                 pinned.value = _m.pinned
+                members.value = _m.members
             }
         }
     }
@@ -136,7 +142,20 @@ class MatrixInterface {
             if (_m is MatrixChatRoom) { _m.sendRedaction(msgid) }
         }
     }
+    fun setRoomTopic(topic: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.setRoomTopic(topic) }
+        }
+    }
+    fun setRoomName(name: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.setRoomName(name) }
+        }
+    }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))
+    fun navigateToRoomInfo() = pushDo(Action.NavigateToRoomInfo())
     fun exitRoom() = pushDo(Action.ExitRoom())
     fun bumpWindow(id: String?) = pushDo(Action.Refresh(50, id, 50))
 
@@ -146,6 +165,7 @@ class MatrixInterface {
         try {
             when (_a) {
                 is Action.NavigateToRoom -> { println("clearing actiosn b/c NavigateToRoom"); actions.clear(); }
+                is Action.NavigateToRoomInfo -> { println("clearing actions b/c NavigateToRoomInfo"); actions.clear(); }
                 is Action.ExitRoom -> { println("clearing actiosn b/c ExitRoom"); actions.clear(); }
                 is Action.Refresh -> {
                     if (actions.size != 0) {
@@ -191,9 +211,13 @@ class MatrixInterface {
             is Action.ExitRoom -> {
                 when (val _m = m) {
                     is MatrixChatRoom -> {
-                        m = _m.exitRoom()
-                        refresh()
-                        if(m is MatrixLogin) { uistate.value = UiLogin() }
+                        if(uistate.value is UiRoomInfo) {
+                            uistate.value = UiChatRoom()
+                        } else {
+                            m = _m.exitRoom()
+                            refresh()
+                            if(m is MatrixLogin) { uistate.value = UiLogin() }
+                        }
                     }
                     else -> {
                         status_message("Tried to exit on not a chat room")
@@ -211,6 +235,20 @@ class MatrixInterface {
                     }
                 }
             }
+            is Action.NavigateToRoomInfo -> {
+                when (val _m = m) {
+                    is MatrixChatRoom -> {
+                        if(_m.room_type == "m.space") {
+                            status_message("Tried to navigate to room info when not in a room")
+                        } else {
+                            uistate.value = UiRoomInfo()
+                        }
+                    }
+                    else -> {
+                        status_message("Tried to navigate on not a chat room")
+                    }
+                }
+            }
         }
     }
 
@@ -218,6 +256,7 @@ class MatrixInterface {
         data class Refresh(val window_back: Int, val base_id: String?, val window_forward: Int): Action()
         data class ExitRoom(val v:Int = 1): Action()
         data class NavigateToRoom(val id: String): Action()
+        data class NavigateToRoomInfo(val unused:Int = 1): Action()
     }
 }
 
