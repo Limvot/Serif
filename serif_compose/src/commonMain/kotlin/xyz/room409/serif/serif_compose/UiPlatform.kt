@@ -11,7 +11,7 @@ expect object AudioPlayer {
     fun loadAudio(audio_url: String)
     fun play()
     fun stop()
-    fun isPlaying(): Boolean
+    fun isPlaying(cb: (Boolean) -> Unit)
     fun getActiveUrl(): String
 }
 

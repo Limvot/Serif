@@ -773,8 +773,13 @@ fun ChatItemBubble(
             } else if (message is SharedUiAudioMessage) {
                 val audio_title = message.message
                 val audio_url = message.url
-                var isPlaying by remember { mutableStateOf((AudioPlayer.isPlaying() && (audio_url == AudioPlayer.getActiveUrl()))) }
-                var msg_button_text = mutableStateOf(if(isPlaying) { "Pause" } else { "Play" })
+                var isPlaying by remember { mutableStateOf(false); }
+                if(audio_url == AudioPlayer.getActiveUrl()) {
+                    AudioPlayer.isPlaying({ playing : Boolean -> isPlaying = playing; })
+                } else {
+                    isPlaying = false;
+                }
+                var msg_button_text = if(isPlaying) { "Pause" } else { "Play" }
                 Spacer(modifier = Modifier.height(4.dp))
                 Surface(color = backgroundBubbleColor, shape = bubbleShape) {
                     Column(modifier = Modifier.width(IntrinsicSize.Max)) {
@@ -783,9 +788,8 @@ fun ChatItemBubble(
                             AudioPlayer.loadAudio(audio_url)
                             AudioPlayer.play()
                             isPlaying = !isPlaying
-                            msg_button_text.value = if(isPlaying) { "Pause" } else { "Play" }
                         }) {
-                            Text(msg_button_text.value)
+                            Text(msg_button_text)
                         }
                     }
                 }
