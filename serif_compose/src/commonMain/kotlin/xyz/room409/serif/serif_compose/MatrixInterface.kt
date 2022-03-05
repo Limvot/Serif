@@ -157,6 +157,12 @@ class MatrixInterface {
             if (_m is MatrixChatRoom) { _m.setRoomName(name) }
         }
     }
+    fun saveMediaToPath(path: String, url: String): () -> Unit {
+        return { ->
+            val _m = m
+            if (_m is MatrixChatRoom) { _m.saveMediaToPath(path,url) }
+        }
+    }
     fun navigateToRoom(id: String) = pushDo(Action.NavigateToRoom(id))
     fun navigateToRoomInfo() = pushDo(Action.NavigateToRoomInfo())
     fun exitRoom() = pushDo(Action.ExitRoom())

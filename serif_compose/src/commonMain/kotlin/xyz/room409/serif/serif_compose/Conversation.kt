@@ -85,6 +85,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
+import xyz.room409.serif.serif_shared.SharedUiFileMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
 import java.io.File
@@ -122,6 +123,7 @@ fun ConversationContent(
     val sendReaction = { reaction: String, eventid: String -> runInViewModel { inter -> inter.sendReaction(reaction, eventid) } }
     val togglePinnedEvent = { event_id: String -> runInViewModel { inter -> inter.togglePinnedEvent(event_id) } }
     val sendRedaction = { eventid: String -> runInViewModel { inter -> inter.sendRedaction(eventid) } }
+    val saveMediaToPath = { path: String, url: String -> runInViewModel { inter -> inter.saveMediaToPath(path, url) } }
     val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
     val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
     val onRoomSettingsPressed = { -> runInViewModel { inter -> inter.navigateToRoomInfo() } }
@@ -159,6 +161,7 @@ fun ConversationContent(
                     updateMsgType = change_message_type,
                     sendRedaction = sendRedaction,
                     sendReaction = sendReaction,
+                    saveMediaToPath = saveMediaToPath,
                     sendMessage = sendMessage,
                     togglePinnedEvent = togglePinnedEvent,
                     pinned = uiState.pinned,
@@ -333,6 +336,7 @@ fun Messages(
     updateMsgType: (MessageSendType) -> Unit,
     sendRedaction: (String) -> Unit,
     sendReaction: (String,String) -> Unit,
+    saveMediaToPath: (String,String) -> Unit,
     sendMessage: (String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     pinned: List<String>,
@@ -391,6 +395,7 @@ fun Messages(
                         updateMsgType = updateMsgType,
                         sendRedaction = sendRedaction,
                         sendReaction = sendReaction,
+                        saveMediaToPath = saveMediaToPath,
                         sendMessage = sendMessage,
                         togglePinnedEvent = togglePinnedEvent,
                         pinned = pinned,
@@ -439,6 +444,7 @@ fun Message(
     updateMsgType: (MessageSendType) -> Unit,
     sendRedaction: (String) -> Unit,
     sendReaction: (String,String) -> Unit,
+    saveMediaToPath: (String,String) -> Unit,
     sendMessage: (String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     pinned: List<String>,
@@ -492,6 +498,7 @@ fun Message(
             sendRedaction = sendRedaction,
             ourUserId = ourUserId,
             sendReaction = sendReaction,
+            saveMediaToPath = saveMediaToPath,
             sendMessage = sendMessage,
             togglePinnedEvent = togglePinnedEvent,
             pinned = pinned,
@@ -514,6 +521,7 @@ fun AuthorAndTextMessage(
     sendRedaction: (String) -> Unit,
     ourUserId: String,
     sendReaction: (String,String) -> Unit,
+    saveMediaToPath: (String,String) -> Unit,
     sendMessage: (String) -> Unit,
     togglePinnedEvent: (String) -> Unit,
     pinned: List<String>,
@@ -529,6 +537,7 @@ fun AuthorAndTextMessage(
                 authorClicked = authorClicked,
                 updateMsgType = updateMsgType,
                 sendRedaction = sendRedaction,
+                saveMediaToPath = saveMediaToPath,
                 togglePinnedEvent = togglePinnedEvent,
                 pinned = pinned,
                 isUserMe = isUserMe,
@@ -659,6 +668,7 @@ fun ChatItemBubble(
     sendMessage: (String) -> Unit,
     pinned: List<String>,
     sendRedaction: (String) -> Unit,
+    saveMediaToPath: (String,String) -> Unit,
     isUserMe: Boolean
 ) {
 
@@ -786,6 +796,23 @@ fun ChatItemBubble(
                             }
                         }
                     )
+                }
+            } else if (message is SharedUiFileMessage) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    Column(modifier = Modifier.width(IntrinsicSize.Max)) {
+                        val filename =
+                            if(message.filename != "") { message.filename } else { message.message }
+                        Text("$filename ${message.mimetype}")
+                        Button(onClick = {
+                            val callback = { user_file_path: String ->
+                                try { saveMediaToPath(user_file_path, message.url) } catch (e: Exception) { println("Couldn't save media, $e") }
+                            }
+                            ShowSaveDialog(filename, callback)
+                        }) {
+                            Text("Download")
+                        }
+                    }
                 }
             } else {
                 Surface(color = backgroundBubbleColor, shape = bubbleShape) {

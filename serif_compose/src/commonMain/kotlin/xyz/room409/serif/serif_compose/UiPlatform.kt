@@ -9,3 +9,4 @@ expect object UiPlatform {
 
 @Composable expect fun DeletionDialog(message: SharedUiMessage, sendRedaction: (String)->Unit, close_deletion_dialog: () -> Unit): Unit
 
+expect fun ShowSaveDialog(filename: String, save_location_callback: (String)->Unit): Unit
