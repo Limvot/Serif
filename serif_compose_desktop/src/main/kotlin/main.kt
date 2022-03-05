@@ -64,12 +64,18 @@ class FakeViewModel {
         get() = inter.roomPath
     val roomName: MutableState<String>
         get() = inter.roomName
+    val roomTopic: MutableState<String>
+        get() = inter.roomTopic
     val sessions: MutableState<List<String>>
         get() = inter.sessions
     val uistate: MutableState<UiScreenState>
         get() = inter.uistate
     val pinned: MutableState<List<String>>
         get() = inter.pinned
+    val members: MutableState<List<String>>
+        get() = inter.members
+    val avatar: MutableState<String>
+        get() = inter.avatar
 }
 
 
@@ -90,10 +96,24 @@ fun main() = application {
                     sessions = fakeViewModel.sessions.value,
                     loginMessage = ((fakeViewModel.uistate.value) as UiLogin).message
                 )
+            } else if(fakeViewModel.uistate.value is UiRoomInfo) {
+                RoomInfoContent(
+                    uiState = ConversationUiState(
+                        fakeViewModel.roomName.value,
+                        fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(),
+                        fakeViewModel.pinned.value, fakeViewModel.members.value,
+                        fakeViewModel.roomTopic.value,
+                        fakeViewModel.avatar.value),
+                    runInViewModel = { fakeViewModel.runInViewModel(it) },
+                )
             } else {
                 ConversationContent(
                     bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
-                    uiState = ConversationUiState(fakeViewModel.roomName.value, fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(), fakeViewModel.pinned.value),
+                    uiState = ConversationUiState(
+                        fakeViewModel.roomName.value,
+                        fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(),
+                        fakeViewModel.pinned.value, fakeViewModel.members.value,
+                        fakeViewModel.roomTopic.value),
                     runInViewModel = { fakeViewModel.runInViewModel(it) },
                     navigateToProfile = { user -> println("clicked on user $user"); },
                     onNavIconPressed = { println("Pressed nav icon..."); },

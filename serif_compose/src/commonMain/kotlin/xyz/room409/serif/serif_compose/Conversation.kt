@@ -126,6 +126,7 @@ fun ConversationContent(
     val sendRedaction = { eventid: String -> runInViewModel { inter -> inter.sendRedaction(eventid) } }
     val saveMediaToPath = { path: String, url: String -> runInViewModel { inter -> inter.saveMediaToPath(path, url) } }
     val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
+    val onRoomSettingsPressed = { -> runInViewModel { inter -> inter.navigateToRoomInfo() } }
     val exitRoom = { -> AudioPlayer.stop(); runInViewModel { inter -> inter.exitRoom() } }
 
     val scrollState = rememberLazyListState()
@@ -197,6 +198,7 @@ fun ConversationContent(
                 channelMembers = uiState.channelMembers,
                 onNavIconPressed = onNavIconPressed,
                 onBackPressed = exitRoom,
+                onRoomSettingsPressed = onRoomSettingsPressed
                 // Use statusBarsPadding() to move the app bar content below the status bar
                 //modifier = Modifier.statusBarsPadding(),
             )
@@ -239,12 +241,14 @@ fun ChannelNameBar(
     channelMembers: Int,
     modifier: Modifier = Modifier,
     onNavIconPressed: () -> Unit = { },
-    onBackPressed: () -> Unit = { }
+    onBackPressed: () -> Unit = { },
+    onRoomSettingsPressed: () -> Unit = { }
 ) {
     var functionalityNotAvailablePopupShown by remember { mutableStateOf(false) }
     if (functionalityNotAvailablePopupShown) {
         //FunctionalityNotAvailablePopup { functionalityNotAvailablePopupShown = false }
     }
+    var show_menu by remember { mutableStateOf(false) }
     JetchatAppBar(
         modifier = modifier,
         onNavIconPressed = onNavIconPressed,
@@ -271,6 +275,30 @@ fun ChannelNameBar(
             CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
                 Button( onClick = onBackPressed) {
                     Text("Back")
+                }
+                Button(onClick = { -> show_menu = true }) {
+                    Text("...")
+                }
+                DropdownMenu(
+                    expanded = show_menu,
+                    onDismissRequest = {show_menu = false}
+                ) {
+                    DropdownMenuItem(
+                        onClick = { onRoomSettingsPressed(); show_menu = false }
+                    ) {
+                        Text("Settings")
+                    }
+                    //TODO: Implement Room Invitations
+                    DropdownMenuItem(
+                        onClick = { show_menu = false }
+                    ) {
+                        Text("Invite (Unimplemented)")
+                    }
+                    DropdownMenuItem(
+                        onClick = { show_menu = false }
+                    ) {
+                        Text("Leave Room (Unimplemented)")
+                    }
                 }
                 /*
                 // Search icon
