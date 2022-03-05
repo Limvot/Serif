@@ -1,6 +1,6 @@
 package xyz.room409.serif.serif_compose
 
-//import androidx.compose.foundation.Image
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -12,8 +12,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.paddingFrom
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.res.loadImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.material.Button
+import androidx.compose.material.ContentAlpha
 import androidx.compose.material.Divider
+import androidx.compose.material.LocalContentAlpha
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
@@ -29,8 +34,16 @@ import androidx.compose.material.OutlinedTextField
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.HorizontalScrollbar
+import androidx.compose.foundation.horizontalScroll
 
 import androidx.compose.ui.ExperimentalComposeUiApi
+import java.io.File
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -46,64 +59,108 @@ fun RoomInfoContent(
     var current_room_topic by remember { mutableStateOf(uiState.roomTopic) }
     var room_name by remember { mutableStateOf(TextFieldValue(uiState.channelName)) }
     var room_topic by remember { mutableStateOf(TextFieldValue(uiState.roomTopic)) }
-    Surface(modifier = Modifier) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) {
-                Spacer(modifier = Modifier.height(74.dp))
+    val avatar_url by remember { mutableStateOf(uiState.roomAvatarUrl) }
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().padding(10.dp)) {
 
-                // List of Room Configuration Items
-                Button( onClick = onBackPressed) { Text("Back") }
-                Text(text = "Room Settings")
+            val scrollStateV = rememberScrollState(0)
+            val scrollStateH = rememberScrollState(0)
 
-                Divider(modifier = Modifier.padding(32.dp))
-                Text("[Placeholder for Room Icon]")
-                Divider(modifier = Modifier.padding(32.dp))
+            Box(modifier = Modifier.fillMaxSize()
+                .verticalScroll(scrollStateV)
+                .padding(end = 12.dp, bottom = 12.dp)
+                .horizontalScroll(scrollStateH)
+            ) {
 
-                Text("Room Name")
-                OutlinedTextField(
-                    value = room_name,
-                    singleLine = true,
-                    modifier = Modifier.padding(8.dp).fillMaxWidth(),
-                    label = { Text(text = current_room_name) },
-                    placeholder = { Text(text = "Super Secret Club") },
-                    onValueChange = { room_name = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
-                )
-                Button(onClick = {
-                    runInViewModel { inter -> 
-                            //Don't allow empty room name
-                            //Also only send out requests if the data has changed
-                            if((room_name.text != "") && (room_name.text != current_room_name)) { inter.setRoomName(room_name.text) }
-                            else { { -> } }
+                Column {
+                    Spacer(modifier = Modifier.height(74.dp))
+                    // List of Room Configuration Items
+                    if(avatar_url != "") {
+                        val avatar_file = File(avatar_url)
+                        val img_bitmap = avatar_file.inputStream().buffered().use(::loadImageBitmap)
+                        Image(
+                            painter = BitmapPainter(img_bitmap),
+                            contentDescription = "Room Profile Picture",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text("[No Room Profile Picture]")
                     }
-                }) { Text("Save") }
-                Text("Room Topic")
-                OutlinedTextField(
-                    value = room_topic,
-                    singleLine = true,
-                    modifier = Modifier.padding(8.dp).fillMaxWidth(),
-                    label = { Text(text = current_room_topic) },
-                    placeholder = { Text(text = "Room Topic or Description") },
-                    onValueChange = { room_topic = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
-                )
-                Button(onClick = {
-                    runInViewModel { inter -> 
-                            //Only send out requests if the data has changed
-                            if(room_topic.text != current_room_topic) { inter.setRoomTopic(room_topic.text) }
-                            else { { -> } }
-                    }
-                }) { Text("Save") }
+                    Divider(modifier = Modifier.padding(32.dp))
 
-                Divider(modifier = Modifier.padding(16.dp))
-                Text(
-                    text = "Member list",
-                    style = MaterialTheme.typography.caption
-                )
-                for(member in uiState.members) {
-                    Text("[User Avatar] $member")
+                    Text("Room Name")
+                    OutlinedTextField(
+                        value = room_name,
+                        singleLine = true,
+                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                        label = { Text(text = current_room_name) },
+                        placeholder = { Text(text = "Super Secret Club") },
+                        onValueChange = { room_name = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                    )
+                    Button(onClick = {
+                        runInViewModel { inter ->
+                                //Don't allow empty room name
+                                //Also only send out requests if the data has changed
+                                if((room_name.text != "") && (room_name.text != current_room_name)) { inter.setRoomName(room_name.text) }
+                                else { { -> } }
+                        }
+                    }) { Text("Save") }
+                    Text("Room Topic")
+                    OutlinedTextField(
+                        value = room_topic,
+                        singleLine = true,
+                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                        label = { Text(text = current_room_topic) },
+                        placeholder = { Text(text = "Room Topic or Description") },
+                        onValueChange = { room_topic = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                    )
+                    Button(onClick = {
+                        runInViewModel { inter ->
+                                //Only send out requests if the data has changed
+                                if(room_topic.text != current_room_topic) { inter.setRoomTopic(room_topic.text) }
+                                else { { -> } }
+                        }
+                    }) { Text("Save") }
+
+                    Divider(modifier = Modifier.padding(16.dp))
+                    Text(
+                        text = "Member list",
+                        style = MaterialTheme.typography.caption
+                    )
+                    for(member in uiState.members) {
+                        Text("[User Avatar] $member")
+                    }
                 }
             }
+            VerticalScrollbar(
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+                adapter = rememberScrollbarAdapter(scrollStateV)
+            )
+            HorizontalScrollbar(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+                adapter = rememberScrollbarAdapter(scrollStateH)
+            )
+            JetchatAppBar(
+                modifier = modifier,
+                title = {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Room Settings",
+                            style = MaterialTheme.typography.subtitle1
+                        )
+                    }
+                },
+                actions = {
+                    CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
+                        Button( onClick = onBackPressed) { Text("Back") }
+                    }
+                }
+            )
         }
     }
 }

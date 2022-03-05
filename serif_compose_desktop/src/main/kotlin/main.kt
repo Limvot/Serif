@@ -74,6 +74,8 @@ class FakeViewModel {
         get() = inter.pinned
     val members: MutableState<List<String>>
         get() = inter.members
+    val avatar: MutableState<String>
+        get() = inter.avatar
 }
 
 
@@ -100,7 +102,8 @@ fun main() = application {
                         fakeViewModel.roomName.value,
                         fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(),
                         fakeViewModel.pinned.value, fakeViewModel.members.value,
-                        fakeViewModel.roomTopic.value),
+                        fakeViewModel.roomTopic.value,
+                        fakeViewModel.avatar.value),
                     runInViewModel = { fakeViewModel.runInViewModel(it) },
                 )
             } else {

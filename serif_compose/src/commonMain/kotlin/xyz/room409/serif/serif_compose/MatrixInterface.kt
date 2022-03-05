@@ -39,6 +39,7 @@ class MatrixInterface {
     val sessions: MutableState<List<String>> = mutableStateOf(listOf())
     val pinned: MutableState<List<String>> = mutableStateOf(listOf())
     val members: MutableState<List<String>> = mutableStateOf(listOf())
+    val avatar: MutableState<String> = mutableStateOf("")
     val lock = ReentrantLock()
     val actions: MutableList<Action> = mutableListOf()
     var already_a_background_thread_running = false
@@ -57,6 +58,7 @@ class MatrixInterface {
                 sessions.value = _m.getSessions()
                 pinned.value = listOf()
                 members.value = listOf()
+                avatar.value = ""
             }
             is MatrixChatRoom -> {
                 messages.value = _m.messages
@@ -67,6 +69,7 @@ class MatrixInterface {
                 sessions.value = listOf()
                 pinned.value = _m.pinned
                 members.value = _m.members
+                avatar.value = _m.avatar
             }
         }
     }
