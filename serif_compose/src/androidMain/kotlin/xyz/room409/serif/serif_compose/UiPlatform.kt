@@ -39,6 +39,13 @@ actual object UiPlatform {
     }
 }
 
+actual object AudioPlayer {
+    actual fun loadAudio(audio_url: String) { }
+    actual fun play() { }
+    actual fun stop() { }
+    actual fun isPlaying(cb: (Boolean) -> Unit) { }
+    actual fun getActiveUrl(): String { return "" }
+}
 actual fun ShowSaveDialog(filename: String, save_location_callback: (String)->Unit): Unit {
     //TODO: implement this with native android file chooser
     return

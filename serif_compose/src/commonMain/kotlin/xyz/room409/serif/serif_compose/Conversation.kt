@@ -85,6 +85,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import xyz.room409.serif.serif_shared.SharedUiLocationMessage
 import xyz.room409.serif.serif_shared.SharedUiImgMessage
+import xyz.room409.serif.serif_shared.SharedUiAudioMessage
 import xyz.room409.serif.serif_shared.SharedUiFileMessage
 import xyz.room409.serif.serif_shared.SharedUiMessage
 import xyz.room409.serif.serif_shared.SharedUiRoom
@@ -125,8 +126,8 @@ fun ConversationContent(
     val sendRedaction = { eventid: String -> runInViewModel { inter -> inter.sendRedaction(eventid) } }
     val saveMediaToPath = { path: String, url: String -> runInViewModel { inter -> inter.saveMediaToPath(path, url) } }
     val navigateToRoom = { id: String -> runInViewModel { inter -> inter.navigateToRoom(id) } }
-    val exitRoom = { -> runInViewModel { inter -> inter.exitRoom() } }
     val onRoomSettingsPressed = { -> runInViewModel { inter -> inter.navigateToRoomInfo() } }
+    val exitRoom = { -> AudioPlayer.stop(); runInViewModel { inter -> inter.exitRoom() } }
 
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -796,6 +797,29 @@ fun ChatItemBubble(
                             }
                         }
                     )
+                }
+            } else if (message is SharedUiAudioMessage) {
+                val audio_title = message.message
+                val audio_url = message.url
+                var isPlaying by remember { mutableStateOf(false); }
+                if(audio_url == AudioPlayer.getActiveUrl()) {
+                    AudioPlayer.isPlaying({ playing : Boolean -> isPlaying = playing; })
+                } else {
+                    isPlaying = false;
+                }
+                var msg_button_text = if(isPlaying) { "Pause" } else { "Play" }
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(color = backgroundBubbleColor, shape = bubbleShape) {
+                    Column(modifier = Modifier.width(IntrinsicSize.Max)) {
+                        Text("${audio_title}\n${audio_url}")
+                        Button(onClick = {
+                            AudioPlayer.loadAudio(audio_url)
+                            AudioPlayer.play()
+                            isPlaying = !isPlaying
+                        }) {
+                            Text(msg_button_text)
+                        }
+                    }
                 }
             } else if (message is SharedUiFileMessage) {
                 Spacer(modifier = Modifier.height(4.dp))
