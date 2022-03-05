@@ -781,6 +781,7 @@ class MatrixClient {
     }
 
     fun getStoredSessions(): List<String> {
+        olm_test()
         println("loading sessions from db")
         return Database.getStoredSessions().map({ it.first })
     }
