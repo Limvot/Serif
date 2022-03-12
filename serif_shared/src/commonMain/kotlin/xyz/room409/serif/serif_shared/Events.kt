@@ -12,9 +12,15 @@ data class DeviceKeys(
     var signatures: Map<String,Map<String,String>>?
 )
 @Serializable
+data class SignedCurve25519(
+    val key: String,
+    var signatures: Map<String,Map<String,String>>?
+)
+@Serializable
 data class KeysUpload(
     val device_keys: DeviceKeys,
-    val one_time_keys: Map<String, JsonElement>?
+    // we're just supporting signed_curve25519 for now
+    val one_time_keys: Map<String, SignedCurve25519>?
 )
 
 @Serializable

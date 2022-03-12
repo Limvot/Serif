@@ -784,37 +784,44 @@ class MatrixClient {
             val user_id = loginResponse.user_id
             val access_token = loginResponse.access_token
 
-
-
             // Save to DB
             println("Saving session to db")
             val new_transactionId: Long = 0
             val olm_account = Account()
-            val keys = olm_account.identityKeys()
-            val key_upload_object = KeysUpload(
-                device_keys= DeviceKeys(
+            val identitykeys = olm_account.identityKeys()
+            olm_account.generateOneTimeKeys(olm_account.maxNumberOfOneTimeKeys())
+            val oneTimeKeys = olm_account.oneTimeKeys()
+
+            val device_keys_object = DeviceKeys(
                     user_id= user_id,
                     device_id= device_id,
                     algorithms= listOf("m.olm.curve25519-aes-sha256", "m.megolm.v1.aes-sha"),
-                    keys= mapOf("curve25519:$device_id" to keys.curve25519, "ed25519:$device_id" to keys.ed25519),
+                    keys= mapOf("curve25519:$device_id" to identitykeys.curve25519, "ed25519:$device_id" to identitykeys.ed25519),
                     signatures=null
-                ),
-                one_time_keys= null
-            )
-            val key_upload_json = JsonFormatHolder.jsonFormat.encodeToString(KeysUpload.serializer(), key_upload_object)
-            val key_upload_canonical_json = MakeItCanonical.canonicalize(key_upload_json)
-            println(key_upload_canonical_json)
-            key_upload_object.device_keys.signatures = mapOf(loginResponse.user_id to mapOf(
-										"ed25519:$device_id" to olm_account.sign(key_upload_canonical_json)
-									 ))
+                )
+            val device_keys_json = JsonFormatHolder.jsonFormat.encodeToString(DeviceKeys.serializer(), device_keys_object)
+            val device_keys_canonical_json = MakeItCanonical.canonicalize(device_keys_json)
+            device_keys_object.signatures = mapOf(user_id to mapOf("ed25519:$device_id" to olm_account.sign(device_keys_canonical_json)))
 
-            println(JsonFormatHolder.jsonFormat.encodeToString(KeysUpload.serializer(), key_upload_object))
+            val key_upload_object = KeysUpload(
+                device_keys= device_keys_object,
+                one_time_keys= oneTimeKeys.curve25519.map { (key_id, key) ->
+                    val signed = SignedCurve25519(key = key, signatures = null)
+                    val signed_json = JsonFormatHolder.jsonFormat.encodeToString(SignedCurve25519.serializer(), signed)
+                    val signed_canonical_json = MakeItCanonical.canonicalize(signed_json)
+                    signed.signatures = mapOf(user_id to mapOf("ed25519:$device_id" to olm_account.sign(signed_canonical_json)))
+                    "signed_curve25519:$key_id" to signed
+                }.toMap()
+            )
+
+            println("posting : ${JsonFormatHolder.jsonFormat.encodeToString(KeysUpload.serializer(), key_upload_object)}")
             val keyuploadResponse = runBlocking {
                 client.post<String>("$server/_matrix/client/r0/keys/upload?access_token=$access_token") {
                     contentType(ContentType.Application.Json)
                     body = key_upload_object
                 }
             }
+            println(keyuploadResponse)
 
             val pickled_olm_account = olm_account.pickle("UNSAFEKEY")
             Database.saveSession(loginResponse.user_id, device_id, access_token, new_transactionId, pickled_olm_account)
