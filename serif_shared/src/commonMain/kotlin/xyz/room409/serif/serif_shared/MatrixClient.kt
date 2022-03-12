@@ -7,9 +7,17 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
 import kotlin.concurrent.thread
 import kotlin.synchronized
 import java.io.File
+
+import com.fasterxml.jackson.databind.*
+import com.fasterxml.jackson.databind.json.*
+import com.fasterxml.jackson.databind.node.*
+import java.util.TreeMap
+
+import io.github.brevilo.jolm.*
 
 sealed class Outcome<out T : Any>
 data class Success<out T : Any>(val value: T) : Outcome<T>()
@@ -93,7 +101,7 @@ fun getRelatedEvent(e: Event): String? {
 // the right T. Java generics are bad, yall, and Kotlin in trying to be nice sometimes makes things much worse.
 inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as? StateEvent<T>?)?.content) as? T?
 
-class MatrixSession(val client: HttpClient, val server: String, val user: String, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
+class MatrixSession(val client: HttpClient, val server: String, val user: String, val device_id: String, olm_account: Account, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var user_presence_info: MutableMap<String,PresenceEventContent> = mutableMapOf()
     private var roomTypingNotifications: MutableMap<String, List<String>> = mutableMapOf()
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
@@ -742,6 +750,21 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 object JsonFormatHolder {
     public val jsonFormat = kotlinx.serialization.json.Json {
         ignoreUnknownKeys = true
+        explicitNulls = false
+    }
+}
+
+object MakeItCanonical {
+    class SortingNodeFactory(): JsonNodeFactory() {
+        override fun objectNode(): ObjectNode {
+            return ObjectNode(this, TreeMap<String, JsonNode>());
+        }
+    }
+    val mapper = JsonMapper.builder().nodeFactory(SortingNodeFactory()).build();
+    fun canonicalize(json_in: String): String {
+        val root = mapper.readTree(json_in) as ObjectNode
+        val left = root.remove("unsigned");
+        return mapper.writeValueAsString(root)
     }
 }
 
@@ -757,14 +780,49 @@ class MatrixClient {
                 }
             }
 
+            val device_id = loginResponse.device_id
+            val user_id = loginResponse.user_id
+            val access_token = loginResponse.access_token
+
+
+
             // Save to DB
             println("Saving session to db")
             val new_transactionId: Long = 0
-            Database.saveSession(loginResponse.user_id, loginResponse.access_token, new_transactionId)
+            val olm_account = Account()
+            val keys = olm_account.identityKeys()
+            val key_upload_object = KeysUpload(
+                device_keys= DeviceKeys(
+                    user_id= user_id,
+                    device_id= device_id,
+                    algorithms= listOf("m.olm.curve25519-aes-sha256", "m.megolm.v1.aes-sha"),
+                    keys= mapOf("curve25519:$device_id" to keys.curve25519, "ed25519:$device_id" to keys.ed25519),
+                    signatures=null
+                ),
+                one_time_keys= null
+            )
+            val key_upload_json = JsonFormatHolder.jsonFormat.encodeToString(KeysUpload.serializer(), key_upload_object)
+            val key_upload_canonical_json = MakeItCanonical.canonicalize(key_upload_json)
+            println(key_upload_canonical_json)
+            key_upload_object.device_keys.signatures = mapOf(loginResponse.user_id to mapOf(
+										"ed25519:$device_id" to olm_account.sign(key_upload_canonical_json)
+									 ))
+
+            println(JsonFormatHolder.jsonFormat.encodeToString(KeysUpload.serializer(), key_upload_object))
+            val keyuploadResponse = runBlocking {
+                client.post<String>("$server/_matrix/client/r0/keys/upload?access_token=$access_token") {
+                    contentType(ContentType.Application.Json)
+                    body = key_upload_object
+                }
+            }
+
+            val pickled_olm_account = olm_account.pickle("UNSAFEKEY")
+            Database.saveSession(loginResponse.user_id, device_id, access_token, new_transactionId, pickled_olm_account)
             val session_id = Database.getUserSession(loginResponse.user_id).second.first
 
-            return Success(MatrixSession(client, server, loginResponse.user_id, session_id, loginResponse.access_token, new_transactionId, onUpdate))
+            return Success(MatrixSession(client, server, user_id, device_id, olm_account, session_id, access_token, new_transactionId, onUpdate))
         } catch (e: Exception) {
+            println(e)
             return Error("Login failed", e)
         }
     }
@@ -774,14 +832,15 @@ class MatrixClient {
         // Load from DB
         println("loading specific session from db")
         val session = Database.getUserSession(username)
+        val device_id = session.first.second
         val session_id = session.second.first
         val tok = session.second.second
-        val transactionId = session.third
-        return Success(MatrixSession(client, server, username, session_id, tok, transactionId, onUpdate))
+        val transactionId = session.third.first
+        val olm_account = Account.unpickle("UNSAFEKEY", session.third.second)
+        return Success(MatrixSession(client, server, username, device_id, olm_account, session_id, tok, transactionId, onUpdate))
     }
 
     fun getStoredSessions(): List<String> {
-        olm_test()
         println("loading sessions from db")
         return Database.getStoredSessions().map({ it.first })
     }

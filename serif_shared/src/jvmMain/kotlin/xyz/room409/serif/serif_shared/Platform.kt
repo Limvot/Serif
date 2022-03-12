@@ -41,6 +41,7 @@ actual object Platform {
             serializer = KotlinxSerializer(
                 kotlinx.serialization.json.Json {
                     ignoreUnknownKeys = true
+                    explicitNulls = false
                 }
             )
         }

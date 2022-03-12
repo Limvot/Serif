@@ -20,8 +20,8 @@ object Database {
     fun transaction(f: () -> Unit) = this.db?.sessionDbQueries?.transaction{ f() }
     fun <T> transactionWithResult(f: () -> T) = this.db?.sessionDbQueries?.transaction{ f() }
 
-    fun saveSession(username: String, access_token: String, transactionId: Long) {
-        this.db?.sessionDbQueries?.insertSession(username, access_token, transactionId)
+    fun saveSession(username: String, device_id: String, access_token: String, transactionId: Long, pickled_olm_account: String) {
+        this.db?.sessionDbQueries?.insertSession(username, device_id, access_token, transactionId, pickled_olm_account)
     }
 
     fun updateSessionTransactionId(session_id: Long, transactionId: Long) {
@@ -36,16 +36,16 @@ object Database {
 
     fun getStoredSessions(): List<Triple<String, String, Long>> {
         val saved_sessions = this.db?.sessionDbQueries?.selectAllSessions(
-            { id: Long, user: String, auth_tok: String, nextBatch: String?, transactionId: Long ->
+            { id: Long, user: String, device_id: String, auth_tok: String, nextBatch: String?, transactionId: Long, pickledOlmAccount: String ->
                 Triple(user, auth_tok, transactionId)
             })?.executeAsList() ?: listOf()
         return saved_sessions
     }
 
-    fun getUserSession(user: String): Triple<String, Pair<Long, String>, Long> {
-        val saved_session = this.db?.sessionDbQueries?.selectUserSession(user) { id: Long, user: String, auth_tok: String, nextBatch: String?, transactionId: Long ->
-            Triple(user, Pair(id, auth_tok), transactionId)
-        }?.executeAsOne() ?: Triple("", Pair(0L,""), 0L)
+    fun getUserSession(user: String): Triple<Pair<String,String>, Pair<Long, String>, Pair<Long,String>> {
+        val saved_session = this.db?.sessionDbQueries?.selectUserSession(user) { id: Long, user: String, device_id: String, auth_tok: String, nextBatch: String?, transactionId: Long, pickledOlmAccount: String ->
+            Triple(Pair(user, device_id), Pair(id, auth_tok), Pair(transactionId, pickledOlmAccount))
+        }?.executeAsOne() ?: Triple(Pair("",""), Pair(0L,""), Pair(0L,""))
         return saved_session
     }
 

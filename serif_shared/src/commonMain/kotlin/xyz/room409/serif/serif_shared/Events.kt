@@ -4,6 +4,20 @@ import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 
 @Serializable
+data class DeviceKeys(
+    val user_id: String,
+    val device_id: String,
+    val algorithms: List<String>,
+    val keys: Map<String,String>,
+    var signatures: Map<String,Map<String,String>>?
+)
+@Serializable
+data class KeysUpload(
+    val device_keys: DeviceKeys,
+    val one_time_keys: Map<String, JsonElement>?
+)
+
+@Serializable
 data class LoginRequest(
     val type: String,
     val identifier: LoginIdentifier,

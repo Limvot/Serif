@@ -1,21 +1,28 @@
 CREATE TABLE IF NOT EXISTS SavedSessions (
  id INTEGER PRIMARY KEY NOT NULL,
  userId TEXT NOT NULL UNIQUE,
+ deviceId TEXT NOT NULL,
  authTok TEXT NOT NULL,
  nextBatch TEXT,
- transactionId INTEGER NOT NULL
+ transactionId INTEGER NOT NULL,
+ pickledOlmAccount TEXT NOT NULL
 );
 
 deleteAllSessions:
 DELETE FROM SavedSessions;
 
 insertSession:
-INSERT INTO SavedSessions(id, userId, authTok, nextBatch, transactionId)
-VALUES(NULL,?,?,NULL,?);
+INSERT INTO SavedSessions(id, userId, deviceId, authTok, nextBatch, transactionId, pickledOlmAccount)
+VALUES(NULL,?,?,?,NULL,?,?);
 
 updateSessionTransactionId:
 UPDATE SavedSessions
 SET transactionId = ?
+WHERE id = ?;
+
+updateSessionPickledOlmAccount:
+UPDATE SavedSessions
+SET pickledOlmAccount = ?
 WHERE id = ?;
 
 updateSessionNextBatch:
