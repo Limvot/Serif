@@ -36,6 +36,7 @@ class MatrixInterface {
     val roomPath: MutableState<List<String>> = mutableStateOf(listOf())
     val roomName: MutableState<String> = mutableStateOf("<>")
     val roomTopic: MutableState<String> = mutableStateOf("")
+    val roomEncrypted: MutableState<Boolean> = mutableStateOf(false)
     val sessions: MutableState<List<String>> = mutableStateOf(listOf())
     val pinned: MutableState<List<String>> = mutableStateOf(listOf())
     val members: MutableState<List<String>> = mutableStateOf(listOf())
@@ -55,6 +56,7 @@ class MatrixInterface {
                 roomPath.value = listOf()
                 roomName.value = "Login"
                 roomTopic.value = ""
+                roomEncrypted.value = false
                 sessions.value = _m.getSessions()
                 pinned.value = listOf()
                 members.value = listOf()
@@ -65,6 +67,7 @@ class MatrixInterface {
                 roomPath.value = _m.room_ids
                 roomName.value = _m.name
                 roomTopic.value = _m.roomTopic
+                roomEncrypted.value = _m.encrypted
                 ourUserId.value = _m.username
                 sessions.value = listOf()
                 pinned.value = _m.pinned

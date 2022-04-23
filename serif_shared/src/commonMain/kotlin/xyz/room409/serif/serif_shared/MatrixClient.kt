@@ -78,6 +78,7 @@ fun idBetween(a: String, b: String, increment: Boolean): String {
 
 fun is_edit_content(msg_content: TextRMEC): Boolean = ((msg_content.new_content != null) && (msg_content.relates_to?.event_id != null))
 fun isStandaloneEvent(e: Event): Boolean {
+    //println("Checking $e for being standalone")
     if (e as? RoomMessageEvent != null) {
         return !(e.content is ReactionRMEC || (e.content is TextRMEC && is_edit_content(e.content)))
     } else {
@@ -101,7 +102,7 @@ fun getRelatedEvent(e: Event): String? {
 // the right T. Java generics are bad, yall, and Kotlin in trying to be nice sometimes makes things much worse.
 inline fun <reified T> Event.castToStateEventWithContentOfType(): T? = ((this as? StateEvent<T>?)?.content) as? T?
 
-class MatrixSession(val client: HttpClient, val server: String, val user: String, val device_id: String, olm_account: Account, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
+class MatrixSession(val client: HttpClient, val server: String, val user: String, val device_id: String, val olm_account: Account, val session_id: Long, val access_token: String, var transactionId: Long, val onUpdate: () -> Unit) {
     private var user_presence_info: MutableMap<String,PresenceEventContent> = mutableMapOf()
     private var roomTypingNotifications: MutableMap<String, List<String>> = mutableMapOf()
     private var in_flight_backfill_requests: MutableSet<Triple<String,String,String>> = mutableSetOf()
@@ -218,6 +219,100 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
             val event_type = if (message_content is ReactionRMEC) {
                 "m.reaction"
             } else { "m.room.message" }
+            // Ok, we should
+            // get room members
+            val members = getRoomMembers(room_id)
+            // query devices using /keys/query (eventually save this)
+            val keysQueryResponse = runBlocking {
+                client.post<KeysQueryResponse>("$server/_matrix/client/r0/keys/query?access_token=$access_token") {
+                    contentType(ContentType.Application.Json)
+                    body = KeysQuery(device_keys = members.map { it to listOf<String>() }.toMap() )
+                }
+            }
+            println("Got the keys for devices in the room $keysQueryResponse")
+
+            //KeysQueryResponse(failures={},
+            //    device_keys={
+            //         @miloignis:synapse.room409.xyz={
+            //              RHSKKPZYUN=DeviceKeys(
+            //                           user_id=@miloignis:synapse.room409.xyz,
+            //                           device_id=RHSKKPZYUN,
+            //                           algorithms=[m.olm.v1.curve25519-aes-sha2, m.megolm.v1.aes-sha2],
+            //                           keys={curve25519:RHSKKPZYUN=0oLYJFZT428yKDawhxqnCAAlm7+gj/CmksvBsH7wW2I,
+            //                                 ed25519:RHSKKPZYUN=r9a3GX+J/bkZPRxwEA5W+xTaOpmOylz0VrLz3Rvs3VQ},
+            //                           signatures={@miloignis:synapse.room409.xyz={
+            //                                ed25519:RHSKKPZYUN=ouawlrQOnayBsh4WhryfwOW6cHkwi7LBLMrc1h2IHspc63OGtQIPG7Fm1qtz89B+IaWiD+gt+cfcnuWxMg7gAw,
+            //                                ed25519:3EM/v0E19S7pnEmUYEGihFh/szKRiqZ3986qXpbmIpw=h98lBhEdUVSWGR2ea8F70lM7BOvafeqtYgB97SryoLSJbYVMue3Vn28s8dp00tp1RQQjDrCj2/IHiUqp9q+9CQ}},
+            //                           unsigned=UnsignedDeviceInfo(device_display_name=element-synapse.room409.xyz (Firefox, Linux))
+            //                         ),
+            //              FVGCSNNYMW=DeviceKeys(....
+
+
+            // check the signatures on the DeviceKeys objects returned
+            // (eventually check that user_id/device_id corresponds to what I've seen previously if exists)
+            // create a megaolm session (eventually if it doesn't exist)
+            val megaolm_session = OutboundGroupSession()
+            //  init outbound group session
+            //  get session id and session key, store as an inbound session?
+            //  share the keys
+            //    build a m.room_key event for each, and send to each encrypted with Olm
+            //        get an olm session (for now make a new one, eventually check to see if one exists)
+            //          claim a one time key
+            val keysClaimResponse = runBlocking {
+                client.post<KeysClaimResponse>("$server/_matrix/client/r0/keys/claim?access_token=$access_token") {
+                    contentType(ContentType.Application.Json)
+                    body = KeysClaim(one_time_keys = keysQueryResponse.device_keys.map { (user_id, devices) -> user_id to devices.map { (device_id, deviceKeys) ->
+                                                                                                device_id to "signed_curve25519"
+                                                                                            }.toMap() }.toMap() )
+                }
+            }
+            println("claimed keys! $keysClaimResponse")
+            for ((user_id, devices) in keysClaimResponse.one_time_keys) {
+                for ((device_id, deviceKeys) in devices) {
+                    println("$user_id - $device_id $deviceKeys")
+                    //val device_one_time_key = deviceKeys.jsonObject.values.single()!!.jsonObject!!.getPrimitive("key")!!.content
+                    val device_one_time_key = deviceKeys.jsonObject.values.single()!!.jsonObject!!["key"]!!.jsonPrimitive.content
+                    val olm_session = Session.createOutboundSession(
+                                        olm_account,
+                                        keysQueryResponse.device_keys[user_id]!![device_id]!!.keys["curve25519"],
+                                        device_one_time_key)
+                    val inner_event = ManualRoomKeyEvent(
+                        content = RoomKeyEventContent(
+                            room_id=room_id,
+                            session_id=megaolm_session.sessionId(),
+                            session_key=megaolm_session.sessionKey()
+                        ),
+                        //sender=user,
+                        //recipient=user_id,
+                        //recipient_keys=EdMap(keysQueryResponse.device_keys[user_id]!![device_id]!!.keys["curve25519"]),
+                        //keys=EdMap(olm_account.identityKeys().curve25519)
+                    )
+                    val encrypted_event = olm_session.encrypt(JsonFormatHolder.jsonFormat.encodeToString(ManualRoomKeyEvent.serializer(), inner_event))
+                    val toSend = ToDeviceEncryptedEventContent(
+                        ciphertext=mapOf(device_one_time_key to ToDeviceEncryptedEventContentInnerCipherText(
+                                body=encrypted_event.getCipherText(),
+                                type=0
+                            )
+                        ),
+                        sender_key=olm_account.identityKeys().curve25519
+                    )
+                    val result = runBlocking {
+                        val message_confirmation =
+                            client.put<EventIdResponse>("$server/_matrix/client/v3/sendToDevice/m.room_key/$transactionId?access_token=$access_token") {
+                                contentType(ContentType.Application.Json)
+                                body = toSend
+                            }
+                        transactionId++
+                        Database.updateSessionTransactionId(session_id, transactionId)
+                        message_confirmation.event_id
+                    }
+                }
+            }
+            //    PUT /_matrix/client/r0/sendToDevice/m.room.encrypted/<txnId>
+            // build a megalom message & encrypt it
+            //  what we have now as inner message
+            //  encrypted message as outer message
+            // send to PUT /_matrix/client/r0/rooms/<room_id>/send/m.room.encrypted/<txn_id>
             val result = runBlocking {
                 val message_confirmation =
                     client.put<EventIdResponse>("$server/_matrix/client/r0/rooms/$room_id/send/$event_type/$transactionId?access_token=$access_token") {
@@ -294,6 +389,7 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
 
     fun sendImageMessage(url: String, room_id: String): Outcome<String> {
         try {
+            //TODO - encrypt if in an encrypted room
             val img_f = File(url)
             val image_data = img_f.readBytes()
             val f_size = image_data.size
@@ -599,6 +695,11 @@ class MatrixSession(val client: HttpClient, val server: String, val user: String
     fun getRoomTopic(id: String): String {
         return Database.getStateEvent(session_id, id, "m.room.topic", "")?.castToStateEventWithContentOfType<RoomTopicContent>()?.topic ?: ""
     }
+    //Checking StateEvent({"type":"m.room.encryption","room_id":"!bwqkmRobBXpTSDiGIw:synapse.room409.xyz","sender":"@testuser:synapse.room409.xyz","content":{"algorithm":"m.megolm.v1.aes-sha2"},"state_key":"","origin_server_ts":1610836416887,"unsigned":{"age":36866676394},"event_id":"$-Bv5XSUDB0hnry39KZouQvPCJy1teltNbx2qVs7T5VQ","user_id":"@testuser:synapse.room409.xyz","age":36866676394} (content: xyz.room409.serif.serif_shared.FallbackContent@90015da)) for being standalone
+    //Checking RoomEventFallback({"type":"m.room.encrypted","room_id":"!bwqkmRobBXpTSDiGIw:synapse.room409.xyz","sender":"@testuser:synapse.room409.xyz","content":{"algorithm":"m.megolm.v1.aes-sha2","sender_key":"hIRB58Z0Of1cSmpiHtYYeO1+7dCs3M/wBZuzJCXrT0Q","ciphertext":"AwgAEoABOSYdzznFOfKZ7IxXwqR18/kLFkhFA5xTUN5Cic57iLIxAsPfkFNta2MQJZXBU9/jMExTS008xG3yp8KiQGeNTh72Jih2PpxctmQEG5+DlInmCU1c9b7GY+D3VLDlq1RazgeTNxGhBGZa/DxDH07fFQAxvcIn/H89YPDGF7eXQ6WyEyrX6k33rr3k6jmu9BJw+CToCD9IpKUmd4RbtHOR3VFGomgQXcm4J6EDTYNDbkB2cXbYw7gLywEm1AaanySp+mnICcNRTgw","session_id":"IPLlZTisxVlOgEEJ1klWnhcZqv5kGZdbjJvRaIEY5LI","device_id":"TAVERUTVKU"},"origin_server_ts":1610836420469,"unsigned":{"age":36866672812},"event_id":"$Mnx66_vRx5tWGdhtIq9rG4zaq1cpHtwhBodbPX398z4","user_id":"@testuser:synapse.room409.xyz","age":36866672812}) for being standalone
+    fun getRoomEncrypted(id: String): Boolean {
+        return Database.getStateEvent(session_id, id, "m.room.encryption", "") != null
+    }
     fun getRoomMembers(id: String): List<String> {
         val events = Database.getStateEvents(session_id, id, "m.room.member")
         return events.map({ (id,event) ->  (event as RoomEvent).sender })
@@ -797,7 +898,8 @@ class MatrixClient {
                     device_id= device_id,
                     algorithms= listOf("m.olm.curve25519-aes-sha256", "m.megolm.v1.aes-sha"),
                     keys= mapOf("curve25519:$device_id" to identitykeys.curve25519, "ed25519:$device_id" to identitykeys.ed25519),
-                    signatures=null
+                    signatures=null,
+                    unsigned=null
                 )
             val device_keys_json = JsonFormatHolder.jsonFormat.encodeToString(DeviceKeys.serializer(), device_keys_object)
             val device_keys_canonical_json = MakeItCanonical.canonicalize(device_keys_json)

@@ -66,6 +66,8 @@ class FakeViewModel {
         get() = inter.roomName
     val roomTopic: MutableState<String>
         get() = inter.roomTopic
+    val roomEncrypted: MutableState<Boolean>
+        get() = inter.roomEncrypted
     val sessions: MutableState<List<String>>
         get() = inter.sessions
     val uistate: MutableState<UiScreenState>
@@ -100,6 +102,7 @@ fun main() = application {
                 RoomInfoContent(
                     uiState = ConversationUiState(
                         fakeViewModel.roomName.value,
+                        fakeViewModel.roomEncrypted.value,
                         fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(),
                         fakeViewModel.pinned.value, fakeViewModel.members.value,
                         fakeViewModel.roomTopic.value,
@@ -111,6 +114,7 @@ fun main() = application {
                     bumpWindowBase = { idx -> fakeViewModel.bumpWindow(idx?.let { idx -> fakeViewModel.messages.value.reversed().let { messages -> messages[min(idx, messages.size-1)].id } }); },
                     uiState = ConversationUiState(
                         fakeViewModel.roomName.value,
+                        fakeViewModel.roomEncrypted.value,
                         fakeViewModel.ourUserId.value, 0, fakeViewModel.messages.value.reversed(),
                         fakeViewModel.pinned.value, fakeViewModel.members.value,
                         fakeViewModel.roomTopic.value),

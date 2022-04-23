@@ -21,6 +21,7 @@ import xyz.room409.serif.serif_shared.SharedUiMessage
 
 class ConversationUiState(
     val channelName: String,
+    val encrypted: Boolean,
     val ourUserId: String,
     val channelMembers: Int,
     initialMessages: List<SharedUiMessage>,

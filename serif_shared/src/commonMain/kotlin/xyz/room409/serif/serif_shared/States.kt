@@ -374,6 +374,7 @@ class MatrixChatRoom(private val msession: MatrixSession, val room_ids: List<Str
     val avatar: String
     val roomName: String = msession.getRoomName(room_id)
     val roomTopic: String = msession.getRoomTopic(room_id)
+    val encrypted: Boolean = msession.getRoomEncrypted(room_id)
     val typing = if(room_type == "m.space") { listOf() } else { normalizeTypingList(msession.getTypingStatusForRoom(room_id)) }
     val link_regex = Regex("<a href=\"https://matrix.to/#/[^:]*:[^>]*\">(.*)</a>")
     init {

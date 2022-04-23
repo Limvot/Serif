@@ -194,7 +194,7 @@ fun ConversationContent(
             }
             // Channel name bar floats above the messages
             ChannelNameBar(
-                channelName = uiState.channelName,
+                channelName = if (uiState.encrypted) { "${uiState.channelName} (encrypted)" } else { uiState.channelName },
                 channelMembers = uiState.channelMembers,
                 onNavIconPressed = onNavIconPressed,
                 onBackPressed = exitRoom,

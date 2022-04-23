@@ -4,12 +4,16 @@ import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 
 @Serializable
+data class UnsignedDeviceInfo(val device_display_name: String? = null)
+
+@Serializable
 data class DeviceKeys(
     val user_id: String,
     val device_id: String,
     val algorithms: List<String>,
     val keys: Map<String,String>,
-    var signatures: Map<String,Map<String,String>>?
+    var signatures: Map<String,Map<String,String>>?,
+    val unsigned: UnsignedDeviceInfo? = null
 )
 @Serializable
 data class SignedCurve25519(
@@ -22,6 +26,69 @@ data class KeysUpload(
     // we're just supporting signed_curve25519 for now
     val one_time_keys: Map<String, SignedCurve25519>?
 )
+@Serializable
+data class KeysQuery(
+    val timeout: Int = 10000,
+    val device_keys: Map<String,List<String>>,
+    val token: String? = null
+)
+@Serializable
+data class KeysQueryResponse(
+    val failures: Map<String, JsonObject>,
+    val device_keys: Map<String,Map<String,DeviceKeys>>
+)
+@Serializable
+data class KeysClaim(
+    val timeout: Int = 10000,
+    val one_time_keys: Map<String,Map<String,String>>
+)
+@Serializable
+data class KeysClaimResponse(
+    val failures: Map<String, JsonObject>,
+    val one_time_keys: Map<String,Map<String,JsonElement>>
+)
+
+@Serializable
+data class ManualRoomKeyEvent(
+    val type: String = "m.room_key",
+    val content: RoomKeyEventContent,
+    //val sender: String,
+    //val recipient: String,
+    //val recipient_keys: Map<String,EdMap>,
+    //val keys: Map<String,EdMap>
+)
+@Serializable
+data class EdMap(val ed25519: String)
+
+@Serializable
+data class RoomKeyEventContent(
+    val algorithm: String = "m.megolm.v1.aes-sha2",
+    val room_id: String,
+    val session_id: String,
+    val session_key: String
+)
+
+// GAH m.room.encrypted can either be a room event or a to-device event
+// We should honestly split them
+@Serializable
+data class ToDeviceEncryptedEventContent(
+    val algorithm: String = "m.olm.v1.curve25519-aes-sha2",
+    val ciphertext: Map<String,ToDeviceEncryptedEventContentInnerCipherText>,
+    val sender_key: String
+)
+@Serializable
+data class ToDeviceEncryptedEventContentInnerCipherText(
+    val body: String,
+    val type: Int = 0 // 0 for pre key, 1 for ordinary
+)
+//@Serializable
+//data class ToRoomEncryptedEventConent(
+    //val algorithm: String = "m.megolm.v1.aes-sha2",
+    //val ciphertext: String,
+    //val device_id: String,
+    //val sender_key: String
+    //val session_id: String
+//)
 
 @Serializable
 data class LoginRequest(
@@ -101,7 +168,6 @@ data class Presence(var events: List<Event> = listOf())
 @Serializable
 data class PresenceEvent(
     override val raw_self: JsonObject,
-    override val raw_content: JsonElement,
     override val type: String = "m.presence",
     val sender: String,
     val content: PresenceEventContent
@@ -156,7 +222,6 @@ data class BackfillResponse(
 @Serializable(with = EventSerializer::class)
 abstract class Event {
     abstract val raw_self: JsonObject
-    abstract val raw_content: JsonElement
     abstract val type: String
 }
 
@@ -177,7 +242,6 @@ data class UnsignedData(
 @Serializable
 class StateEvent<T>(
     override val raw_self: JsonObject,
-    override val raw_content: JsonElement,
     override val type: String,
     override val event_id: String,
     override val sender: String,
@@ -221,7 +285,6 @@ class RoomMemberEventContent(val displayname: String? = null, val avatar_url: St
 @Serializable
 class RoomMessageEvent(
     override val raw_self: JsonObject,
-    override val raw_content: JsonElement,
     val redacts: String?=null,
     override val type: String,
     override val event_id: String,
@@ -333,7 +396,6 @@ class FallbackRMEC(
 @Serializable
 class EventFallback(
     override val raw_self: JsonObject,
-    override val raw_content: JsonElement,
     override val type: String
 ) : Event() {
     override fun toString() = "EventFallback(" + raw_self.toString() + ")"
@@ -342,7 +404,6 @@ class EventFallback(
 @Serializable
 class RoomEventFallback(
     override val raw_self: JsonObject,
-    override val raw_content: JsonElement,
     override val type: String,
     override val event_id: String,
     override val sender: String,
@@ -416,7 +477,6 @@ object StateEventFallbackSerializer : GenericJsonEventSerializer<StateEvent<Fall
 open class GenericJsonEventSerializer<T : Any>(clazz: KSerializer<T>) : JsonTransformingSerializer<T>(clazz) {
     override fun transformDeserialize(element: JsonElement): JsonElement = buildJsonObject {
         put("raw_self", element)
-        put("raw_content", element.jsonObject["content"]!!)
         for ((key, value) in element.jsonObject) {
             put(key, value)
         }
